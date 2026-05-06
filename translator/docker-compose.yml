@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  translator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cop_translator
+    volumes:
+      - ./output:/app/output
+      - ./source:/app/source
+      - ./output/excel:/app/excel
+      - ../Doc:/app/doc
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MODE=${MODE:-translate-json}
+      - SOURCE_LANG=${SOURCE_LANG:-en}
+      - TARGET_LANG=${TARGET_LANG:-cs}
+      - SOURCE_FILE=${SOURCE_FILE:-}
+      - OUTPUT_DIR=${OUTPUT_DIR:-/app/output}
+      - EXCEL_DIR=${EXCEL_DIR:-/app/excel}
+      - DOC_DIR=${DOC_DIR:-/app/doc}
+      - SOURCE_DIR=${SOURCE_DIR:-/app/source}
+      - BATCH_LANGS=${BATCH_LANGS:-en,fr,cz,sk,de,it,ar}
+      - OUTPUT_FORMAT=${OUTPUT_FORMAT:-auto}
+    working_dir: /app
+
+volumes:
+  output:

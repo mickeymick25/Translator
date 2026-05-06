@@ -1,0 +1,70 @@
+# ─── Python ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ─── Virtual environments ────────────────────────────────
+venv/
+ENV/
+env/
+.venv/
+
+# ─── Tests & Coverage ───────────────────────────────────
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# ─── Docker ──────────────────────────────────────────────
+.dockerignore
+
+# ─── OS ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ─── IDE ─────────────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-*
+
+# ─── Logs ────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── DONNÉES — Ne pas committer ─────────────────────────
+# Sources : fichiers de données métier (toutes extensions)
+translator/source/**/*.json
+translator/source/**/*.xlsx
+translator/source/**/*.xls
+translator/source/**/*.csv
+
+# Outputs : fichiers générés (toutes extensions)
+translator/output/**/*.json
+translator/output/**/*.xlsx
+translator/output/**/*.xls
+translator/output/**/*.csv
+
+# Cache de traductions et state du rate limiter
+**/.translation_cache.json
+**/.rate_limiter_state.json
