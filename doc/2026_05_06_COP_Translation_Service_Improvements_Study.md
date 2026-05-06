@@ -1409,10 +1409,13 @@ IMP-T002 (Pre-commit) ──► Dépend de T001 (tests) pour être utile
 
 | Phase | Semaine | Contenu |
 |-------|---------|---------|
-| **Phase 1** | S1-S2 | IMP-T006 (Cache) + IMP-T001 (Tests) — en parallèle |
-| **Phase 2** | S3 | IMP-T003 (Rate Limiter corrigé) + IMP-T007 (Chemins locaux) + mise à jour des tests |
-| **Phase 3** | S4 | IMP-T005 (CLI) + IMP-T002 (Pre-commit hooks) |
-| **Phase 4** | S5+ | IMP-T004 (Multi-provider) selon les besoins |
+| **Phase 1** | S1 | IMP-T001 (Tests unitaires du code existant) |
+| **Phase 2** | S2 | IMP-T007 (Chemins locaux) — TDD |
+| **Phase 3** | S3 | IMP-T006 (Cache intelligent) — TDD |
+| **Phase 4** | S4 | IMP-T003 (Rate limiter adaptatif) — TDD |
+| **Phase 5** | S5 | IMP-T005 (Interface CLI) — TDD |
+| **Phase 6** | S6 | IMP-T002 (Pre-commit hooks) — Config |
+| **Phase 7** | S7+ | IMP-T004 (Multi-provider) — TDD, selon les besoins |
 
 ### 4.4 Suivi d'Implémentation
 
@@ -1439,3 +1442,18 @@ IMP-T002 (Pre-commit) ──► Dépend de T001 (tests) pour être utile
 | ❌ Annulé | Abandonné ou reporté |
 
 > **Instructions de mise à jour** : Remplacer 🔲 par 🔵/🟡/✅/❌ au fur et à mesure de l'avancement. Renseigner les dates et branches quand pertinent.
+
+---
+
+### 4.5 Document de suivi détaillé
+
+> 🆕 **Ajout v1.2** — Un document de suivi détaillé avec l'approche TDD et les sous-tâches par amélioration est disponible dans :
+>
+> 📄 [`doc/2026_05_08_Implementation_Tracking.md`](2026_05_08_Implementation_Tracking.md)
+>
+> Ce document contient :
+> - Le cycle TDD détaillé pour chaque amélioration (🔴 Écrire le test → 🟢 Implémenter → 🔵 Refactorer)
+> - Les sous-tâches avec statut par case à cocher
+> - Les fichiers créés/modifiés pour chaque tâche
+> - Les critères de validation
+> - L'historique des commits et les décisions d'architecture
