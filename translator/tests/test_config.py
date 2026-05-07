@@ -867,3 +867,94 @@ class TestConfigCLIFlags:
         assert config.dry_run is True
         assert config.verbose is True
         assert config.quiet is True
+
+
+# ─── IMP-T004: Multi-provider config ──────────────────────────────
+
+
+class TestConfigProviderDefaults:
+    """Tests for multi-provider configuration defaults (IMP-T004)."""
+
+    def test_default_translation_provider(self):
+        """Default translation provider is 'google'."""
+        config = Config()
+        assert config.TRANSLATION_PROVIDER == "google"
+
+    def test_default_deepl_api_key_empty(self):
+        """Default DeepL API key is empty string."""
+        config = Config()
+        assert config.DEEPL_API_KEY == ""
+
+    def test_default_deepl_use_free_api(self):
+        """Default DEEPL_USE_FREE_API is 'true'."""
+        config = Config()
+        assert config.DEEPL_USE_FREE_API == "true"
+
+    def test_default_translation_fallback(self):
+        """Default TRANSLATION_FALLBACK is 'false'."""
+        config = Config()
+        assert config.TRANSLATION_FALLBACK == "false"
+
+
+class TestConfigProviderEnvOverrides:
+    """Tests for multi-provider environment variable overrides (IMP-T004)."""
+
+    @patch.dict(os.environ, {"TRANSLATION_PROVIDER": "deepl"})
+    def test_translation_provider_from_env(self):
+        """TRANSLATION_PROVIDER environment variable overrides the default."""
+        config = Config()
+        assert config.TRANSLATION_PROVIDER == "deepl"
+
+    @patch.dict(os.environ, {"DEEPL_API_KEY": "my-secret-key"})
+    def test_deepl_api_key_from_env(self):
+        """DEEPL_API_KEY environment variable is loaded."""
+        config = Config()
+        assert config.DEEPL_API_KEY == "my-secret-key"
+
+    @patch.dict(os.environ, {"DEEPL_USE_FREE_API": "false"})
+    def test_deepl_use_free_api_from_env(self):
+        """DEEPL_USE_FREE_API environment variable overrides the default."""
+        config = Config()
+        assert config.DEEPL_USE_FREE_API == "false"
+
+    @patch.dict(os.environ, {"TRANSLATION_FALLBACK": "true"})
+    def test_translation_fallback_from_env(self):
+        """TRANSLATION_FALLBACK environment variable overrides the default."""
+        config = Config()
+        assert config.TRANSLATION_FALLBACK == "true"
+
+
+class TestConfigProviderProperties:
+    """Tests for multi-provider derived properties (IMP-T004)."""
+
+    def test_deepl_use_free_api_enabled_default(self):
+        """deepl_use_free_api_enabled is True by default."""
+        config = Config()
+        assert config.deepl_use_free_api_enabled is True
+
+    @patch.dict(os.environ, {"DEEPL_USE_FREE_API": "false"})
+    def test_deepl_use_free_api_disabled(self):
+        """deepl_use_free_api_enabled is False when DEEPL_USE_FREE_API='false'."""
+        config = Config()
+        assert config.deepl_use_free_api_enabled is False
+
+    def test_deepl_use_free_api_one_means_true(self):
+        """deepl_use_free_api_enabled is True when DEEPL_USE_FREE_API='1'."""
+        config = Config(DEEPL_USE_FREE_API="1")
+        assert config.deepl_use_free_api_enabled is True
+
+    def test_fallback_enabled_default_false(self):
+        """fallback_enabled is False by default."""
+        config = Config()
+        assert config.fallback_enabled is False
+
+    @patch.dict(os.environ, {"TRANSLATION_FALLBACK": "true"})
+    def test_fallback_enabled_true(self):
+        """fallback_enabled is True when TRANSLATION_FALLBACK='true'."""
+        config = Config()
+        assert config.fallback_enabled is True
+
+    def test_fallback_enabled_yes_means_true(self):
+        """fallback_enabled is True when TRANSLATION_FALLBACK='yes'."""
+        config = Config(TRANSLATION_FALLBACK="yes")
+        assert config.fallback_enabled is True

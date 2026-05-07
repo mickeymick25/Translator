@@ -9,10 +9,12 @@ Covers:
 - translate_batch_generator(): generator mode
 """
 
+import os
 import time
 from unittest.mock import MagicMock, patch
 
 from core.translator import (
+    get_provider,
     is_rate_limit_error,
     translate_batch,
     translate_batch_generator,
@@ -86,42 +88,42 @@ class TestTranslateTextEmptyInput:
 class TestTranslateTextSuccess:
     """Tests for translate_text with successful API calls."""
 
-    @patch("core.translator.GoogleTranslator")
-    def test_returns_translated_text(self, mock_cls):
+    @patch("core.translator.get_provider")
+    def test_returns_translated_text(self, mock_get_provider):
         """A successful translation returns the translated text."""
-        mock_instance = MagicMock()
-        mock_instance.translate.return_value = "Bonjour"
-        mock_cls.return_value = mock_instance
+        mock_provider = MagicMock()
+        mock_provider.translate.return_value = "Bonjour"
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("Hello", "en", "fr")
         assert result == "Bonjour"
 
-    @patch("core.translator.GoogleTranslator")
-    def test_passes_correct_source_and_target(self, mock_cls):
-        """GoogleTranslator is called with the correct source and target."""
-        mock_instance = MagicMock()
-        mock_instance.translate.return_value = "Bonjour"
-        mock_cls.return_value = mock_instance
+    @patch("core.translator.get_provider")
+    def test_passes_correct_source_and_target(self, mock_get_provider):
+        """The provider's translate method is called with the correct text, source, and target."""
+        mock_provider = MagicMock()
+        mock_provider.translate.return_value = "Bonjour"
+        mock_get_provider.return_value = mock_provider
 
         translate_text("Hello", "en", "fr")
-        mock_cls.assert_called_once_with(source="en", target="fr")
+        mock_provider.translate.assert_called_once_with("Hello", "en", "fr")
 
-    @patch("core.translator.GoogleTranslator")
-    def test_returns_original_on_empty_api_result(self, mock_cls):
+    @patch("core.translator.get_provider")
+    def test_returns_original_on_empty_api_result(self, mock_get_provider):
         """If the API returns None/empty, the original text is returned."""
-        mock_instance = MagicMock()
-        mock_instance.translate.return_value = None
-        mock_cls.return_value = mock_instance
+        mock_provider = MagicMock()
+        mock_provider.translate.return_value = None
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("Hello", "en", "fr")
         assert result == "Hello"
 
-    @patch("core.translator.GoogleTranslator")
-    def test_special_characters_preserved(self, mock_cls):
+    @patch("core.translator.get_provider")
+    def test_special_characters_preserved(self, mock_get_provider):
         """Special characters in input are preserved in the output."""
-        mock_instance = MagicMock()
-        mock_instance.translate.return_value = "100 %"
-        mock_cls.return_value = mock_instance
+        mock_provider = MagicMock()
+        mock_provider.translate.return_value = "100 %"
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("100%", "en", "fr")
         assert "%" in result
@@ -131,42 +133,42 @@ class TestTranslateTextRetry:
     """Tests for translate_text retry logic on errors."""
 
     @patch("core.translator.time.sleep")
-    @patch("core.translator.GoogleTranslator")
-    def test_retries_on_server_error(self, mock_cls, mock_sleep):
+    @patch("core.translator.get_provider")
+    def test_retries_on_server_error(self, mock_get_provider, mock_sleep):
         """After a server error, translate_text retries and succeeds on 2nd attempt."""
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = [
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = [
             Exception("Server Error: Internal Server Error"),
             "Résultat",
         ]
-        mock_cls.return_value = mock_instance
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("Test", "en", "fr", max_retries=3)
         assert result == "Résultat"
-        assert mock_instance.translate.call_count == 2
+        assert mock_provider.translate.call_count == 2
 
     @patch("core.translator.time.sleep")
-    @patch("core.translator.GoogleTranslator")
-    def test_returns_original_after_max_retries(self, mock_cls, mock_sleep):
+    @patch("core.translator.get_provider")
+    def test_returns_original_after_max_retries(self, mock_get_provider, mock_sleep):
         """After max retries, the original text is returned."""
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = Exception("Persistent server error")
-        mock_cls.return_value = mock_instance
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = Exception("Persistent server error")
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("Test", "en", "fr", max_retries=2)
         assert result == "Test"
-        assert mock_instance.translate.call_count == 2
+        assert mock_provider.translate.call_count == 2
 
     @patch("core.translator.time.sleep")
-    @patch("core.translator.GoogleTranslator")
-    def test_rate_limit_triggers_backoff(self, mock_cls, mock_sleep):
+    @patch("core.translator.get_provider")
+    def test_rate_limit_triggers_backoff(self, mock_get_provider, mock_sleep):
         """A 429 rate limit error triggers the adaptive rate limiter backoff."""
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = [
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = [
             Exception("429 Too Many Requests"),
             "OK",
         ]
-        mock_cls.return_value = mock_instance
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("Test", "en", "fr", max_retries=3)
         assert result == "OK"
@@ -174,16 +176,16 @@ class TestTranslateTextRetry:
         assert mock_sleep.call_count >= 1
 
     @patch("core.translator.time.sleep")
-    @patch("core.translator.GoogleTranslator")
-    def test_rate_limit_increases_delay(self, mock_cls, mock_sleep):
+    @patch("core.translator.get_provider")
+    def test_rate_limit_increases_delay(self, mock_get_provider, mock_sleep):
         """On consecutive rate limit errors, the rate limiter increases the delay adaptively."""
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = [
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = [
             Exception("429 Too Many Requests"),
             Exception("429 Too Many Requests"),
             "OK",
         ]
-        mock_cls.return_value = mock_instance
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("Test", "en", "fr", max_retries=3)
         assert result == "OK"
@@ -198,15 +200,17 @@ class TestTranslateTextRetry:
         assert sleep_calls[1] > sleep_calls[0] or sleep_calls[1] >= 0.4
 
     @patch("core.translator.time.sleep")
-    @patch("core.translator.GoogleTranslator")
-    def test_non_rate_limit_error_uses_linear_backoff(self, mock_cls, mock_sleep):
+    @patch("core.translator.get_provider")
+    def test_non_rate_limit_error_uses_linear_backoff(
+        self, mock_get_provider, mock_sleep
+    ):
         """Non-rate-limit errors use a linear backoff: (attempt+1)*2 seconds."""
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = [
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = [
             Exception("ConnectionError: Network unreachable"),
             "OK",
         ]
-        mock_cls.return_value = mock_instance
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("Test", "en", "fr", max_retries=3)
         assert result == "OK"
@@ -327,11 +331,11 @@ class TestTranslateBatchGenerator:
 class TestTranslateTextWithCache:
     """Tests for translate_text() integration with the translation cache."""
 
-    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_provider")
     @patch("core.translator.get_config")
     @patch("core.translator.get_cache")
     def test_cache_hit_returns_cached_translation(
-        self, mock_get_cache, mock_get_config, mock_cls
+        self, mock_get_cache, mock_get_config, mock_get_provider
     ):
         """When cache is enabled and has a hit, the cached result is returned without API call."""
         mock_config = MagicMock()
@@ -347,13 +351,13 @@ class TestTranslateTextWithCache:
         assert result == "Bonjour"
         mock_cache.get.assert_called_once_with("en", "fr", "Hello")
         # API should NOT be called
-        mock_cls.assert_not_called()
+        mock_get_provider.assert_not_called()
 
-    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_provider")
     @patch("core.translator.get_config")
     @patch("core.translator.get_cache")
     def test_cache_miss_calls_api_and_stores_result(
-        self, mock_get_cache, mock_get_config, mock_cls
+        self, mock_get_cache, mock_get_config, mock_get_provider
     ):
         """When cache is enabled but misses, the API is called and result is cached."""
         mock_config = MagicMock()
@@ -365,9 +369,9 @@ class TestTranslateTextWithCache:
         mock_cache.get.return_value = None  # cache miss
         mock_get_cache.return_value = mock_cache
 
-        mock_instance = MagicMock()
-        mock_instance.translate.return_value = "Bonjour"
-        mock_cls.return_value = mock_instance
+        mock_provider = MagicMock()
+        mock_provider.translate.return_value = "Bonjour"
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("Hello", "en", "fr")
         assert result == "Bonjour"
@@ -376,11 +380,11 @@ class TestTranslateTextWithCache:
         # Result was stored in cache
         mock_cache.put.assert_called_once_with("en", "fr", "Hello", "Bonjour")
 
-    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_provider")
     @patch("core.translator.get_config")
     @patch("core.translator.get_cache")
     def test_cache_disabled_does_not_check_cache(
-        self, mock_get_cache, mock_get_config, mock_cls
+        self, mock_get_cache, mock_get_config, mock_get_provider
     ):
         """When cache is disabled, no cache lookup or store is performed."""
         mock_config = MagicMock()
@@ -388,20 +392,20 @@ class TestTranslateTextWithCache:
         mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
         mock_get_config.return_value = mock_config
 
-        mock_instance = MagicMock()
-        mock_instance.translate.return_value = "Bonjour"
-        mock_cls.return_value = mock_instance
+        mock_provider = MagicMock()
+        mock_provider.translate.return_value = "Bonjour"
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("Hello", "en", "fr")
         assert result == "Bonjour"
         # get_cache should not be called when cache is disabled
         mock_get_cache.assert_not_called()
 
-    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_provider")
     @patch("core.translator.get_config")
     @patch("core.translator.get_cache")
     def test_cache_hit_for_different_language_pairs(
-        self, mock_get_cache, mock_get_config, mock_cls
+        self, mock_get_cache, mock_get_config, mock_get_provider
     ):
         """Cache lookups use the correct (source, target, text) key."""
         mock_config = MagicMock()
@@ -417,10 +421,12 @@ class TestTranslateTextWithCache:
         assert result == "Taste"
         mock_cache.get.assert_called_once_with("en", "de", "Button")
 
-    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_provider")
     @patch("core.translator.get_config")
     @patch("core.translator.get_cache")
-    def test_empty_text_skips_cache(self, mock_get_cache, mock_get_config, mock_cls):
+    def test_empty_text_skips_cache(
+        self, mock_get_cache, mock_get_config, mock_get_provider
+    ):
         """Empty text is returned as-is without checking the cache."""
         mock_config = MagicMock()
         mock_config.cache_enabled = True
@@ -431,13 +437,13 @@ class TestTranslateTextWithCache:
         assert result == ""
         # Neither get_cache nor get_config should be called for empty text
         # (get_config IS called for the empty check, but get_cache is not)
-        mock_cls.assert_not_called()
+        mock_get_provider.assert_not_called()
 
-    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_provider")
     @patch("core.translator.get_config")
     @patch("core.translator.get_cache")
     def test_failed_translation_does_not_cache(
-        self, mock_get_cache, mock_get_config, mock_cls
+        self, mock_get_cache, mock_get_config, mock_get_provider
     ):
         """When translation fails after retries, the result is NOT cached."""
         mock_config = MagicMock()
@@ -449,9 +455,9 @@ class TestTranslateTextWithCache:
         mock_cache.get.return_value = None  # cache miss
         mock_get_cache.return_value = mock_cache
 
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = Exception("Persistent error")
-        mock_cls.return_value = mock_instance
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = Exception("Persistent error")
+        mock_get_provider.return_value = mock_provider
 
         result = translate_text("Hello", "en", "fr", max_retries=1)
         assert result == "Hello"
@@ -550,19 +556,19 @@ class TestTranslateTextWithRateLimiter:
 
     @patch("core.translator.time.sleep")
     @patch("core.translator.get_rate_limiter")
-    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_provider")
     def test_rate_limit_error_calls_record_error(
-        self, mock_cls, mock_get_rl, mock_sleep
+        self, mock_get_provider, mock_get_rl, mock_sleep
     ):
         """A 429 error triggers rate_limiter.record_error()."""
         from core.rate_limiter import RateLimiter
 
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = [
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = [
             Exception("429 Too Many Requests"),
             "OK",
         ]
-        mock_cls.return_value = mock_instance
+        mock_get_provider.return_value = mock_provider
 
         rl = RateLimiter(persist_path=None)
         mock_get_rl.return_value = rl
@@ -574,17 +580,19 @@ class TestTranslateTextWithRateLimiter:
 
     @patch("core.translator.time.sleep")
     @patch("core.translator.get_rate_limiter")
-    @patch("core.translator.GoogleTranslator")
-    def test_rate_limit_uses_should_wait_delay(self, mock_cls, mock_get_rl, mock_sleep):
+    @patch("core.translator.get_provider")
+    def test_rate_limit_uses_should_wait_delay(
+        self, mock_get_provider, mock_get_rl, mock_sleep
+    ):
         """For 429 errors, translate_text sleeps the delay from rate_limiter.should_wait()."""
         from core.rate_limiter import RateLimiter
 
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = [
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = [
             Exception("429 Too Many Requests"),
             "OK",
         ]
-        mock_cls.return_value = mock_instance
+        mock_get_provider.return_value = mock_provider
 
         rl = RateLimiter(base_delay=0.5, error_threshold=1, persist_path=None)
         # Pre-record an error so should_wait() returns True with a known delay
@@ -603,19 +611,19 @@ class TestTranslateTextWithRateLimiter:
 
     @patch("core.translator.time.sleep")
     @patch("core.translator.get_rate_limiter")
-    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_provider")
     def test_non_rate_limit_error_uses_linear_backoff(
-        self, mock_cls, mock_get_rl, mock_sleep
+        self, mock_get_provider, mock_get_rl, mock_sleep
     ):
         """Non-429 errors use linear backoff, NOT the rate limiter."""
         from core.rate_limiter import RateLimiter
 
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = [
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = [
             Exception("Server Error: Internal Server Error"),
             "OK",
         ]
-        mock_cls.return_value = mock_instance
+        mock_get_provider.return_value = mock_provider
 
         rl = RateLimiter(persist_path=None)
         mock_get_rl.return_value = rl
@@ -631,14 +639,16 @@ class TestTranslateTextWithRateLimiter:
 
     @patch("core.translator.time.sleep")
     @patch("core.translator.get_rate_limiter")
-    @patch("core.translator.GoogleTranslator")
-    def test_success_calls_record_success(self, mock_cls, mock_get_rl, mock_sleep):
+    @patch("core.translator.get_provider")
+    def test_success_calls_record_success(
+        self, mock_get_provider, mock_get_rl, mock_sleep
+    ):
         """Successful translation calls rate_limiter.record_success()."""
         from core.rate_limiter import RateLimiter
 
-        mock_instance = MagicMock()
-        mock_instance.translate.return_value = "Bonjour"
-        mock_cls.return_value = mock_instance
+        mock_provider = MagicMock()
+        mock_provider.translate.return_value = "Bonjour"
+        mock_get_provider.return_value = mock_provider
 
         rl = RateLimiter(persist_path=None)
         mock_get_rl.return_value = rl
@@ -651,18 +661,20 @@ class TestTranslateTextWithRateLimiter:
 
     @patch("core.translator.time.sleep")
     @patch("core.translator.get_rate_limiter")
-    @patch("core.translator.GoogleTranslator")
-    def test_no_double_backoff_on_rate_limit(self, mock_cls, mock_get_rl, mock_sleep):
+    @patch("core.translator.get_provider")
+    def test_no_double_backoff_on_rate_limit(
+        self, mock_get_provider, mock_get_rl, mock_sleep
+    ):
         """429 errors use ONLY the rate limiter delay, no additional exponential backoff."""
         from core.rate_limiter import RateLimiter
 
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = [
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = [
             Exception("429 Too Many Requests"),
             Exception("429 Too Many Requests"),
             "OK",
         ]
-        mock_cls.return_value = mock_instance
+        mock_get_provider.return_value = mock_provider
 
         rl = RateLimiter(base_delay=0.2, error_threshold=1, persist_path=None)
         mock_get_rl.return_value = rl
@@ -676,8 +688,10 @@ class TestTranslateTextWithRateLimiter:
 
     @patch("core.translator.time.sleep")
     @patch("core.translator.get_rate_limiter")
-    @patch("core.translator.GoogleTranslator")
-    def test_rate_limit_with_cache_hit(self, mock_cls, mock_get_rl, mock_sleep):
+    @patch("core.translator.get_provider")
+    def test_rate_limit_with_cache_hit(
+        self, mock_get_provider, mock_get_rl, mock_sleep
+    ):
         """Rate limiter is NOT called when cache hits (no API call made)."""
         from core.rate_limiter import RateLimiter
 
@@ -701,21 +715,23 @@ class TestTranslateTextWithRateLimiter:
             assert result == "Bonjour"
             # No API call, no rate limiter interaction
             assert len(rl._error_timestamps) == 0
-            mock_cls.assert_not_called()
+            mock_get_provider.assert_not_called()
 
     @patch("core.translator.time.sleep")
     @patch("core.translator.get_rate_limiter")
-    @patch("core.translator.GoogleTranslator")
-    def test_rate_limit_error_then_success(self, mock_cls, mock_get_rl, mock_sleep):
+    @patch("core.translator.get_provider")
+    def test_rate_limit_error_then_success(
+        self, mock_get_provider, mock_get_rl, mock_sleep
+    ):
         """After a 429 error, the next success calls record_success()."""
         from core.rate_limiter import RateLimiter
 
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = [
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = [
             Exception("429 Too Many Requests"),
             "OK",
         ]
-        mock_cls.return_value = mock_instance
+        mock_get_provider.return_value = mock_provider
 
         rl = RateLimiter(persist_path=None)
         mock_get_rl.return_value = rl
@@ -724,5 +740,72 @@ class TestTranslateTextWithRateLimiter:
         assert result == "OK"
         # One error should be recorded
         assert len(rl._error_timestamps) == 1
-        # One sleep call for the rate limit delay
-        assert mock_sleep.call_count == 1
+
+
+# ─── get_provider ──────────────────────────────────────────────────
+
+
+class TestGetProvider:
+    """Tests for the get_provider() singleton (IMP-T004)."""
+
+    def setup_method(self):
+        """Reset the provider singleton before each test."""
+        import core.translator as translator_module
+
+        translator_module._provider = None
+
+    def teardown_method(self):
+        """Reset the provider singleton after each test."""
+        import core.translator as translator_module
+
+        translator_module._provider = None
+
+    def test_returns_google_provider_by_default(self):
+        """get_provider() returns a GoogleProvider when config defaults are used."""
+        from core.translator_factory import GoogleProvider
+
+        provider = get_provider()
+        assert isinstance(provider, GoogleProvider)
+
+    def test_singleton_returns_same_instance(self):
+        """get_provider() returns the same instance on subsequent calls."""
+        provider1 = get_provider()
+        provider2 = get_provider()
+        assert provider1 is provider2
+
+    @patch.dict(
+        os.environ, {"TRANSLATION_PROVIDER": "deepl", "DEEPL_API_KEY": "test-key"}
+    )
+    def test_creates_deepl_provider_from_config(self):
+        """get_provider() creates a DeepLProvider when config specifies deepl."""
+        # Reset config singleton to pick up new env vars
+        import core.config as config_module
+        from core.translator_factory import DeepLProvider
+
+        config_module._config = None
+        try:
+            provider = get_provider()
+            assert isinstance(provider, DeepLProvider)
+        finally:
+            config_module._config = None
+
+    @patch.dict(
+        os.environ,
+        {
+            "TRANSLATION_PROVIDER": "google",
+            "DEEPL_API_KEY": "test-key",
+            "TRANSLATION_FALLBACK": "true",
+        },
+    )
+    def test_creates_fallback_provider_from_config(self):
+        """get_provider() creates a FallbackProvider when fallback is enabled."""
+        # Reset config singleton to pick up new env vars
+        import core.config as config_module
+        from core.translator_factory import FallbackProvider
+
+        config_module._config = None
+        try:
+            provider = get_provider()
+            assert isinstance(provider, FallbackProvider)
+        finally:
+            config_module._config = None

@@ -211,6 +211,20 @@ class Config:
     # Rate limiter state settings
     RATE_LIMITER_STATE_PATH: str = field(default_factory=_default_rate_limiter_path)
 
+    # Multi-provider settings (IMP-T004)
+    TRANSLATION_PROVIDER: str = field(
+        default_factory=lambda: os.environ.get("TRANSLATION_PROVIDER", "google")
+    )
+    DEEPL_API_KEY: str = field(
+        default_factory=lambda: os.environ.get("DEEPL_API_KEY", "")
+    )
+    DEEPL_USE_FREE_API: str = field(
+        default_factory=lambda: os.environ.get("DEEPL_USE_FREE_API", "true")
+    )
+    TRANSLATION_FALLBACK: str = field(
+        default_factory=lambda: os.environ.get("TRANSLATION_FALLBACK", "false")
+    )
+
     # CLI flags (set by build_config_from_args, not by env vars)
     dry_run: bool = False
     verbose: bool = False
@@ -220,6 +234,16 @@ class Config:
     def cache_enabled(self) -> bool:
         """Whether the translation cache is enabled."""
         return self.TRANSLATION_CACHE.lower() in ("true", "1", "yes")
+
+    @property
+    def deepl_use_free_api_enabled(self) -> bool:
+        """Whether to use DeepL's free API tier."""
+        return self.DEEPL_USE_FREE_API.lower() in ("true", "1", "yes")
+
+    @property
+    def fallback_enabled(self) -> bool:
+        """Whether automatic provider fallback is enabled."""
+        return self.TRANSLATION_FALLBACK.lower() in ("true", "1", "yes")
 
     @property
     def batch_langs_list(self) -> list[str]:

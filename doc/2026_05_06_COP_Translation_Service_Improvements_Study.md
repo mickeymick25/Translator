@@ -1426,7 +1426,7 @@ IMP-T002 (Pre-commit) ──► Dépend de T001 (tests) pour être utile
 | IMP-T001 | Tests unitaires | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T001-tests-unitaires` | 257 tests, 87% coverage total |
 | IMP-T002 | Pre-commit hooks + CI optionnelle | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T002-pre-commit` | ruff + ruff-format + pre-commit-hooks + pytest-quick, CI optionnelle |
 | IMP-T003 | Rate limiter adaptatif | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T003-rate-limiter` | 428 tests, 89% total, 97% rate_limiter |
-| IMP-T004 | Multi-provider + fallback | 🔲 Non commencé | | | | Prérequis : IMP-T001, IMP-T003 |
+| IMP-T004 | Multi-provider + fallback | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T004-multi-provider` | TranslationProvider ABC, GoogleProvider, DeepLProvider, FallbackProvider — 563 tests, 89% total, 92% factory |
 | IMP-T005 | Interface CLI | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T005-cli` | 501 tests, 89% total |
 | IMP-T006 | Cache intelligent | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T006-cache-intelligent` | 359 tests, 88% total, 97% cache |
 | IMP-T007 | Chemins locaux | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T007-chemins-locaux` | 287 tests, 100% config coverage |

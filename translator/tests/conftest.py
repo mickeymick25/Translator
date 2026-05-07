@@ -133,8 +133,11 @@ def sample_dropdown_entries():
 @pytest.fixture
 def mock_google_translator():
     """
-    Mock GoogleTranslator that returns predefined translations.
+    Mock translation provider that returns predefined translations.
     Does NOT make any real API calls.
+
+    Patches core.translator.get_provider to return a mock provider
+    whose translate(text, source, target) method looks up predefined results.
     """
     translations = {
         ("Hello", "en", "fr"): "Bonjour",
@@ -152,62 +155,56 @@ def mock_google_translator():
         ("Home", "en", "ar"): "الرئيسية",
     }
 
-    with pytest.mock.patch("core.translator.GoogleTranslator") as mock_cls:
-        mock_instance = MagicMock()
+    mock_provider = MagicMock()
+    mock_provider.name = "MockProvider"
 
-        def translate_side_effect(text):
-            # Handle the case where translate is called on the instance
-            # after GoogleTranslator(source=..., target=...) construction
-            key = (text, mock_instance._source, mock_instance._target)
-            return translations.get(key, f"[{mock_instance._target}] {text}")
+    def translate_side_effect(text, source, target):
+        key = (text, source, target)
+        return translations.get(key, f"[{target}] {text}")
 
-        mock_instance.translate = MagicMock(side_effect=translate_side_effect)
+    mock_provider.translate = MagicMock(side_effect=translate_side_effect)
 
-        def constructor_side_effect(source, target):
-            mock_instance._source = source
-            mock_instance._target = target
-            return mock_instance
-
-        mock_cls.side_effect = constructor_side_effect
-        mock_cls.return_value = mock_instance
-
-        yield mock_cls
+    with pytest.mock.patch("core.translator.get_provider", return_value=mock_provider):
+        yield mock_provider
 
 
 @pytest.fixture
 def mock_google_translator_error():
     """
-    Mock GoogleTranslator that always raises an exception.
+    Mock translation provider that always raises an exception.
     For testing error handling and retry logic.
     """
-    with pytest.mock.patch("core.translator.GoogleTranslator") as mock_cls:
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = Exception(
-            "Server Error: Internal Server Error"
-        )
-        mock_cls.return_value = mock_instance
-        yield mock_cls
+    mock_provider = MagicMock()
+    mock_provider.name = "MockProvider"
+    mock_provider.translate.side_effect = Exception(
+        "Server Error: Internal Server Error"
+    )
+
+    with pytest.mock.patch("core.translator.get_provider", return_value=mock_provider):
+        yield mock_provider
 
 
 @pytest.fixture
 def mock_google_translator_rate_limit():
     """
-    Mock GoogleTranslator that raises a rate limit error on first call,
+    Mock translation provider that raises a rate limit error on first call,
     then succeeds on subsequent calls.
     """
-    with pytest.mock.patch("core.translator.GoogleTranslator") as mock_cls:
-        call_count = {"n": 0}
+    mock_provider = MagicMock()
+    mock_provider.name = "MockProvider"
 
-        def translate_side_effect(text):
-            call_count["n"] += 1
-            if call_count["n"] <= 1:
-                raise Exception("429 Too Many Requests")
-            return f"[translated] {text}"
+    call_count = {"n": 0}
 
-        mock_instance = MagicMock()
-        mock_instance.translate.side_effect = translate_side_effect
-        mock_cls.return_value = mock_instance
-        yield mock_cls
+    def translate_side_effect(text, source, target):
+        call_count["n"] += 1
+        if call_count["n"] <= 1:
+            raise Exception("429 Too Many Requests")
+        return f"[translated] {text}"
+
+    mock_provider.translate = MagicMock(side_effect=translate_side_effect)
+
+    with pytest.mock.patch("core.translator.get_provider", return_value=mock_provider):
+        yield mock_provider
 
 
 # ─── Fixtures: Environment ─────────────────────────────────────────
@@ -255,5 +252,23 @@ def reset_rate_limiter_singleton():
         import core.rate_limiter as rl_module
 
         rl_module._global_rate_limiter = None
+    except ImportError:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def reset_provider_singleton():
+    """Reset the translation provider singleton between tests to avoid state leakage."""
+    try:
+        import core.translator as translator_module
+
+        translator_module._provider = None
+    except ImportError:
+        pass
+    yield
+    try:
+        import core.translator as translator_module
+
+        translator_module._provider = None
     except ImportError:
         pass

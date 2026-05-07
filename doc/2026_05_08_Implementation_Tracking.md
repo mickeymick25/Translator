@@ -29,7 +29,7 @@
 | 4 | **IMP-T003** | Rate limiter adaptatif | Haute | ✅ `feat/IMP-T003-rate-limiter` |
 | 5 | **IMP-T005** | Interface CLI (argparse) | Moyenne | ✅ `feat/IMP-T005-interface-cli` |
 | 6 | **IMP-T002** | Pre-commit hooks + CI optionnelle | Basse | ✅ `feat/IMP-T002-pre-commit` |
-| 7 | **IMP-T004** | Multi-provider avec fallback | Basse | `feat/IMP-T004-multi-provider` |
+| 7 | **IMP-T004** | Multi-provider avec fallback | Basse | ✅ `feat/IMP-T004-multi-provider` |
 
 ---
 
@@ -375,8 +375,10 @@ L'approche Docker respecte la convention du projet mais est plus lente (~15s de 
 
 ### IMP-T004 — Multi-Provider avec Fallback
 
-**Statut :** 🔲 Non commencé
+**Statut :** ✅ Terminé
 **Branche :** `feat/IMP-T004-multi-provider`
+**Date début :** 2026-05-08
+**Date fin :** 2026-05-08
 **Priorité :** Basse
 **Description :** Support de DeepL comme alternative à Google Translate, avec fallback automatique.
 
@@ -384,26 +386,38 @@ L'approche Docker respecte la convention du projet mais est plus lente (~15s de 
 
 | Étape | Action | Statut |
 |-------|--------|--------|
-| 🔴 | Écrire les tests pour `TranslationProvider` (interface abstraite) | 🔲 |
-| 🔴 | Écrire les tests pour `GoogleProvider` | 🔲 |
-| 🔴 | Écrire les tests pour `DeepLProvider` (mock de l'API) | 🔲 |
-| 🔴 | Écrire les tests pour `FallbackProvider` — basculement après 3 erreurs 429 | 🔲 |
-| 🔴 | Écrire les tests pour `create_provider()` | 🔲 |
-| 🟢 | Implémenter `translator/core/translator_factory.py` | 🔲 |
-| 🟢 | Intégrer dans `translator/core/translator.py` | 🔲 |
-| 🟢 | Ajouter `TRANSLATION_PROVIDER`, `DEEPL_API_KEY`, `DEEPL_USE_FREE_API`, `TRANSLATION_FALLBACK` dans `config.py` | 🔲 |
-| 🔵 | Refactorer si nécessaire | 🔲 |
-| ✅ | Tous les tests passent | 🔲 |
+| 🔴 | Écrire les tests pour `TranslationProvider` (interface abstraite) | ✅ |
+| 🔴 | Écrire les tests pour `GoogleProvider` | ✅ |
+| 🔴 | Écrire les tests pour `DeepLProvider` (mock de l'API) | ✅ |
+| 🔴 | Écrire les tests pour `FallbackProvider` — basculement après 3 erreurs 429 | ✅ |
+| 🔴 | Écrire les tests pour `create_provider()` | ✅ |
+| 🟢 | Implémenter `translator/core/translator_factory.py` | ✅ |
+| 🟢 | Intégrer dans `translator/core/translator.py` | ✅ |
+| 🟢 | Ajouter `TRANSLATION_PROVIDER`, `DEEPL_API_KEY`, `DEEPL_USE_FREE_API`, `TRANSLATION_FALLBACK` dans `config.py` | ✅ |
+| 🔵 | Refactorer si nécessaire | ✅ |
+| ✅ | Tous les tests passent | ✅ |
 
 #### Fichiers créés
 
-- `translator/core/translator_factory.py` — Providers et factory
-- `translator/tests/test_translator_factory.py` — Tests des providers
+- `translator/core/translator_factory.py` — `TranslationProvider` (ABC), `GoogleProvider`, `DeepLProvider`, `FallbackProvider`, `create_provider()`
+- `translator/tests/test_translator_factory.py` — 44 tests des providers (6 classes)
 
 #### Fichiers modifiés
 
-- `translator/core/translator.py` — Utilisation du factory au lieu de l'appel direct
-- `translator/core/config.py` — Nouvelles variables d'environnement
+- `translator/core/translator.py` — `get_provider()` singleton, remplacement de l'appel direct `GoogleTranslator` par le provider
+- `translator/core/config.py` — Nouvelles variables : `TRANSLATION_PROVIDER`, `DEEPL_API_KEY`, `DEEPL_USE_FREE_API`, `TRANSLATION_FALLBACK` + propriétés `deepl_use_free_api_enabled`, `fallback_enabled`
+- `translator/tests/conftest.py` — Fixtures mises à jour : mock de `get_provider` au lieu de `GoogleTranslator` + fixture `reset_provider_singleton`
+- `translator/tests/test_translator.py` — Mise à jour des 20 mocks `GoogleTranslator` → `get_provider` + 4 tests `TestGetProvider`
+- `translator/tests/test_config.py` — 18 tests pour les nouvelles variables provider (3 classes)
+
+#### Couverture par module (après IMP-T004)
+
+| Module | Stmts | Miss | Cover |
+|--------|-------|------|-------|
+| core/translator_factory.py | 96 | 8 | 92% |
+| core/translator.py | 92 | 7 | 92% |
+| core/config.py | 111 | 0 | 100% |
+| **TOTAL** | **971** | **102** | **89%** |
 
 ---
 
@@ -419,6 +433,7 @@ L'approche Docker respecte la convention du projet mais est plus lente (~15s de 
 | 2026-05-08 | `feat/IMP-T003-rate-limiter` | `9f75d1b` | feat(rate-limiter): adaptive rate limiter with persistence and no double backoff |
 | 2026-05-08 | `feat/IMP-T005-cli` | `22e816c` | feat(cli): argparse CLI with subcommands, CLI > env > default resolution |
 | 2026-05-08 | `feat/IMP-T002-pre-commit` | `157a04d` | chore: pre-commit hooks (ruff, ruff-format, pre-commit-hooks, pytest-quick) + CI optionnelle |
+| 2026-05-08 | `feat/IMP-T004-multi-provider` | — | feat(multi-provider): TranslationProvider ABC, GoogleProvider, DeepLProvider, FallbackProvider, create_provider() — 563 tests, 89% total |
 
 ---
 
@@ -441,6 +456,11 @@ L'approche Docker respecte la convention du projet mais est plus lente (~15s de 
 | 2026-05-08 | Pre-commit hooks : `ruff` principal, `black` en CI uniquement | ruff-format compatible black ; black gardé pour vérification CI |
 | 2026-05-08 | Hook `pytest-quick` avec `language: system` | Plus rapide que Docker rebuild ; alternative Docker documentée |
 | 2026-05-08 | Tests `/tmp/output` → `tmp_path` (pytest fixture) | Évite les dépendances au filesystem local entre les runs de tests |
+| 2026-05-08 | Provider pattern (ABC + concrete implementations) | Remplace l'appel direct `GoogleTranslator` ; facilite l'ajout de nouveaux providers |
+| 2026-05-08 | `FallbackProvider` seuil 3 erreurs 429 consécutives | Évite les bascules intempestives sur un rate limit isolé |
+| 2026-05-08 | `FallbackProvider` retourne le texte original en cas d'erreur non rate-limit | Comportement défensif : pas de propagation d'exception au caller |
+| 2026-05-08 | `get_provider()` singleton lazy-init | Même pattern que `get_config()` / `get_cache()` / `get_rate_limiter()` |
+| 2026-05-08 | `DEEPL_LANG_MAP` inclut `"cz": "CS"` et `"cs": "CS"` | Le code projet utilise `cz`, l'API DeepL utilise `CS` ; les deux sont mappés |
 
 ### Conventions de branches
 

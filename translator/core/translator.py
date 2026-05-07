@@ -8,13 +8,37 @@ import logging
 import time
 from typing import Callable, Iterator
 
-from deep_translator import GoogleTranslator
-
 from core.cache import get_cache
 from core.config import get_config
 from core.rate_limiter import get_rate_limiter
+from core.translator_factory import TranslationProvider, create_provider
 
 logger = logging.getLogger(__name__)
+
+# Global provider instance (lazy-loaded)
+_provider: TranslationProvider | None = None
+
+
+def get_provider() -> TranslationProvider:
+    """
+    Get the translation provider (lazy initialization).
+
+    Creates the provider based on configuration:
+    - TRANSLATION_PROVIDER: 'google' (default) or 'deepl'
+    - DEEPL_API_KEY: required for DeepL
+    - DEEPL_USE_FREE_API: use free tier (default: true)
+    - TRANSLATION_FALLBACK: auto-fallback on rate limits (default: false)
+    """
+    global _provider
+    if _provider is None:
+        config = get_config()
+        _provider = create_provider(
+            provider_type=config.TRANSLATION_PROVIDER,
+            deepl_api_key=config.DEEPL_API_KEY,
+            deepl_use_free_api=config.deepl_use_free_api_enabled,
+            fallback_enabled=config.fallback_enabled,
+        )
+    return _provider
 
 
 def is_rate_limit_error(error_msg: str) -> bool:
@@ -74,9 +98,8 @@ def translate_text(
 
     for attempt in range(max_retries):
         try:
-            result = GoogleTranslator(source=source_lang, target=target_lang).translate(
-                text
-            )
+            provider = get_provider()
+            result = provider.translate(text, source_lang, target_lang)
             if result:
                 rate_limiter.record_success()
                 if cache:
