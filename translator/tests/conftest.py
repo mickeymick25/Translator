@@ -239,3 +239,21 @@ def reset_cache_singleton():
         cache_module._cache = None
     except ImportError:
         pass
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter_singleton():
+    """Reset the RateLimiter singleton between tests to avoid state leakage."""
+    try:
+        import core.rate_limiter as rl_module
+
+        rl_module._global_rate_limiter = None
+    except ImportError:
+        pass
+    yield
+    try:
+        import core.rate_limiter as rl_module
+
+        rl_module._global_rate_limiter = None
+    except ImportError:
+        pass

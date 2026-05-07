@@ -6,12 +6,13 @@ rate limiting, and batch processing support.
 
 import logging
 import time
-from typing import Any, Callable, Iterator
+from typing import Callable, Iterator
 
 from deep_translator import GoogleTranslator
 
 from core.cache import get_cache
 from core.config import get_config
+from core.rate_limiter import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,6 @@ def translate_text(
     source_lang: str,
     target_lang: str,
     max_retries: int = 3,
-    base_delay: float = 0.2,
 ) -> str:
     """
     Translate a single text with smart rate limiting and optional caching.
@@ -42,13 +42,14 @@ def translate_text(
     If the translation cache is enabled, checks the cache first and stores
     successful translations for future reuse.
 
+    For rate limit (429) errors, the adaptive rate limiter manages wait delays.
+    For other errors, a linear backoff of (attempt+1)*2 seconds is used.
+
     Args:
         text: The text to translate.
         source_lang: Source language code (e.g., 'en').
         target_lang: Target language code (e.g., 'cs').
         max_retries: Maximum number of retry attempts on failure.
-        base_delay: Base delay between requests in seconds (default 0.2s = 5 req/s max for Google).
-                   Gets multiplied by 2^(attempts-1) on rate limit errors.
 
     Returns:
         The translated text, or the original text if translation failed.
@@ -69,7 +70,7 @@ def translate_text(
     else:
         cache = None
 
-    current_delay = base_delay
+    rate_limiter = get_rate_limiter()
 
     for attempt in range(max_retries):
         try:
@@ -77,6 +78,7 @@ def translate_text(
                 text
             )
             if result:
+                rate_limiter.record_success()
                 if cache:
                     cache.put(source_lang, target_lang, text, result)
                 return result
@@ -87,17 +89,28 @@ def translate_text(
         except Exception as e:
             is_rate_limit = is_rate_limit_error(str(e))
 
-            if attempt < max_retries - 1:
-                if is_rate_limit:
-                    # Exponential backoff on rate limit errors
-                    wait_time = current_delay * (2**attempt)
+            if is_rate_limit:
+                # Rate limit error: use adaptive rate limiter (no double backoff)
+                rate_limiter.record_error()
+                _, wait_time = rate_limiter.should_wait()
+                if attempt < max_retries - 1:
                     logger.warning(
-                        "Rate limit hit, backing off %.1fs (attempt %d): %s",
-                        wait_time,
+                        "Rate limit hit (attempt %d), waiting %.1fs: %s",
                         attempt + 1,
+                        wait_time,
                         str(e)[:100],
                     )
+                    time.sleep(wait_time)
                 else:
+                    logger.error(
+                        "Failed to translate after %d attempts: %s...",
+                        max_retries,
+                        text[:50],
+                    )
+                    return text
+            else:
+                # Non-rate-limit error: linear backoff
+                if attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 2
                     logger.warning(
                         "Translation attempt %d failed, retrying in %ds: %s",
@@ -105,16 +118,14 @@ def translate_text(
                         wait_time,
                         str(e),
                     )
-                time.sleep(wait_time)
-                if is_rate_limit:
-                    current_delay *= 2  # Increase delay for next attempt
-            else:
-                logger.error(
-                    "Failed to translate after %d attempts: %s...",
-                    max_retries,
-                    text[:50],
-                )
-                return text
+                    time.sleep(wait_time)
+                else:
+                    logger.error(
+                        "Failed to translate after %d attempts: %s...",
+                        max_retries,
+                        text[:50],
+                    )
+                    return text
 
     return text
 

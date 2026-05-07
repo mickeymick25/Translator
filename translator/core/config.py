@@ -88,6 +88,18 @@ def _default_cache_path() -> str:
     )
 
 
+def _default_rate_limiter_path() -> str:
+    """Return the default rate limiter state file path, adapted to the execution environment."""
+    if _is_docker():
+        return os.environ.get(
+            "RATE_LIMITER_STATE_PATH", "/app/output/.rate_limiter_state.json"
+        )
+    return os.environ.get(
+        "RATE_LIMITER_STATE_PATH",
+        str(Path.cwd() / "output" / ".rate_limiter_state.json"),
+    )
+
+
 def _find_latest_import_folder(source_dir: str) -> str | None:
     """
     Find the most recent YYYY_MM_DD_Import folder in source_dir.
@@ -195,6 +207,9 @@ class Config:
         default_factory=lambda: os.environ.get("TRANSLATION_CACHE", "true")
     )
     TRANSLATION_CACHE_PATH: str = field(default_factory=_default_cache_path)
+
+    # Rate limiter state settings
+    RATE_LIMITER_STATE_PATH: str = field(default_factory=_default_rate_limiter_path)
 
     @property
     def cache_enabled(self) -> bool:

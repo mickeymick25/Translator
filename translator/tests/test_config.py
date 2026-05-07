@@ -29,6 +29,7 @@ from core.config import (
     _default_doc_dir,
     _default_excel_dir,
     _default_output_dir,
+    _default_rate_limiter_path,
     _default_source_dir,
     _find_latest_import_folder,
     _find_source_file_in_import,
@@ -752,3 +753,63 @@ class TestConfigCacheSettings:
         """TRANSLATION_CACHE_PATH env var overrides the default."""
         config = Config()
         assert config.TRANSLATION_CACHE_PATH == "/my/cache.json"
+
+
+class TestDefaultRateLimiterPath:
+    """Tests for _default_rate_limiter_path()."""
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_docker_default(self, mock_docker):
+        """In Docker, default rate limiter path is /app/output/.rate_limiter_state.json."""
+        result = _default_rate_limiter_path()
+        assert result == "/app/output/.rate_limiter_state.json"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_local_default(self, mock_docker):
+        """Outside Docker, default rate limiter path uses CWD."""
+        result = _default_rate_limiter_path()
+        assert "output" in result
+        assert ".rate_limiter_state.json" in result
+
+    @patch("core.config._is_docker", return_value=True)
+    @patch.dict(os.environ, {"RATE_LIMITER_STATE_PATH": "/custom/state.json"})
+    def test_docker_env_var_overrides_default(self, mock_docker):
+        """RATE_LIMITER_STATE_PATH env var overrides Docker default."""
+        result = _default_rate_limiter_path()
+        assert result == "/custom/state.json"
+
+    @patch("core.config._is_docker", return_value=False)
+    @patch.dict(os.environ, {"RATE_LIMITER_STATE_PATH": "/local/state.json"})
+    def test_local_env_var_overrides_default(self, mock_docker):
+        """RATE_LIMITER_STATE_PATH env var overrides local default."""
+        result = _default_rate_limiter_path()
+        assert result == "/local/state.json"
+
+
+class TestConfigRateLimiterSettings:
+    """Tests for Config rate limiter settings."""
+
+    def test_default_rate_limiter_state_path_exists(self):
+        """Config has a RATE_LIMITER_STATE_PATH field."""
+        config = Config()
+        assert hasattr(config, "RATE_LIMITER_STATE_PATH")
+        assert isinstance(config.RATE_LIMITER_STATE_PATH, str)
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_default_rate_limiter_path_in_docker(self, mock_docker):
+        """In Docker, RATE_LIMITER_STATE_PATH defaults to /app/output."""
+        config = Config()
+        assert config.RATE_LIMITER_STATE_PATH == "/app/output/.rate_limiter_state.json"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_default_rate_limiter_path_local(self, mock_docker):
+        """Outside Docker, RATE_LIMITER_STATE_PATH uses CWD."""
+        config = Config()
+        assert "output" in config.RATE_LIMITER_STATE_PATH
+        assert ".rate_limiter_state.json" in config.RATE_LIMITER_STATE_PATH
+
+    @patch.dict(os.environ, {"RATE_LIMITER_STATE_PATH": "/my/state.json"})
+    def test_rate_limiter_path_env_var_override(self):
+        """RATE_LIMITER_STATE_PATH env var overrides the default."""
+        config = Config()
+        assert config.RATE_LIMITER_STATE_PATH == "/my/state.json"

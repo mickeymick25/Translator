@@ -26,7 +26,7 @@
 | 1 | **IMP-T001** | Tests unitaires du code existant | Haute | ✅ `feat/IMP-T001-tests-unitaires` |
 | 2 | **IMP-T007** | Chemins locaux (Docker vs local) | Moyenne | ✅ `feat/IMP-T007-chemins-locaux` |
 | 3 | **IMP-T006** | Cache intelligent de traductions | Haute | ✅ `feat/IMP-T006-cache-intelligent` |
-| 4 | **IMP-T003** | Rate limiter adaptatif | Haute | `feat/IMP-T003-rate-limiter` |
+| 4 | **IMP-T003** | Rate limiter adaptatif | Haute | ✅ `feat/IMP-T003-rate-limiter` |
 | 5 | **IMP-T005** | Interface CLI (argparse) | Moyenne | `feat/IMP-T005-interface-cli` |
 | 6 | **IMP-T002** | Pre-commit hooks + CI optionnelle | Basse | `feat/IMP-T002-pre-commit` |
 | 7 | **IMP-T004** | Multi-provider avec fallback | Basse | `feat/IMP-T004-multi-provider` |
@@ -188,8 +188,10 @@
 
 ### IMP-T003 — Rate Limiter Adaptatif
 
-**Statut :** 🔲 Non commencé
+**Statut :** ✅ Terminé
 **Branche :** `feat/IMP-T003-rate-limiter`
+**Date début :** 2026-05-09
+**Date fin :** 2026-05-09
 **Priorité :** Haute
 **Description :** Rate limiter avec mémoire des erreurs, persistance JSON, et seuil réactif.
 
@@ -197,34 +199,56 @@
 
 | Étape | Action | Statut |
 |-------|--------|--------|
-| 🔴 | Écrire les tests pour `RateLimiter.__init__()` | 🔲 |
-| 🔴 | Écrire les tests pour `RateLimiter.should_wait()` — aucun seuil, seuil atteint, max_delay | 🔲 |
-| 🔴 | Écrire les tests pour `RateLimiter.record_error()` | 🔲 |
-| 🔴 | Écrire les tests pour `RateLimiter._persist_errors()` / `_load_persisted_errors()` | 🔲 |
-| 🔴 | Écrire les tests pour `get_rate_limiter()` (singleton, lazy init) | 🔲 |
-| 🔴 | Écrire les tests d'intégration : `translate_text()` avec rate limiter | 🔲 |
-| 🟢 | Implémenter `translator/core/rate_limiter.py` | 🔲 |
-| 🟢 | Intégrer dans `translator/core/translator.py` (remplacer le backoff inline) | 🔲 |
-| 🟢 | Ajouter `RATE_LIMITER_STATE_PATH` dans `config.py` | 🔲 |
-| 🔵 | Refactorer `translate_text()` pour supprimer le backoff redondant | 🔲 |
-| ✅ | Tous les tests passent | 🔲 |
+| 🔴 | Écrire les tests pour `RateLimiter.__init__()` | ✅ |
+| 🔴 | Écrire les tests pour `RateLimiter.should_wait()` — aucun seuil, seuil atteint, max_delay | ✅ |
+| 🔴 | Écrire les tests pour `RateLimiter.record_error()` | ✅ |
+| 🔴 | Écrire les tests pour `RateLimiter._persist_errors()` / `_load_persisted_errors()` | ✅ |
+| 🔴 | Écrire les tests pour `get_rate_limiter()` (singleton, lazy init) | ✅ |
+| 🔴 | Écrire les tests d'intégration : `translate_text()` avec rate limiter | ✅ |
+| 🟢 | Implémenter `translator/core/rate_limiter.py` | ✅ |
+| 🟢 | Intégrer dans `translator/core/translator.py` (remplacer le backoff inline) | ✅ |
+| 🟢 | Ajouter `RATE_LIMITER_STATE_PATH` dans `config.py` | ✅ |
+| 🔵 | Refactorer `translate_text()` pour supprimer le backoff redondant | ✅ |
+| ✅ | Tous les tests passent | ✅ 428/428 |
 
 #### Fichiers créés
 
-- `translator/core/rate_limiter.py` — Module de rate limiting
-- `translator/tests/test_rate_limiter.py` — Tests du rate limiter
+- `translator/core/rate_limiter.py` — Module de rate limiting (67 stmts, 97% coverage)
+- `translator/tests/test_rate_limiter.py` — 54 tests du rate limiter
 
 #### Fichiers modifiés
 
-- `translator/core/translator.py` — Remplacer le backoff inline par le rate limiter
-- `translator/core/config.py` — Variable `RATE_LIMITER_STATE_PATH`
+- `translator/core/translator.py` — Remplacement du backoff inline par le rate limiter adaptatif pour les erreurs 429 ; backoff linéaire conservé pour les erreurs non-rate-limit ; suppression du paramètre `base_delay` ; import de `get_rate_limiter` ; appel `record_error()` / `record_success()` / `should_wait()`
+- `translator/core/config.py` — Variable `RATE_LIMITER_STATE_PATH`, fonction `_default_rate_limiter_path()`
+- `translator/tests/test_config.py` — 8 nouveaux tests (TestDefaultRateLimiterPath, TestConfigRateLimiterSettings)
+- `translator/tests/test_translator.py` — 7 nouveaux tests d'intégration (TestTranslateTextWithRateLimiter) ; mise à jour des tests de retry existants (suppression de `base_delay`, adaptation aux assertions du rate limiter)
+- `translator/tests/conftest.py` — Fixture `reset_rate_limiter_singleton`
 
 #### Critère de validation
 
-- [ ] Le rate limiter persiste son état entre deux exécutions
-- [ ] Le seuil réactif (error_threshold=1) fonctionne
-- [ ] Le max_delay (10s) est respecté
-- [ ] Pas de double backoff (ancien + nouveau)
+- [x] Le rate limiter persiste son état entre deux exécutions
+- [x] Le seuil réactif (error_threshold=1) fonctionne
+- [x] Le max_delay (10s) est respecté
+- [x] Pas de double backoff (ancien + nouveau)
+
+#### Couverture par module (après IMP-T003)
+
+| Module | Stmts | Miss | Cover |
+|--------|-------|------|-------|
+| core/cache.py | 70 | 2 | 97% |
+| core/config.py | 98 | 0 | 100% |
+| core/io_json.py | 46 | 0 | 100% |
+| core/io_xlsx.py | 96 | 7 | 93% |
+| core/rate_limiter.py | 67 | 2 | 97% |
+| core/translator.py | 85 | 7 | 92% |
+| modes/mode_analyze.py | 76 | 2 | 97% |
+| modes/mode_translate_dropdowns.py | 195 | 61 | 69% |
+| modes/mode_translate_json.py | 123 | 13 | 89% |
+| **TOTAL** | **856** | **94** | **89%** |
+
+---
+
+### IMP-T005 — Interface CLI (argparse)
 
 ---
 

@@ -10,6 +10,7 @@ Covers:
 """
 
 import os
+import time
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -161,7 +162,7 @@ class TestTranslateTextRetry:
     @patch("core.translator.time.sleep")
     @patch("core.translator.GoogleTranslator")
     def test_rate_limit_triggers_backoff(self, mock_cls, mock_sleep):
-        """A 429 rate limit error triggers exponential backoff."""
+        """A 429 rate limit error triggers the adaptive rate limiter backoff."""
         mock_instance = MagicMock()
         mock_instance.translate.side_effect = [
             Exception("429 Too Many Requests"),
@@ -169,15 +170,15 @@ class TestTranslateTextRetry:
         ]
         mock_cls.return_value = mock_instance
 
-        result = translate_text("Test", "en", "fr", max_retries=3, base_delay=0.2)
+        result = translate_text("Test", "en", "fr", max_retries=3)
         assert result == "OK"
-        # sleep is called once (after the rate limit error)
+        # sleep is called once (after the rate limit error, via rate limiter)
         assert mock_sleep.call_count >= 1
 
     @patch("core.translator.time.sleep")
     @patch("core.translator.GoogleTranslator")
     def test_rate_limit_increases_delay(self, mock_cls, mock_sleep):
-        """On consecutive rate limit errors, the delay increases (exponential backoff)."""
+        """On consecutive rate limit errors, the rate limiter increases the delay adaptively."""
         mock_instance = MagicMock()
         mock_instance.translate.side_effect = [
             Exception("429 Too Many Requests"),
@@ -186,15 +187,16 @@ class TestTranslateTextRetry:
         ]
         mock_cls.return_value = mock_instance
 
-        result = translate_text("Test", "en", "fr", max_retries=3, base_delay=0.2)
+        result = translate_text("Test", "en", "fr", max_retries=3)
         assert result == "OK"
 
         # Collect all sleep call arguments
         sleep_calls = [call.args[0] for call in mock_sleep.call_args_list]
-        # There should be at least 2 sleep calls (one per retry)
+        # There should be at least 2 sleep calls (one per rate limit retry)
         assert len(sleep_calls) >= 2
-        # First delay should be base_delay * 2^0 = 0.2
-        # Second delay should be base_delay * 2^1 = 0.4 (current_delay doubles)
+        # With adaptive rate limiter (base_delay=0.2, threshold=1):
+        # 1st 429: 1 error in memory → multiplier=2^0=1, delay=0.2
+        # 2nd 429: 2 errors in memory → multiplier=2^1=2, delay=0.4
         assert sleep_calls[1] > sleep_calls[0] or sleep_calls[1] >= 0.4
 
     @patch("core.translator.time.sleep")
@@ -540,3 +542,189 @@ class TestTranslateBatchWithCache:
         # Should not raise any errors — cache code is skipped entirely
         results = translate_batch(["x", "y"], "en", "fr", rate_limit_seconds=0)
         assert results == ["A", "B"]
+
+
+# ─── translate_text with rate limiter ──────────────────────────────
+
+
+class TestTranslateTextWithRateLimiter:
+    """Integration tests for translate_text() with the adaptive rate limiter."""
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.get_rate_limiter")
+    @patch("core.translator.GoogleTranslator")
+    def test_rate_limit_error_calls_record_error(
+        self, mock_cls, mock_get_rl, mock_sleep
+    ):
+        """A 429 error triggers rate_limiter.record_error()."""
+        from core.rate_limiter import RateLimiter
+
+        mock_instance = MagicMock()
+        mock_instance.translate.side_effect = [
+            Exception("429 Too Many Requests"),
+            "OK",
+        ]
+        mock_cls.return_value = mock_instance
+
+        rl = RateLimiter(persist_path=None)
+        mock_get_rl.return_value = rl
+
+        result = translate_text("Test", "en", "fr", max_retries=3)
+        assert result == "OK"
+        # record_error should have been called once (one 429 error)
+        assert len(rl._error_timestamps) == 1
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.get_rate_limiter")
+    @patch("core.translator.GoogleTranslator")
+    def test_rate_limit_uses_should_wait_delay(self, mock_cls, mock_get_rl, mock_sleep):
+        """For 429 errors, translate_text sleeps the delay from rate_limiter.should_wait()."""
+        from core.rate_limiter import RateLimiter
+
+        mock_instance = MagicMock()
+        mock_instance.translate.side_effect = [
+            Exception("429 Too Many Requests"),
+            "OK",
+        ]
+        mock_cls.return_value = mock_instance
+
+        rl = RateLimiter(base_delay=0.5, error_threshold=1, persist_path=None)
+        # Pre-record an error so should_wait() returns True with a known delay
+        rl._error_timestamps = [time.time()]
+        mock_get_rl.return_value = rl
+
+        result = translate_text("Test", "en", "fr", max_retries=3)
+        assert result == "OK"
+        # sleep should have been called at least once
+        assert mock_sleep.call_count >= 1
+        # The first sleep call should be the rate limiter delay
+        sleep_args = [call.args[0] for call in mock_sleep.call_args_list]
+        # With 2 errors in memory (1 pre-recorded + 1 new), multiplier = 2^(2-1) = 2
+        # delay = 0.5 * 2 = 1.0
+        assert any(abs(a - 1.0) < 0.01 for a in sleep_args)
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.get_rate_limiter")
+    @patch("core.translator.GoogleTranslator")
+    def test_non_rate_limit_error_uses_linear_backoff(
+        self, mock_cls, mock_get_rl, mock_sleep
+    ):
+        """Non-429 errors use linear backoff, NOT the rate limiter."""
+        from core.rate_limiter import RateLimiter
+
+        mock_instance = MagicMock()
+        mock_instance.translate.side_effect = [
+            Exception("Server Error: Internal Server Error"),
+            "OK",
+        ]
+        mock_cls.return_value = mock_instance
+
+        rl = RateLimiter(persist_path=None)
+        mock_get_rl.return_value = rl
+
+        result = translate_text("Test", "en", "fr", max_retries=3)
+        assert result == "OK"
+        # Non-rate-limit errors should NOT record errors in rate limiter
+        assert len(rl._error_timestamps) == 0
+        # Linear backoff: (attempt + 1) * 2 = (0+1)*2 = 2 seconds
+        sleep_calls = [call.args[0] for call in mock_sleep.call_args_list]
+        assert len(sleep_calls) >= 1
+        assert sleep_calls[0] == 2.0
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.get_rate_limiter")
+    @patch("core.translator.GoogleTranslator")
+    def test_success_calls_record_success(self, mock_cls, mock_get_rl, mock_sleep):
+        """Successful translation calls rate_limiter.record_success()."""
+        from core.rate_limiter import RateLimiter
+
+        mock_instance = MagicMock()
+        mock_instance.translate.return_value = "Bonjour"
+        mock_cls.return_value = mock_instance
+
+        rl = RateLimiter(persist_path=None)
+        mock_get_rl.return_value = rl
+
+        # record_success is a no-op currently, but we verify it's called
+        result = translate_text("Hello", "en", "fr")
+        assert result == "Bonjour"
+        # No errors should be recorded
+        assert len(rl._error_timestamps) == 0
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.get_rate_limiter")
+    @patch("core.translator.GoogleTranslator")
+    def test_no_double_backoff_on_rate_limit(self, mock_cls, mock_get_rl, mock_sleep):
+        """429 errors use ONLY the rate limiter delay, no additional exponential backoff."""
+        from core.rate_limiter import RateLimiter
+
+        mock_instance = MagicMock()
+        mock_instance.translate.side_effect = [
+            Exception("429 Too Many Requests"),
+            Exception("429 Too Many Requests"),
+            "OK",
+        ]
+        mock_cls.return_value = mock_instance
+
+        rl = RateLimiter(base_delay=0.2, error_threshold=1, persist_path=None)
+        mock_get_rl.return_value = rl
+
+        result = translate_text("Test", "en", "fr", max_retries=3)
+        assert result == "OK"
+        # Both 429 errors should be recorded in rate limiter
+        assert len(rl._error_timestamps) == 2
+        # sleep should be called for each 429 error (rate limiter delays only)
+        assert mock_sleep.call_count == 2
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.get_rate_limiter")
+    @patch("core.translator.GoogleTranslator")
+    def test_rate_limit_with_cache_hit(self, mock_cls, mock_get_rl, mock_sleep):
+        """Rate limiter is NOT called when cache hits (no API call made)."""
+        from core.rate_limiter import RateLimiter
+
+        rl = RateLimiter(persist_path=None)
+        mock_get_rl.return_value = rl
+
+        with (
+            patch("core.translator.get_config") as mock_get_config,
+            patch("core.translator.get_cache") as mock_get_cache,
+        ):
+            mock_config = MagicMock()
+            mock_config.cache_enabled = True
+            mock_config.TRANSLATION_CACHE_PATH = "/tmp/test.json"
+            mock_get_config.return_value = mock_config
+
+            mock_cache = MagicMock()
+            mock_cache.get.return_value = "Bonjour"
+            mock_get_cache.return_value = mock_cache
+
+            result = translate_text("Hello", "en", "fr")
+            assert result == "Bonjour"
+            # No API call, no rate limiter interaction
+            assert len(rl._error_timestamps) == 0
+            mock_cls.assert_not_called()
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.get_rate_limiter")
+    @patch("core.translator.GoogleTranslator")
+    def test_rate_limit_error_then_success(self, mock_cls, mock_get_rl, mock_sleep):
+        """After a 429 error, the next success calls record_success()."""
+        from core.rate_limiter import RateLimiter
+
+        mock_instance = MagicMock()
+        mock_instance.translate.side_effect = [
+            Exception("429 Too Many Requests"),
+            "OK",
+        ]
+        mock_cls.return_value = mock_instance
+
+        rl = RateLimiter(persist_path=None)
+        mock_get_rl.return_value = rl
+
+        result = translate_text("Test", "en", "fr", max_retries=3)
+        assert result == "OK"
+        # One error should be recorded
+        assert len(rl._error_timestamps) == 1
+        # One sleep call for the rate limit delay
+        assert mock_sleep.call_count == 1
