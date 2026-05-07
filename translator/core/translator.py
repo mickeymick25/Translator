@@ -10,6 +10,9 @@ from typing import Any, Callable, Iterator
 
 from deep_translator import GoogleTranslator
 
+from core.cache import get_cache
+from core.config import get_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,7 +37,10 @@ def translate_text(
     base_delay: float = 0.2,
 ) -> str:
     """
-    Translate a single text with smart rate limiting.
+    Translate a single text with smart rate limiting and optional caching.
+
+    If the translation cache is enabled, checks the cache first and stores
+    successful translations for future reuse.
 
     Args:
         text: The text to translate.
@@ -53,6 +59,16 @@ def translate_text(
     if not text or len(text.strip()) == 0:
         return text
 
+    # Check cache if enabled
+    config = get_config()
+    if config.cache_enabled:
+        cache = get_cache(cache_path=config.TRANSLATION_CACHE_PATH)
+        cached = cache.get(source_lang, target_lang, text)
+        if cached is not None:
+            return cached
+    else:
+        cache = None
+
     current_delay = base_delay
 
     for attempt in range(max_retries):
@@ -61,6 +77,8 @@ def translate_text(
                 text
             )
             if result:
+                if cache:
+                    cache.put(source_lang, target_lang, text, result)
                 return result
             logger.warning(
                 "Translation returned empty result for text: %s...", text[:50]
@@ -168,6 +186,20 @@ def translate_batch(
     # Final checkpoint if there are remaining items
     if checkpoint_callback and translated_since_checkpoint:
         checkpoint_callback(total, results)
+
+    # Flush cache if enabled
+    config = get_config()
+    if config.cache_enabled:
+        cache = get_cache(cache_path=config.TRANSLATION_CACHE_PATH)
+        cache.flush()
+        stats = cache.stats()
+        logger.info(
+            "Cache stats: %d hits, %d misses (%.1f%% hit rate), %d total cached entries",
+            stats["hits"],
+            stats["misses"],
+            stats["hit_rate_pct"],
+            stats["total_entries"],
+        )
 
     logger.info("Batch translation completed: %d/%d items", total, total)
     return results

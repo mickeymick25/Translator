@@ -4,11 +4,13 @@ Tests for core/translator.py — Translation module.
 Covers:
 - is_rate_limit_error(): rate limit detection
 - translate_text(): empty/whitespace input, successful translation, retry logic, rate limit handling
-- translate_batch(): batch processing with checkpoint callback
+- translate_text(): cache integration (hit, miss, disabled)
+- translate_batch(): batch processing with checkpoint callback, cache flush
 - translate_batch_generator(): generator mode
 """
 
-from unittest.mock import MagicMock, patch
+import os
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from core.translator import (
@@ -317,3 +319,224 @@ class TestTranslateBatchGenerator:
         results = list(translate_batch_generator([], "en", "fr", rate_limit_seconds=0))
         assert results == []
         mock_translate.assert_not_called()
+
+
+# ─── translate_text with cache ─────────────────────────────────────
+
+
+class TestTranslateTextWithCache:
+    """Tests for translate_text() integration with the translation cache."""
+
+    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_config")
+    @patch("core.translator.get_cache")
+    def test_cache_hit_returns_cached_translation(
+        self, mock_get_cache, mock_get_config, mock_cls
+    ):
+        """When cache is enabled and has a hit, the cached result is returned without API call."""
+        mock_config = MagicMock()
+        mock_config.cache_enabled = True
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = "Bonjour"
+        mock_get_cache.return_value = mock_cache
+
+        result = translate_text("Hello", "en", "fr")
+        assert result == "Bonjour"
+        mock_cache.get.assert_called_once_with("en", "fr", "Hello")
+        # API should NOT be called
+        mock_cls.assert_not_called()
+
+    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_config")
+    @patch("core.translator.get_cache")
+    def test_cache_miss_calls_api_and_stores_result(
+        self, mock_get_cache, mock_get_config, mock_cls
+    ):
+        """When cache is enabled but misses, the API is called and result is cached."""
+        mock_config = MagicMock()
+        mock_config.cache_enabled = True
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None  # cache miss
+        mock_get_cache.return_value = mock_cache
+
+        mock_instance = MagicMock()
+        mock_instance.translate.return_value = "Bonjour"
+        mock_cls.return_value = mock_instance
+
+        result = translate_text("Hello", "en", "fr")
+        assert result == "Bonjour"
+        # Cache miss was checked
+        mock_cache.get.assert_called_once_with("en", "fr", "Hello")
+        # Result was stored in cache
+        mock_cache.put.assert_called_once_with("en", "fr", "Hello", "Bonjour")
+
+    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_config")
+    @patch("core.translator.get_cache")
+    def test_cache_disabled_does_not_check_cache(
+        self, mock_get_cache, mock_get_config, mock_cls
+    ):
+        """When cache is disabled, no cache lookup or store is performed."""
+        mock_config = MagicMock()
+        mock_config.cache_enabled = False
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+
+        mock_instance = MagicMock()
+        mock_instance.translate.return_value = "Bonjour"
+        mock_cls.return_value = mock_instance
+
+        result = translate_text("Hello", "en", "fr")
+        assert result == "Bonjour"
+        # get_cache should not be called when cache is disabled
+        mock_get_cache.assert_not_called()
+
+    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_config")
+    @patch("core.translator.get_cache")
+    def test_cache_hit_for_different_language_pairs(
+        self, mock_get_cache, mock_get_config, mock_cls
+    ):
+        """Cache lookups use the correct (source, target, text) key."""
+        mock_config = MagicMock()
+        mock_config.cache_enabled = True
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = "Taste"
+        mock_get_cache.return_value = mock_cache
+
+        result = translate_text("Button", "en", "de")
+        assert result == "Taste"
+        mock_cache.get.assert_called_once_with("en", "de", "Button")
+
+    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_config")
+    @patch("core.translator.get_cache")
+    def test_empty_text_skips_cache(self, mock_get_cache, mock_get_config, mock_cls):
+        """Empty text is returned as-is without checking the cache."""
+        mock_config = MagicMock()
+        mock_config.cache_enabled = True
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+
+        result = translate_text("", "en", "fr")
+        assert result == ""
+        # Neither get_cache nor get_config should be called for empty text
+        # (get_config IS called for the empty check, but get_cache is not)
+        mock_cls.assert_not_called()
+
+    @patch("core.translator.GoogleTranslator")
+    @patch("core.translator.get_config")
+    @patch("core.translator.get_cache")
+    def test_failed_translation_does_not_cache(
+        self, mock_get_cache, mock_get_config, mock_cls
+    ):
+        """When translation fails after retries, the result is NOT cached."""
+        mock_config = MagicMock()
+        mock_config.cache_enabled = True
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None  # cache miss
+        mock_get_cache.return_value = mock_cache
+
+        mock_instance = MagicMock()
+        mock_instance.translate.side_effect = Exception("Persistent error")
+        mock_cls.return_value = mock_instance
+
+        result = translate_text("Hello", "en", "fr", max_retries=1)
+        assert result == "Hello"
+        # Only get() was called (cache miss), but put() was never called
+        mock_cache.get.assert_called_once_with("en", "fr", "Hello")
+        mock_cache.put.assert_not_called()
+
+
+# ─── translate_batch with cache ─────────────────────────────────────
+
+
+class TestTranslateBatchWithCache:
+    """Tests for translate_batch() integration with the translation cache."""
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.translate_text")
+    @patch("core.translator.get_config")
+    @patch("core.translator.get_cache")
+    def test_batch_flushes_cache_on_completion(
+        self, mock_get_cache, mock_get_config, mock_translate, mock_sleep
+    ):
+        """translate_batch flushes the cache at the end."""
+        mock_config = MagicMock()
+        mock_config.cache_enabled = True
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+
+        mock_cache = MagicMock()
+        mock_cache.stats.return_value = {
+            "total_entries": 3,
+            "hits": 2,
+            "misses": 1,
+            "hit_rate_pct": 66.7,
+        }
+        mock_get_cache.return_value = mock_cache
+
+        mock_translate.side_effect = ["A", "B", "C"]
+        mock_sleep.return_value = None
+
+        translate_batch(["x", "y", "z"], "en", "fr", rate_limit_seconds=0)
+        mock_cache.flush.assert_called_once()
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.translate_text")
+    @patch("core.translator.get_config")
+    @patch("core.translator.get_cache")
+    def test_batch_logs_cache_stats(
+        self, mock_get_cache, mock_get_config, mock_translate, mock_sleep
+    ):
+        """translate_batch logs cache statistics after completion."""
+        mock_config = MagicMock()
+        mock_config.cache_enabled = True
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+
+        mock_cache = MagicMock()
+        mock_cache.stats.return_value = {
+            "total_entries": 10,
+            "hits": 8,
+            "misses": 2,
+            "hit_rate_pct": 80.0,
+        }
+        mock_get_cache.return_value = mock_cache
+
+        mock_translate.side_effect = ["A", "B"]
+        mock_sleep.return_value = None
+
+        translate_batch(["x", "y"], "en", "fr", rate_limit_seconds=0)
+        mock_cache.stats.assert_called()
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.translate_text")
+    @patch("core.translator.get_config")
+    def test_batch_does_not_flush_cache_when_disabled(
+        self, mock_get_config, mock_translate, mock_sleep
+    ):
+        """When cache is disabled, no flush or stats are performed."""
+        mock_config = MagicMock()
+        mock_config.cache_enabled = False
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+
+        mock_translate.side_effect = ["A", "B"]
+        mock_sleep.return_value = None
+
+        # Should not raise any errors — cache code is skipped entirely
+        results = translate_batch(["x", "y"], "en", "fr", rate_limit_seconds=0)
+        assert results == ["A", "B"]

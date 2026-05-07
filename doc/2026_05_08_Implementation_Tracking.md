@@ -25,7 +25,7 @@
 |-------|----|-------------|----------|----------------|
 | 1 | **IMP-T001** | Tests unitaires du code existant | Haute | ✅ `feat/IMP-T001-tests-unitaires` |
 | 2 | **IMP-T007** | Chemins locaux (Docker vs local) | Moyenne | ✅ `feat/IMP-T007-chemins-locaux` |
-| 3 | **IMP-T006** | Cache intelligent de traductions | Haute | `feat/IMP-T006-cache-intelligent` |
+| 3 | **IMP-T006** | Cache intelligent de traductions | Haute | ✅ `feat/IMP-T006-cache-intelligent` |
 | 4 | **IMP-T003** | Rate limiter adaptatif | Haute | `feat/IMP-T003-rate-limiter` |
 | 5 | **IMP-T005** | Interface CLI (argparse) | Moyenne | `feat/IMP-T005-interface-cli` |
 | 6 | **IMP-T002** | Pre-commit hooks + CI optionnelle | Basse | `feat/IMP-T002-pre-commit` |
@@ -141,8 +141,10 @@
 
 ### IMP-T006 — Cache Intelligent de Traductions
 
-**Statut :** 🔲 Non commencé
+**Statut :** ✅ Terminé
 **Branche :** `feat/IMP-T006-cache-intelligent`
+**Date début :** 2026-05-08
+**Date fin :** 2026-05-08
 **Priorité :** Haute
 **Description :** Cache persistant des traductions pour éviter de re-traduire les mêmes termes d'un run à l'autre.
 
@@ -150,34 +152,37 @@
 
 | Étape | Action | Statut |
 |-------|--------|--------|
-| 🔴 | Écrire les tests pour `TranslationCache.__init__()` | 🔲 |
-| 🔴 | Écrire les tests pour `TranslationCache.get()` / `put()` | 🔲 |
-| 🔴 | Écrire les tests pour `TranslationCache.flush()` / `_load()` / `_save()` | 🔲 |
-| 🔴 | Écrire les tests pour `TranslationCache.stats()` | 🔲 |
-| 🔴 | Écrire les tests pour `get_cache()` (singleton) | 🔲 |
-| 🔴 | Écrire les tests d'intégration : `translate_text()` avec cache | 🔲 |
-| 🟢 | Implémenter `translator/core/cache.py` | 🔲 |
-| 🟢 | Intégrer le cache dans `translator/core/translator.py` | 🔲 |
-| 🟢 | Ajouter `TRANSLATION_CACHE` et `TRANSLATION_CACHE_PATH` dans `config.py` | 🔲 |
-| 🔵 | Refactorer si nécessaire | 🔲 |
-| ✅ | Tous les tests passent | 🔲 |
+| 🔴 | Écrire les tests pour `TranslationCache.__init__()` | ✅ |
+| 🔴 | Écrire les tests pour `TranslationCache.get()` / `put()` | ✅ |
+| 🔴 | Écrire les tests pour `TranslationCache.flush()` / `_load()` / `_save()` | ✅ |
+| 🔴 | Écrire les tests pour `TranslationCache.stats()` | ✅ |
+| 🔴 | Écrire les tests pour `get_cache()` (singleton) | ✅ |
+| 🔴 | Écrire les tests d'intégration : `translate_text()` avec cache | ✅ |
+| 🟢 | Implémenter `translator/core/cache.py` | ✅ |
+| 🟢 | Intégrer le cache dans `translator/core/translator.py` | ✅ |
+| 🟢 | Ajouter `TRANSLATION_CACHE` et `TRANSLATION_CACHE_PATH` dans `config.py` | ✅ |
+| 🔵 | Refactorer si nécessaire | ✅ |
+| ✅ | Tous les tests passent | ✅ 359/359 |
 
 #### Fichiers créés
 
-- `translator/core/cache.py` — Module de cache
-- `translator/tests/test_cache.py` — Tests du cache
+- `translator/core/cache.py` — Module de cache (TranslationCache, get_cache)
+- `translator/tests/test_cache.py` — 49 tests du cache
 
 #### Fichiers modifiés
 
 - `translator/core/translator.py` — Intégration du cache dans `translate_text()` et `translate_batch()`
-- `translator/core/config.py` — Variables `TRANSLATION_CACHE`, `TRANSLATION_CACHE_PATH`
+- `translator/core/config.py` — Variables `TRANSLATION_CACHE`, `TRANSLATION_CACHE_PATH`, propriété `cache_enabled`, fonction `_default_cache_path()`
+- `translator/tests/test_config.py` — 14 nouveaux tests (TestDefaultCachePath, TestConfigCacheSettings)
+- `translator/tests/test_translator.py` — 9 nouveaux tests d'intégration cache (TestTranslateTextWithCache, TestTranslateBatchWithCache)
+- `translator/tests/conftest.py` — Fixture `reset_cache_singleton`
 
 #### Critère de validation
 
-- [ ] 1er run : cold cache, toutes les traductions passent par l'API
-- [ ] 2e run : warm cache, hit rate > 90% sur les mêmes termes
-- [ ] Le cache se persiste correctement entre deux exécutions
-- [ ] `TRANSLATION_CACHE=false` désactive le cache
+- [x] 1er run : cold cache, toutes les traductions passent par l'API
+- [x] 2e run : warm cache, hit rate > 90% sur les mêmes termes
+- [x] Le cache se persiste correctement entre deux exécutions
+- [x] `TRANSLATION_CACHE=false` désactive le cache
 
 ---
 
@@ -326,6 +331,7 @@
 | 2026-05-08 | `feat/IMP-T001-tests-unitaires` | `c03e3a8` | test(core): add unit tests for core modules — 130 tests, 92-100% coverage |
 | 2026-05-08 | `feat/IMP-T001-tests-unitaires` | `48dc8ae` | test(modes): add unit tests for all 3 modes — 257 tests total, 87% coverage |
 | 2026-05-08 | `feat/IMP-T007-chemins-locaux` | — | feat(config): add Docker/local path detection — 287 tests, 100% config coverage |
+| 2026-05-08 | `feat/IMP-T006-cache-intelligent` | — | feat(cache): add persistent translation cache — 359 tests, 88% total coverage |
 
 ---
 
@@ -342,6 +348,9 @@
 | 2026-05-08 | Détection Docker via `/.dockerenv` ou `/run/.containerenv` | Simple, fiable, couvre Docker et Podman |
 | 2026-05-08 | Helper `_default_dir()` pour résolution des chemins | Réduit la duplication, facilite l'ajout futur de chemins (cache, rate limiter) |
 | 2026-05-08 | Chemins locaux basés sur `Path.cwd()` | Permet `python service.py` sans config manuelle hors Docker |
+| 2026-05-08 | Cache clé `{source}:{target}:{text}` | Garantit l'unicité quelle que soit la paire de langues |
+| 2026-05-08 | Cache persistant JSON avec `flush()` différé | Évite les I/O disque à chaque `put()`, flush en fin de batch uniquement |
+| 2026-05-08 | `TRANSLATION_CACHE` activé par défaut | ROI immédiat : les termes stables ne sont jamais re-traduits |
 
 ### Conventions de branches
 

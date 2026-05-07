@@ -221,3 +221,21 @@ def reset_config_singleton():
     config_module._config = None
     yield
     config_module._config = None
+
+
+@pytest.fixture(autouse=True)
+def reset_cache_singleton():
+    """Reset the TranslationCache singleton between tests to avoid state leakage."""
+    try:
+        import core.cache as cache_module
+
+        cache_module._cache = None
+    except ImportError:
+        pass
+    yield
+    try:
+        import core.cache as cache_module
+
+        cache_module._cache = None
+    except ImportError:
+        pass

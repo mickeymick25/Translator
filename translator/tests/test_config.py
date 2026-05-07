@@ -24,6 +24,7 @@ from core.config import (
     MODE_TRANSLATE_DROPDOWNS,
     MODE_TRANSLATE_JSON,
     Config,
+    _default_cache_path,
     _default_dir,
     _default_doc_dir,
     _default_excel_dir,
@@ -649,3 +650,105 @@ class TestConfigEnvironmentAwareDefaults:
         config = Config()
         assert config.OUTPUT_DIR == "/my/output"
         assert config.SOURCE_DIR == "/my/source"
+
+
+# ─── _default_cache_path ──────────────────────────────────────────
+
+
+class TestDefaultCachePath:
+    """Tests for _default_cache_path() — environment-aware cache file path."""
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_docker_default(self, mock_docker):
+        """In Docker, default cache path is /app/output/.translation_cache.json."""
+        result = _default_cache_path()
+        assert result == "/app/output/.translation_cache.json"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_local_default(self, mock_docker, monkeypatch):
+        """Outside Docker, default cache path is CWD/output/.translation_cache.json."""
+        monkeypatch.delenv("TRANSLATION_CACHE_PATH", raising=False)
+        result = _default_cache_path()
+        assert result == str(Path.cwd() / "output" / ".translation_cache.json")
+
+    @patch("core.config._is_docker", return_value=True)
+    @patch.dict(os.environ, {"TRANSLATION_CACHE_PATH": "/custom/cache.json"})
+    def test_docker_env_var_overrides_default(self, mock_docker):
+        """In Docker, TRANSLATION_CACHE_PATH env var overrides the Docker default."""
+        result = _default_cache_path()
+        assert result == "/custom/cache.json"
+
+    @patch("core.config._is_docker", return_value=False)
+    @patch.dict(os.environ, {"TRANSLATION_CACHE_PATH": "/custom/cache.json"})
+    def test_local_env_var_overrides_default(self, mock_docker):
+        """Outside Docker, TRANSLATION_CACHE_PATH env var overrides the local default."""
+        result = _default_cache_path()
+        assert result == "/custom/cache.json"
+
+
+# ─── Config cache settings ────────────────────────────────────────
+
+
+class TestConfigCacheSettings:
+    """Tests for Config TRANSLATION_CACHE, TRANSLATION_CACHE_PATH, and cache_enabled."""
+
+    def test_default_translation_cache_is_true(self):
+        """Default TRANSLATION_CACHE is 'true'."""
+        config = Config()
+        assert config.TRANSLATION_CACHE == "true"
+
+    def test_cache_enabled_is_true_by_default(self):
+        """cache_enabled property returns True by default."""
+        config = Config()
+        assert config.cache_enabled is True
+
+    @patch.dict(os.environ, {"TRANSLATION_CACHE": "false"})
+    def test_cache_enabled_false(self):
+        """TRANSLATION_CACHE=false disables the cache."""
+        config = Config()
+        assert config.cache_enabled is False
+
+    @patch.dict(os.environ, {"TRANSLATION_CACHE": "0"})
+    def test_cache_enabled_zero(self):
+        """TRANSLATION_CACHE=0 disables the cache."""
+        config = Config()
+        assert config.cache_enabled is False
+
+    @patch.dict(os.environ, {"TRANSLATION_CACHE": "yes"})
+    def test_cache_enabled_yes(self):
+        """TRANSLATION_CACHE=yes enables the cache."""
+        config = Config()
+        assert config.cache_enabled is True
+
+    @patch.dict(os.environ, {"TRANSLATION_CACHE": "1"})
+    def test_cache_enabled_one(self):
+        """TRANSLATION_CACHE=1 enables the cache."""
+        config = Config()
+        assert config.cache_enabled is True
+
+    @patch.dict(os.environ, {"TRANSLATION_CACHE": "TRUE"})
+    def test_cache_enabled_case_insensitive(self):
+        """TRANSLATION_CACHE is case-insensitive."""
+        config = Config()
+        assert config.cache_enabled is True
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_default_cache_path_in_docker(self, mock_docker):
+        """In Docker, default cache path is /app/output/.translation_cache.json."""
+        config = Config()
+        assert config.TRANSLATION_CACHE_PATH == "/app/output/.translation_cache.json"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_default_cache_path_local(self, mock_docker, monkeypatch):
+        """Outside Docker, default cache path uses CWD."""
+        monkeypatch.delenv("TRANSLATION_CACHE_PATH", raising=False)
+        config = Config()
+        assert config.TRANSLATION_CACHE_PATH == str(
+            Path.cwd() / "output" / ".translation_cache.json"
+        )
+
+    @patch.dict(os.environ, {"TRANSLATION_CACHE_PATH": "/my/cache.json"})
+    def test_cache_path_env_var_override(self):
+        """TRANSLATION_CACHE_PATH env var overrides the default."""
+        config = Config()
+        assert config.TRANSLATION_CACHE_PATH == "/my/cache.json"

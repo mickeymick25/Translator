@@ -77,6 +77,17 @@ def _default_doc_dir() -> str:
     return _default_dir("DOC_DIR", "/app/doc", str(Path.cwd() / "Doc"))
 
 
+def _default_cache_path() -> str:
+    """Return the default cache file path, adapted to the execution environment."""
+    if _is_docker():
+        return os.environ.get(
+            "TRANSLATION_CACHE_PATH", "/app/output/.translation_cache.json"
+        )
+    return os.environ.get(
+        "TRANSLATION_CACHE_PATH", str(Path.cwd() / "output" / ".translation_cache.json")
+    )
+
+
 def _find_latest_import_folder(source_dir: str) -> str | None:
     """
     Find the most recent YYYY_MM_DD_Import folder in source_dir.
@@ -178,6 +189,17 @@ class Config:
     OUTPUT_FORMAT: str = field(
         default_factory=lambda: os.environ.get("OUTPUT_FORMAT", "auto")
     )
+
+    # Translation cache settings
+    TRANSLATION_CACHE: str = field(
+        default_factory=lambda: os.environ.get("TRANSLATION_CACHE", "true")
+    )
+    TRANSLATION_CACHE_PATH: str = field(default_factory=_default_cache_path)
+
+    @property
+    def cache_enabled(self) -> bool:
+        """Whether the translation cache is enabled."""
+        return self.TRANSLATION_CACHE.lower() in ("true", "1", "yes")
 
     @property
     def batch_langs_list(self) -> list[str]:
