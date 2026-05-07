@@ -28,7 +28,7 @@
 | 3 | **IMP-T006** | Cache intelligent de traductions | Haute | ✅ `feat/IMP-T006-cache-intelligent` |
 | 4 | **IMP-T003** | Rate limiter adaptatif | Haute | ✅ `feat/IMP-T003-rate-limiter` |
 | 5 | **IMP-T005** | Interface CLI (argparse) | Moyenne | ✅ `feat/IMP-T005-interface-cli` |
-| 6 | **IMP-T002** | Pre-commit hooks + CI optionnelle | Basse | `feat/IMP-T002-pre-commit` |
+| 6 | **IMP-T002** | Pre-commit hooks + CI optionnelle | Basse | ✅ `feat/IMP-T002-pre-commit` |
 | 7 | **IMP-T004** | Multi-provider avec fallback | Basse | `feat/IMP-T004-multi-provider` |
 
 ---
@@ -308,6 +308,8 @@
 
 **Statut :** ✅ Terminé
 **Branche :** `feat/IMP-T002-pre-commit`
+**Date début :** 2026-05-08
+**Date fin :** 2026-05-08
 **Priorité :** Basse
 **Description :** Pre-commit hooks pour la qualité de code, CI GitHub Actions optionnelle.
 
@@ -416,7 +418,7 @@ L'approche Docker respecte la convention du projet mais est plus lente (~15s de 
 | 2026-05-08 | `feat/IMP-T006-cache-intelligent` | — | feat(cache): add persistent translation cache — 359 tests, 88% total coverage |
 | 2026-05-08 | `feat/IMP-T003-rate-limiter` | `9f75d1b` | feat(rate-limiter): adaptive rate limiter with persistence and no double backoff |
 | 2026-05-08 | `feat/IMP-T005-cli` | `22e816c` | feat(cli): argparse CLI with subcommands, CLI > env > default resolution |
-| 2026-05-08 | `feat/IMP-T002-pre-commit` | — | chore: pre-commit hooks (ruff, ruff-format, pre-commit-hooks, pytest-quick) + CI optionnelle |
+| 2026-05-08 | `feat/IMP-T002-pre-commit` | `157a04d` | chore: pre-commit hooks (ruff, ruff-format, pre-commit-hooks, pytest-quick) + CI optionnelle |
 
 ---
 
