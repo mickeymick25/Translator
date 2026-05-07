@@ -1,4 +1,4 @@
-# COP Translation Service
+# Translation Service
 
 **Service de traduction générique pour le projet COP**
 
