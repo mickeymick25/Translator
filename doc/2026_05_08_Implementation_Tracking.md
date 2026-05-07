@@ -27,7 +27,7 @@
 | 2 | **IMP-T007** | Chemins locaux (Docker vs local) | Moyenne | ✅ `feat/IMP-T007-chemins-locaux` |
 | 3 | **IMP-T006** | Cache intelligent de traductions | Haute | ✅ `feat/IMP-T006-cache-intelligent` |
 | 4 | **IMP-T003** | Rate limiter adaptatif | Haute | ✅ `feat/IMP-T003-rate-limiter` |
-| 5 | **IMP-T005** | Interface CLI (argparse) | Moyenne | `feat/IMP-T005-interface-cli` |
+| 5 | **IMP-T005** | Interface CLI (argparse) | Moyenne | ✅ `feat/IMP-T005-interface-cli` |
 | 6 | **IMP-T002** | Pre-commit hooks + CI optionnelle | Basse | `feat/IMP-T002-pre-commit` |
 | 7 | **IMP-T004** | Multi-provider avec fallback | Basse | `feat/IMP-T004-multi-provider` |
 
@@ -250,12 +250,10 @@
 
 ### IMP-T005 — Interface CLI (argparse)
 
----
-
-### IMP-T005 — Interface CLI (argparse)
-
-**Statut :** 🔲 Non commencé
+**Statut :** ✅ Terminé
 **Branche :** `feat/IMP-T005-interface-cli`
+**Date début :** 2026-05-09
+**Date fin :** 2026-05-09
 **Priorité :** Moyenne
 **Description :** Ajouter une interface CLI pour remplacer/supplémenter les variables d'environnement.
 
@@ -263,27 +261,46 @@
 
 | Étape | Action | Statut |
 |-------|--------|--------|
-| 🔴 | Écrire les tests pour `build_parser()` — sous-commandes, arguments | 🔲 |
-| 🔴 | Écrire les tests pour la résolution de conflits (CLI > env > défaut) | 🔲 |
-| 🔴 | Écrire les tests pour chaque mode CLI | 🔲 |
-| 🟢 | Implémenter `build_parser()` dans `service.py` | 🔲 |
-| 🟢 | Implémenter la résolution CLI → Config | 🔲 |
-| 🟢 | Implémenter `--dry-run` pour chaque mode | 🔲 |
-| 🔵 | Refactorer si nécessaire | 🔲 |
-| ✅ | Tous les tests passent | 🔲 |
+| 🔴 | Écrire les tests pour `build_parser()` — sous-commandes, arguments | ✅ |
+| 🔴 | Écrire les tests pour la résolution de conflits (CLI > env > défaut) | ✅ |
+| 🔴 | Écrire les tests pour chaque mode CLI | ✅ |
+| 🟢 | Implémenter `build_parser()` dans `service.py` | ✅ |
+| 🟢 | Implémenter la résolution CLI → Config | ✅ |
+| 🟢 | Implémenter `--dry-run` pour chaque mode | ✅ |
+| 🔵 | Refactorer si nécessaire | ✅ |
+| ✅ | Tous les tests passent | ✅ 501/501 |
+
+#### Fichiers créés
+
+- `translator/tests/test_cli.py` — 65 tests de l'interface CLI (build_parser, build_config_from_args, résolution CLI > env > défaut)
 
 #### Fichiers modifiés
 
-- `translator/service.py` — Ajout de `build_parser()`, intégration CLI
-- `translator/core/config.py` — Support de la résolution CLI > env > défaut
-- `translator/tests/test_cli.py` — Tests de l'interface CLI
+- `translator/service.py` — Ajout de `build_parser()`, `build_config_from_args()`, `configure_logging()` ; intégration CLI dans `main()` ; rétrocompatibilité Docker via env var `MODE` ; `--version`, `-v`/`--verbose`, `-q`/`--quiet`, `--dry-run` sur chaque sous-commande ; `__version__ = "1.1.0"`
+- `translator/core/config.py` — Ajout des champs `dry_run`, `verbose`, `quiet` (bool, defaults False)
+- `translator/tests/test_config.py` — 8 nouveaux tests (TestConfigCLIFlags)
 
 #### Critère de validation
 
-- [ ] `python service.py --help` affiche l'aide
-- [ ] `python service.py translate-json -s en -t fr -i file.json` fonctionne
-- [ ] `python service.py --dry-run translate-json` simule sans appel API
-- [ ] Les args CLI ont priorité sur les env vars
+- [x] `python service.py --help` affiche l'aide
+- [x] `python service.py translate-json -s en -t fr -i file.json` fonctionne
+- [x] `python service.py translate-json --dry-run` simule sans appel API
+- [x] Les args CLI ont priorité sur les env vars
+
+#### Couverture par module (après IMP-T005)
+
+| Module | Stmts | Miss | Cover |
+|--------|-------|------|-------|
+| core/cache.py | 70 | 2 | 97% |
+| core/config.py | 101 | 0 | 100% |
+| core/io_json.py | 46 | 0 | 100% |
+| core/io_xlsx.py | 96 | 7 | 93% |
+| core/rate_limiter.py | 67 | 2 | 97% |
+| core/translator.py | 85 | 7 | 92% |
+| modes/mode_analyze.py | 76 | 2 | 97% |
+| modes/mode_translate_dropdowns.py | 195 | 61 | 69% |
+| modes/mode_translate_json.py | 123 | 13 | 89% |
+| **TOTAL** | **859** | **94** | **89%** |
 
 ---
 

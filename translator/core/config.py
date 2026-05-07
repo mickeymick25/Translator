@@ -211,6 +211,11 @@ class Config:
     # Rate limiter state settings
     RATE_LIMITER_STATE_PATH: str = field(default_factory=_default_rate_limiter_path)
 
+    # CLI flags (set by build_config_from_args, not by env vars)
+    dry_run: bool = False
+    verbose: bool = False
+    quiet: bool = False
+
     @property
     def cache_enabled(self) -> bool:
         """Whether the translation cache is enabled."""

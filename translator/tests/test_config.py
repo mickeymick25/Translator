@@ -813,3 +813,51 @@ class TestConfigRateLimiterSettings:
         """RATE_LIMITER_STATE_PATH env var overrides the default."""
         config = Config()
         assert config.RATE_LIMITER_STATE_PATH == "/my/state.json"
+
+
+class TestConfigCLIFlags:
+    """Tests for Config CLI flag fields (dry_run, verbose, quiet)."""
+
+    def test_dry_run_default_false(self):
+        """dry_run defaults to False."""
+        config = Config()
+        assert config.dry_run is False
+
+    def test_dry_run_can_be_set_true(self):
+        """dry_run can be set to True."""
+        config = Config(dry_run=True)
+        assert config.dry_run is True
+
+    def test_verbose_default_false(self):
+        """verbose defaults to False."""
+        config = Config()
+        assert config.verbose is False
+
+    def test_verbose_can_be_set_true(self):
+        """verbose can be set to True."""
+        config = Config(verbose=True)
+        assert config.verbose is True
+
+    def test_quiet_default_false(self):
+        """quiet defaults to False."""
+        config = Config()
+        assert config.quiet is False
+
+    def test_quiet_can_be_set_true(self):
+        """quiet can be set to True."""
+        config = Config(quiet=True)
+        assert config.quiet is True
+
+    def test_all_cli_flags_default_false(self):
+        """All CLI flags default to False simultaneously."""
+        config = Config()
+        assert config.dry_run is False
+        assert config.verbose is False
+        assert config.quiet is False
+
+    def test_all_cli_flags_can_be_set(self):
+        """All CLI flags can be set simultaneously."""
+        config = Config(dry_run=True, verbose=True, quiet=True)
+        assert config.dry_run is True
+        assert config.verbose is True
+        assert config.quiet is True
