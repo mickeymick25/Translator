@@ -433,7 +433,7 @@ L'approche Docker respecte la convention du projet mais est plus lente (~15s de 
 | 2026-05-08 | `feat/IMP-T003-rate-limiter` | `9f75d1b` | feat(rate-limiter): adaptive rate limiter with persistence and no double backoff |
 | 2026-05-08 | `feat/IMP-T005-cli` | `22e816c` | feat(cli): argparse CLI with subcommands, CLI > env > default resolution |
 | 2026-05-08 | `feat/IMP-T002-pre-commit` | `157a04d` | chore: pre-commit hooks (ruff, ruff-format, pre-commit-hooks, pytest-quick) + CI optionnelle |
-| 2026-05-08 | `feat/IMP-T004-multi-provider` | — | feat(multi-provider): TranslationProvider ABC, GoogleProvider, DeepLProvider, FallbackProvider, create_provider() — 563 tests, 89% total |
+| 2026-05-08 | `feat/IMP-T004-multi-provider` | `ee5262c` | feat(multi-provider): TranslationProvider ABC, GoogleProvider, DeepLProvider, FallbackProvider, create_provider() — 563 tests, 89% total |
 
 ---
 
