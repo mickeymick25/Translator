@@ -40,7 +40,6 @@ import argparse
 import logging
 import os
 import sys
-from pathlib import Path
 
 from core.config import (
     MODE_ANALYZE,

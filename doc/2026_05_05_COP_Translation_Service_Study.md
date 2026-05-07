@@ -426,19 +426,19 @@ Le rate limiter actuel ne mémorise pas les erreurs de rate limit entre les exé
 ```python
 class AdaptiveRateLimiter:
     """Rate limiter qui s'adapte automatiquement aux erreurs."""
-    
+
     def __init__(self, base_delay: float = 0.2, memory_minutes: int = 30):
         self.base_delay = base_delay
         self.memory_minutes = memory_minutes
         self.error_log = []  # Liste des timestamps d'erreurs
-        
+
     def should_wait(self) -> tuple[bool, float]:
         """Détermine si on doit attendre et combien."""
         now = time.time()
         # Nettoie les erreurs anciennes
-        self.error_log = [t for t in self.error_log 
+        self.error_log = [t for t in self.error_log
                          if now - t < self.memory_minutes * 60]
-        
+
         if len(self.error_log) >= 3:
             # 3+ erreurs récentes → délai augmenté
             return True, self.base_delay * (2 ** min(len(self.error_log), 5))

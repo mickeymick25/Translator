@@ -222,7 +222,7 @@ def run() -> None:
         target_langs = [lang for lang in batch_langs if lang != source_lang]
         if source_lang in batch_langs:
             logger.info("Note: Skipping %s (same as source lang)", source_lang.upper())
-        logger.info("Target languages: %s", [l.upper() for l in target_langs])
+        logger.info("Target languages: %s", [lang.upper() for lang in target_langs])
 
         # Use ThreadPoolExecutor for parallel translation
         max_workers = min(len(target_langs), 4)  # Limit to 4 parallel workers

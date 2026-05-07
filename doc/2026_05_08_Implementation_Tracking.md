@@ -306,7 +306,7 @@
 
 ### IMP-T002 — Pre-commit Hooks + CI Optionnelle
 
-**Statut :** 🔲 Non commencé
+**Statut :** ✅ Terminé
 **Branche :** `feat/IMP-T002-pre-commit`
 **Priorité :** Basse
 **Description :** Pre-commit hooks pour la qualité de code, CI GitHub Actions optionnelle.
@@ -315,18 +315,59 @@
 
 | # | Tâche | Statut |
 |---|-------|--------|
-| 2.1 | Créer `.pre-commit-config.yaml` | 🔲 |
-| 2.2 | Ajouter `ruff` et `black` dans `requirements-dev.txt` | 🔲 |
-| 2.3 | Installer et tester les hooks localement | 🔲 |
-| 2.4 | (Optionnel) Créer `.github/workflows/ci.yml` | 🔲 |
+| 2.1 | Créer `.pre-commit-config.yaml` | ✅ |
+| 2.2 | Ajouter `ruff`, `black` et `pre-commit` dans `requirements-dev.txt` | ✅ |
+| 2.3 | Installer et tester les hooks localement | ✅ |
+| 2.4 | (Optionnel) Créer `.github/workflows/ci.yml` | ✅ |
 
 > Note : Pas de TDD pour cette tâche (configuration, pas de code métier).
 
 #### Fichiers créés
 
-- `.pre-commit-config.yaml`
-- `requirements-dev.txt`
-- `.github/workflows/ci.yml` (optionnel)
+- `.pre-commit-config.yaml` — ruff (lint + format), pre-commit-hooks (whitespace, EOF, YAML, JSON, merge-conflict), pytest-quick (local)
+- `.github/workflows/ci.yml` — lint (ruff + black), test (pytest), build (Docker smoke test)
+
+#### Fichiers modifiés
+
+- `translator/requirements-dev.txt` — ajout de `pre-commit>=3.7.0`
+- `.gitignore` — ajout de `.pre-commit-cache/`
+- `translator/core/io_json.py` — F841 : `metadata` → `_metadata` (2 occurrences)
+- `translator/modes/mode_translate_dropdowns.py` — F841 : `source_col` → `_source_col` (2 occurrences)
+- `translator/modes/mode_translate_json.py` — E741 : `l` → `lang` (ambiguous variable name)
+- `translator/tests/test_mode_analyze.py` — F841 : suppression `result =` non utilisé
+- `translator/tests/test_mode_translate_dropdowns.py` — F841 : suppression `result =` non utilisé (2 occurrences)
+- `translator/tests/test_config.py` — `test_default_output_dir` / `test_default_source_dir` : environment-aware (Docker vs local)
+- `translator/tests/test_mode_translate_json.py` — `/tmp/output` → `tmp_path` (5 tests, évite les dépendances au filesystem local)
+
+#### Corrections de lint (pre-commit run --all-files)
+
+| Règle | Fichier | Correction |
+|-------|---------|------------|
+| F841 | `io_json.py:96,126` | `metadata` → `_metadata` |
+| F841 | `mode_translate_dropdowns.py:320,407` | `source_col` → `_source_col` |
+| E741 | `mode_translate_json.py:225` | `l` → `lang` |
+| F841 | `test_mode_analyze.py:421` | `result = run()` → `run()` |
+| F841 | `test_mode_translate_dropdowns.py:394,430` | `result =` supprimé |
+| trailing-whitespace | 3 fichiers doc | Corrigé automatiquement |
+| end-of-file-fixer | 5 fichiers doc | Corrigé automatiquement |
+| ruff-format | 1 fichier | Reformaté automatiquement |
+| black | 2 fichiers test | Reformaté (blank lines après imports) |
+
+#### Hook pytest-quick — note d'implémentation
+
+Le hook local `pytest-quick` utilise Docker par défaut (python n'est pas disponible en local, convention « tout via Docker ») :
+
+```bash
+docker compose -f translator/docker-compose.yml run --rm --build test tests/ -x -q --tb=short
+```
+
+Alternative si env Python local disponible — remplacer l'entry par :
+
+```bash
+python -m pytest translator/tests/ -x -q --tb=short
+```
+
+L'approche Docker respecte la convention du projet mais est plus lente (~15s de build). L'approche système est plus rapide (pas de rebuild) mais suppose un env Python local installé.
 
 ---
 
@@ -373,6 +414,9 @@
 | 2026-05-08 | `feat/IMP-T001-tests-unitaires` | `48dc8ae` | test(modes): add unit tests for all 3 modes — 257 tests total, 87% coverage |
 | 2026-05-08 | `feat/IMP-T007-chemins-locaux` | — | feat(config): add Docker/local path detection — 287 tests, 100% config coverage |
 | 2026-05-08 | `feat/IMP-T006-cache-intelligent` | — | feat(cache): add persistent translation cache — 359 tests, 88% total coverage |
+| 2026-05-08 | `feat/IMP-T003-rate-limiter` | `9f75d1b` | feat(rate-limiter): adaptive rate limiter with persistence and no double backoff |
+| 2026-05-08 | `feat/IMP-T005-cli` | `22e816c` | feat(cli): argparse CLI with subcommands, CLI > env > default resolution |
+| 2026-05-08 | `feat/IMP-T002-pre-commit` | — | chore: pre-commit hooks (ruff, ruff-format, pre-commit-hooks, pytest-quick) + CI optionnelle |
 
 ---
 
@@ -392,6 +436,9 @@
 | 2026-05-08 | Cache clé `{source}:{target}:{text}` | Garantit l'unicité quelle que soit la paire de langues |
 | 2026-05-08 | Cache persistant JSON avec `flush()` différé | Évite les I/O disque à chaque `put()`, flush en fin de batch uniquement |
 | 2026-05-08 | `TRANSLATION_CACHE` activé par défaut | ROI immédiat : les termes stables ne sont jamais re-traduits |
+| 2026-05-08 | Pre-commit hooks : `ruff` principal, `black` en CI uniquement | ruff-format compatible black ; black gardé pour vérification CI |
+| 2026-05-08 | Hook `pytest-quick` avec `language: system` | Plus rapide que Docker rebuild ; alternative Docker documentée |
+| 2026-05-08 | Tests `/tmp/output` → `tmp_path` (pytest fixture) | Évite les dépendances au filesystem local entre les runs de tests |
 
 ### Conventions de branches
 

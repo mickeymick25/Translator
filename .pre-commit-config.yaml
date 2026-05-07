@@ -1,0 +1,33 @@
+# Pre-commit hooks — IMP-T002
+# Installation : pip install pre-commit && pre-commit install
+# Exécution manuelle : pre-commit run --all-files
+#
+# Note : pytest-quick utilise Docker (python n'est pas disponible en local).
+# Alternative si env Python local : remplacer l'entry par
+#   python -m pytest translator/tests/ -x -q --tb=short
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: pytest-quick
+        name: pytest (quick — Docker)
+        entry: docker compose -f translator/docker-compose.yml run --rm --build test tests/ -x -q --tb=short
+        language: system
+        pass_filenames: false
+        always_run: true

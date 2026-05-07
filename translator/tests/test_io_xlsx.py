@@ -8,10 +8,6 @@ Covers:
 - save_dropdown_xlsx(): multi-sheet generation, language-specific columns
 """
 
-import json
-from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 from core.io_xlsx import (
     analyze_xlsx,

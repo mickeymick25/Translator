@@ -33,6 +33,9 @@ env/
 coverage.xml
 htmlcov/
 
+# ─── Pre-commit ──────────────────────────────────────────
+.pre-commit-cache/
+
 # ─── Docker ──────────────────────────────────────────────
 .dockerignore
 

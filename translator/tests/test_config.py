@@ -66,14 +66,20 @@ class TestConfigDefaults:
         assert "cz" in config.BATCH_LANGS
 
     def test_default_output_dir(self):
-        """Default output directory is /app/output."""
+        """Default output directory depends on execution environment."""
         config = Config()
-        assert config.OUTPUT_DIR == "/app/output"
+        if _is_docker():
+            assert config.OUTPUT_DIR == "/app/output"
+        else:
+            assert config.OUTPUT_DIR == str(Path.cwd() / "output")
 
     def test_default_source_dir(self):
-        """Default source directory is /app/source."""
+        """Default source directory depends on execution environment."""
         config = Config()
-        assert config.SOURCE_DIR == "/app/source"
+        if _is_docker():
+            assert config.SOURCE_DIR == "/app/source"
+        else:
+            assert config.SOURCE_DIR == str(Path.cwd() / "source")
 
 
 class TestConfigEnvOverrides:

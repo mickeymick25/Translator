@@ -317,7 +317,7 @@ def _generate_all_json(
 
     for lang in target_langs:
         lang_info = LANGUAGES.get(lang, {})
-        source_col = lang_info.get("source_col", "origin")
+        _source_col = lang_info.get("source_col", "origin")
 
         output_path = output_dir / f"dropdown_{lang}.json"
 
@@ -404,7 +404,7 @@ def _generate_all_xlsx(
 
     for lang in target_langs:
         lang_info = LANGUAGES.get(lang, {})
-        source_col = lang_info.get("source_col", "origin")
+        _source_col = lang_info.get("source_col", "origin")
 
         if lang in ("en", "fr"):
             # No API translation

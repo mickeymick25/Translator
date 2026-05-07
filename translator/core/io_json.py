@@ -93,7 +93,7 @@ def load_structured_json(filepath: str | Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as f:
         data: dict[str, Any] = json.load(f)
 
-    metadata = data.get("metadata", {})
+    _metadata = data.get("metadata", {})
     contexts = data.get("contexts", {})
     total_entries = sum(len(ctx) for ctx in contexts.values())
 
@@ -123,7 +123,7 @@ def save_structured_json(filepath: str | Path, data: dict[str, Any]) -> None:
     with path.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-    metadata = data.get("metadata", {})
+    _metadata = data.get("metadata", {})
     contexts = data.get("contexts", {})
     total_entries = sum(len(ctx) for ctx in contexts.values())
 

@@ -9,11 +9,9 @@ Covers:
 - translate_batch_generator(): generator mode
 """
 
-import os
 import time
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 from core.translator import (
     is_rate_limit_error,
     translate_batch,

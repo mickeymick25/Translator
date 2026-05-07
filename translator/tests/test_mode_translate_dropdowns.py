@@ -12,9 +12,8 @@ Covers:
 - run(): main entry point with mocked dependencies
 """
 
-import json
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from modes.mode_translate_dropdowns import (
@@ -392,7 +391,7 @@ class TestTranslateDropdownEntriesBatch:
         """All entries not in existing_translations are translated."""
         mock_translate_batch.return_value = ["Taste", "Abbrechen", "Datei", "Öffnen"]
 
-        result = _translate_dropdown_entries_batch(sample_dropdown_entries, "de", {})
+        _translate_dropdown_entries_batch(sample_dropdown_entries, "de", {})
 
         assert mock_translate_batch.call_count == 1
         items_arg = mock_translate_batch.call_args[1]["items"]
@@ -428,9 +427,7 @@ class TestTranslateDropdownEntriesBatch:
         }
         mock_translate_batch.return_value = ["Datei", "Öffnen"]
 
-        result = _translate_dropdown_entries_batch(
-            sample_dropdown_entries, "de", existing
-        )
+        _translate_dropdown_entries_batch(sample_dropdown_entries, "de", existing)
 
         items_arg = mock_translate_batch.call_args[1]["items"]
         assert items_arg == ["File", "Open"]

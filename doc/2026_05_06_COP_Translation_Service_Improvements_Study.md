@@ -139,39 +139,39 @@ class TestTranslateText:
         mock_instance = MagicMock()
         mock_instance.translate.return_value = "Bonjour"
         mock_translator_cls.return_value = mock_instance
-        
+
         result = translate_text("Hello", "en", "fr")
         assert result == "Bonjour"
         mock_translator_cls.assert_called_once_with(source="en", target="fr")
-    
+
     def test_translate_empty_returns_empty(self):
         """Test qu'un texte vide retourne une chaîne vide (pas d'appel API)."""
         result = translate_text("", "en", "fr")
         assert result == ""
-    
+
     def test_translate_whitespace_returns_same(self):
         """Test qu'un texte composé d'espaces est retourné tel quel."""
         result = translate_text("   ", "en", "fr")
         assert result == "   "
-    
+
     @patch("core.translator.GoogleTranslator")
     def test_translate_preserves_special_chars(self, mock_translator_cls):
         """Test que les caractères spéciaux sont préservés."""
         mock_instance = MagicMock()
         mock_instance.translate.return_value = "100 %"
         mock_translator_cls.return_value = mock_instance
-        
+
         result = translate_text("100%", "en", "fr")
         assert "%" in result
-    
+
     def test_rate_limit_detection_too_many_requests(self):
         """Test la détection des erreurs 'Too Many Requests'."""
         assert is_rate_limit_error("Server Error: You made too many requests") is True
-    
+
     def test_rate_limit_detection_429(self):
         """Test la détection du code HTTP 429."""
         assert is_rate_limit_error("HTTP 429 Too Many Requests") is True
-    
+
     def test_rate_limit_not_triggered_on_other_errors(self):
         """Test qu'une erreur non-rate-limit n'est pas détectée comme telle."""
         assert is_rate_limit_error("ConnectionError: Network unreachable") is False
@@ -188,11 +188,11 @@ class TestRetryLogic:
             "Résultat"
         ]
         mock_translator_cls.return_value = mock_instance
-        
+
         result = translate_text("Test", "en", "fr", max_retries=3)
         assert result == "Résultat"
         assert mock_instance.translate.call_count == 3
-    
+
     @patch("core.translator.GoogleTranslator")
     @patch("core.translator.time.sleep")
     def test_max_retries_respected(self, mock_sleep, mock_translator_cls):
@@ -200,11 +200,11 @@ class TestRetryLogic:
         mock_instance = MagicMock()
         mock_instance.translate.side_effect = Exception("Server Error: Persistent failure")
         mock_translator_cls.return_value = mock_instance
-        
+
         result = translate_text("Test", "en", "fr", max_retries=2)
         assert result == "Test"  # Retourne l'original après échec
         assert mock_instance.translate.call_count == 2
-    
+
     @patch("core.translator.GoogleTranslator")
     @patch("core.translator.time.sleep")
     def test_rate_limit_triggers_backoff(self, mock_sleep, mock_translator_cls):
@@ -215,7 +215,7 @@ class TestRetryLogic:
             "OK"
         ]
         mock_translator_cls.return_value = mock_instance
-        
+
         result = translate_text("Test", "en", "fr", max_retries=3)
         assert result == "OK"
         # Vérifie que sleep a été appelé (backoff rate limit)
@@ -1424,12 +1424,12 @@ IMP-T002 (Pre-commit) ──► Dépend de T001 (tests) pour être utile
 | ID | Amélioration | Statut | Date début | Date fin | Branche | Notes |
 |----|-------------|--------|------------|----------|---------|-------|
 | IMP-T001 | Tests unitaires | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T001-tests-unitaires` | 257 tests, 87% coverage total |
-| IMP-T002 | Pre-commit hooks + CI optionnelle | 🔲 Non commencé | | | | Pre-commit hooks en priorité, CI optionnelle |
-| IMP-T003 | Rate limiter adaptatif | 🔲 Non commencé | | | | Prérequis : IMP-T001 |
+| IMP-T002 | Pre-commit hooks + CI optionnelle | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T002-pre-commit` | ruff + ruff-format + pre-commit-hooks + pytest-quick, CI optionnelle |
+| IMP-T003 | Rate limiter adaptatif | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T003-rate-limiter` | 428 tests, 89% total, 97% rate_limiter |
 | IMP-T004 | Multi-provider + fallback | 🔲 Non commencé | | | | Prérequis : IMP-T001, IMP-T003 |
-| IMP-T005 | Interface CLI | 🔲 Non commencé | | | | Peut être fait en parallèle avec IMP-T006 |
-| IMP-T006 | Cache intelligent | 🔲 Non commencé | | | | Prérequis : IMP-T001 pour les tests |
-| IMP-T007 | Chemins locaux | 🔲 Non commencé | | | | Peut être fait en parallèle avec IMP-T003 |
+| IMP-T005 | Interface CLI | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T005-cli` | 501 tests, 89% total |
+| IMP-T006 | Cache intelligent | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T006-cache-intelligent` | 359 tests, 88% total, 97% cache |
+| IMP-T007 | Chemins locaux | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T007-chemins-locaux` | 287 tests, 100% config coverage |
 
 **Légende des statuts :**
 

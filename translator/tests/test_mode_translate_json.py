@@ -7,13 +7,9 @@ Covers:
 - run(): single lang, batch mode, fallback to TARGET_LANG
 """
 
-import json
-import os
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 from modes.mode_translate_json import (
     _create_checkpoint_callback,
     _translate_single_language,
@@ -88,14 +84,13 @@ class TestTranslateSingleLanguage:
     @patch("modes.mode_translate_json.save_flat_json")
     @patch("modes.mode_translate_json.translate_batch")
     @patch("modes.mode_translate_json.load_flat_json")
-    def test_translates_and_saves(self, mock_load, mock_batch, mock_save):
+    def test_translates_and_saves(self, mock_load, mock_batch, mock_save, tmp_path):
         """Translates all entries and saves the result."""
         mock_load.return_value = {"k1": "Hello", "k2": "World"}
         mock_batch.return_value = ["Bonjour", "Monde"]
-        output_dir = Path("/tmp/output")
 
         lang, success, count = _translate_single_language(
-            "source.json", {"k1": "Hello", "k2": "World"}, "en", "fr", output_dir
+            "source.json", {"k1": "Hello", "k2": "World"}, "en", "fr", tmp_path
         )
 
         assert lang == "fr"
@@ -107,20 +102,20 @@ class TestTranslateSingleLanguage:
     @patch("modes.mode_translate_json.save_flat_json")
     @patch("modes.mode_translate_json.translate_batch")
     @patch("modes.mode_translate_json.load_flat_json")
-    def test_skips_already_translated_keys(self, mock_load, mock_batch, mock_save):
+    def test_skips_already_translated_keys(
+        self, mock_load, mock_batch, mock_save, tmp_path
+    ):
         """When output exists, already translated keys are skipped."""
         mock_load.return_value = {"k1": "Bonjour"}  # existing translation
         mock_batch.return_value = ["Monde"]
-        output_dir = Path("/tmp/output")
 
-        # Create a fake existing output file
-        output_path = output_dir / "translation_en_fr.json"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        # Create a fake existing output file in tmp_path
+        output_path = tmp_path / "translation_en_fr.json"
         output_path.write_text('{"k1": "Bonjour"}', encoding="utf-8")
 
         source_data = {"k1": "Hello", "k2": "World"}
         lang, success, count = _translate_single_language(
-            "source.json", source_data, "en", "fr", output_dir
+            "source.json", source_data, "en", "fr", tmp_path
         )
 
         assert count == 1  # Only k2 needed translation
@@ -131,18 +126,18 @@ class TestTranslateSingleLanguage:
     @patch("modes.mode_translate_json.save_flat_json")
     @patch("modes.mode_translate_json.translate_batch")
     @patch("modes.mode_translate_json.load_flat_json")
-    def test_all_keys_already_translated(self, mock_load, mock_batch, mock_save):
+    def test_all_keys_already_translated(
+        self, mock_load, mock_batch, mock_save, tmp_path
+    ):
         """When all keys already translated, returns 0 entries."""
         mock_load.return_value = {"k1": "Bonjour", "k2": "Monde"}
-        output_dir = Path("/tmp/output")
 
-        output_path = output_dir / "translation_en_fr.json"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = tmp_path / "translation_en_fr.json"
         output_path.write_text('{"k1": "Bonjour", "k2": "Monde"}', encoding="utf-8")
 
         source_data = {"k1": "Hello", "k2": "World"}
         lang, success, count = _translate_single_language(
-            "source.json", source_data, "en", "fr", output_dir
+            "source.json", source_data, "en", "fr", tmp_path
         )
 
         assert success is True
@@ -152,14 +147,13 @@ class TestTranslateSingleLanguage:
     @patch("modes.mode_translate_json.save_flat_json")
     @patch("modes.mode_translate_json.translate_batch")
     @patch("modes.mode_translate_json.load_flat_json")
-    def test_uses_correct_api_target_for_czech(self, mock_load, mock_batch, mock_save):
+    def test_uses_correct_api_target_for_czech(
+        self, mock_load, mock_batch, mock_save, tmp_path
+    ):
         """Czech 'cz' uses 'cs' as the API target language code."""
         mock_batch.return_value = ["Dům"]
-        output_dir = Path("/tmp/output")
 
-        _translate_single_language(
-            "source.json", {"k1": "Home"}, "en", "cz", output_dir
-        )
+        _translate_single_language("source.json", {"k1": "Home"}, "en", "cz", tmp_path)
 
         call_args = mock_batch.call_args
         assert call_args[1]["target_lang"] == "cs"
@@ -167,14 +161,11 @@ class TestTranslateSingleLanguage:
     @patch("modes.mode_translate_json.save_flat_json")
     @patch("modes.mode_translate_json.translate_batch")
     @patch("modes.mode_translate_json.load_flat_json")
-    def test_output_file_naming(self, mock_load, mock_batch, mock_save):
+    def test_output_file_naming(self, mock_load, mock_batch, mock_save, tmp_path):
         """Output file is named translation_{source}_{target}.json."""
         mock_batch.return_value = ["Hallo"]
-        output_dir = Path("/tmp/output_test_naming")
 
-        _translate_single_language(
-            "source.json", {"k1": "Hello"}, "en", "de", output_dir
-        )
+        _translate_single_language("source.json", {"k1": "Hello"}, "en", "de", tmp_path)
 
         saved_path = mock_save.call_args[0][0]
         assert saved_path.name == "translation_en_de.json"
@@ -183,19 +174,17 @@ class TestTranslateSingleLanguage:
     @patch("modes.mode_translate_json.translate_batch")
     @patch("modes.mode_translate_json.load_flat_json")
     def test_merges_new_and_existing_translations(
-        self, mock_load, mock_batch, mock_save
+        self, mock_load, mock_batch, mock_save, tmp_path
     ):
         """New translations are merged with existing ones on final save."""
         mock_load.return_value = {"k1": "Bonjour"}
         mock_batch.return_value = ["Monde"]
-        output_dir = Path("/tmp/output_merge")
 
-        output_path = output_dir / "translation_en_fr.json"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = tmp_path / "translation_en_fr.json"
         output_path.write_text('{"k1": "Bonjour"}', encoding="utf-8")
 
         source_data = {"k1": "Hello", "k2": "World"}
-        _translate_single_language("source.json", source_data, "en", "fr", output_dir)
+        _translate_single_language("source.json", source_data, "en", "fr", tmp_path)
 
         saved_data = mock_save.call_args[0][1]
         assert "k1" in saved_data

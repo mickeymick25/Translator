@@ -3,7 +3,6 @@ XLSX I/O module for the translation service.
 Handles reading, writing, and analysis of Excel files for dropdown translations.
 """
 
-import json
 import logging
 import re
 from pathlib import Path

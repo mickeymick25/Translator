@@ -5,8 +5,8 @@ COP_translations/Doc/2026_04_17_Dropdown_Xlsx_Analysis.md
 ```markdown
 # Analyse du fichier Dropdown_a_traduire.xlsx
 
-**Date :** 2026-04-17  
-**Auteur :** Analyse automatique  
+**Date :** 2026-04-17
+**Auteur :** Analyse automatique
 **Fichier source :** `excel/Dropdown_a_traduire.xlsx`
 
 ---

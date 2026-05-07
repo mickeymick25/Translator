@@ -13,7 +13,6 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 from modes.mode_analyze import _export_json, _print_analysis, run
 
 # ─── Sample analysis data ─────────────────────────────────────────
@@ -419,7 +418,7 @@ class TestRunWithSourceFile:
         mock_analyze.return_value = _make_sample_analysis(
             "/explicit/path/dropdown.xlsx"
         )
-        result = run()
+        run()
         mock_analyze.assert_called_once()
         called_path = mock_analyze.call_args[0][0]
         assert str(called_path) == "/explicit/path/dropdown.xlsx"
