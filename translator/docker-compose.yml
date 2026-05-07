@@ -25,5 +25,28 @@ services:
       - OUTPUT_FORMAT=${OUTPUT_FORMAT:-auto}
     working_dir: /app
 
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cop_translator_test
+    entrypoint: ["python", "-m", "pytest"]
+    command:
+      [
+        "tests/",
+        "-v",
+        "--tb=short",
+        "--cov=core",
+        "--cov=modes",
+        "--cov-report=term-missing",
+      ]
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SOURCE_DIR=/app/source
+      - OUTPUT_DIR=/app/output
+      - EXCEL_DIR=/app/excel
+      - DOC_DIR=/app/doc
+    working_dir: /app
+
 volumes:
   output:

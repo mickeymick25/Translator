@@ -13,6 +13,19 @@ from deep_translator import GoogleTranslator
 logger = logging.getLogger(__name__)
 
 
+def is_rate_limit_error(error_msg: str) -> bool:
+    """Detect if an error message indicates a rate limit (429 / Too Many Requests).
+
+    Args:
+        error_msg: The error message string to check.
+
+    Returns:
+        True if the error is a rate limit error, False otherwise.
+    """
+    msg = error_msg.lower()
+    return "too many requests" in msg or "429" in msg
+
+
 def translate_text(
     text: str,
     source_lang: str,
@@ -54,8 +67,7 @@ def translate_text(
             )
             return text
         except Exception as e:
-            error_msg = str(e).lower()
-            is_rate_limit = "too many requests" in error_msg or "429" in error_msg
+            is_rate_limit = is_rate_limit_error(str(e))
 
             if attempt < max_retries - 1:
                 if is_rate_limit:

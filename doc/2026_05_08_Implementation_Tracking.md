@@ -23,7 +23,7 @@
 
 | Ordre | ID | Amélioration | Priorité | Branche prévue |
 |-------|----|-------------|----------|----------------|
-| 1 | **IMP-T001** | Tests unitaires du code existant | Haute | `feat/IMP-T001-tests-unitaires` |
+| 1 | **IMP-T001** | Tests unitaires du code existant | Haute | ✅ `feat/IMP-T001-tests-unitaires` |
 | 2 | **IMP-T007** | Chemins locaux (Docker vs local) | Moyenne | `feat/IMP-T007-chemins-locaux` |
 | 3 | **IMP-T006** | Cache intelligent de traductions | Haute | `feat/IMP-T006-cache-intelligent` |
 | 4 | **IMP-T003** | Rate limiter adaptatif | Haute | `feat/IMP-T003-rate-limiter` |
@@ -37,28 +37,30 @@
 
 ### IMP-T001 — Tests Unitaires du Code Existant
 
-**Statut :** 🔲 Non commencé
+**Statut :** ✅ Terminé
 **Branche :** `feat/IMP-T001-tests-unitaires`
+**Date début :** 2026-05-08
+**Date fin :** 2026-05-08
 **Priorité :** Haute
 **Description :** Écrire les tests unitaires pour le code existant avant toute modification. C'est le socle de confiance pour les développements ultérieurs.
 
 #### Prérequis
 
-- [ ] Installer `pytest`, `pytest-cov`, `pytest-mock` dans `requirements.txt`
-- [ ] Créer `translator/pytest.ini`
-- [ ] Extraire `is_rate_limit_error()` de `translator.py` vers une fonction testable
+- [x] Installer `pytest`, `pytest-cov`, `pytest-mock` dans `requirements-dev.txt`
+- [x] Créer `translator/pytest.ini`
+- [x] Extraire `is_rate_limit_error()` de `translator.py` vers une fonction testable
 
 #### Sous-tâches
 
 | # | Module | Fichier de test | Statut |
 |---|--------|----------------|--------|
-| 1.1 | `core/config.py` | `tests/test_config.py` | 🔲 |
-| 1.2 | `core/io_json.py` | `tests/test_io_json.py` | 🔲 |
-| 1.3 | `core/io_xlsx.py` | `tests/test_io_xlsx.py` | 🔲 |
-| 1.4 | `core/translator.py` | `tests/test_translator.py` | 🔲 |
-| 1.5 | `modes/mode_translate_json.py` | `tests/test_mode_translate_json.py` | 🔲 |
-| 1.6 | `modes/mode_translate_dropdowns.py` | `tests/test_mode_translate_dropdowns.py` | 🔲 |
-| 1.7 | `modes/mode_analyze.py` | `tests/test_mode_analyze.py` | 🔲 |
+| 1.1 | `core/config.py` | `tests/test_config.py` | ✅ 100% |
+| 1.2 | `core/io_json.py` | `tests/test_io_json.py` | ✅ 100% |
+| 1.3 | `core/io_xlsx.py` | `tests/test_io_xlsx.py` | ✅ 93% |
+| 1.4 | `core/translator.py` | `tests/test_translator.py` | ✅ 92% |
+| 1.5 | `modes/mode_translate_json.py` | `tests/test_mode_translate_json.py` | ✅ 89% |
+| 1.6 | `modes/mode_translate_dropdowns.py` | `tests/test_mode_translate_dropdowns.py` | ✅ 69% |
+| 1.7 | `modes/mode_analyze.py` | `tests/test_mode_analyze.py` | ✅ 97% |
 
 #### Tests clés par module
 
@@ -95,9 +97,9 @@
 
 #### Critère de validation
 
-- [ ] Couverture > 70% sur `core/`
-- [ ] Tous les tests passent (`pytest translator/tests/ -v`)
-- [ ] Aucun appel API réel dans les tests (tout mocké)
+- [x] Couverture > 70% sur `core/` (atteint : 92-100%)
+- [x] Tous les tests passent (`docker compose run --rm --build test` → 257/257 passed)
+- [x] Aucun appel API réel dans les tests (tout mocké)
 
 ---
 
@@ -318,6 +320,8 @@
 | Date | Branche | Commit | Description |
 |------|---------|--------|-------------|
 | 2026-05-08 | `main` | `573504e` | feat: initial commit — service de traduction COP v1.0 |
+| 2026-05-08 | `feat/IMP-T001-tests-unitaires` | `c03e3a8` | test(core): add unit tests for core modules — 130 tests, 92-100% coverage |
+| 2026-05-08 | `feat/IMP-T001-tests-unitaires` | `48dc8ae` | test(modes): add unit tests for all 3 modes — 257 tests total, 87% coverage |
 
 ---
 

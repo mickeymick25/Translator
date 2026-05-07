@@ -1423,7 +1423,7 @@ IMP-T002 (Pre-commit) ──► Dépend de T001 (tests) pour être utile
 
 | ID | Amélioration | Statut | Date début | Date fin | Branche | Notes |
 |----|-------------|--------|------------|----------|---------|-------|
-| IMP-T001 | Tests unitaires | 🔲 Non commencé | | | | Prérequis : extraire `is_rate_limit_error()` |
+| IMP-T001 | Tests unitaires | ✅ Terminé | 2026-05-08 | 2026-05-08 | `feat/IMP-T001-tests-unitaires` | 257 tests, 87% coverage total |
 | IMP-T002 | Pre-commit hooks + CI optionnelle | 🔲 Non commencé | | | | Pre-commit hooks en priorité, CI optionnelle |
 | IMP-T003 | Rate limiter adaptatif | 🔲 Non commencé | | | | Prérequis : IMP-T001 |
 | IMP-T004 | Multi-provider + fallback | 🔲 Non commencé | | | | Prérequis : IMP-T001, IMP-T003 |
@@ -1442,6 +1442,8 @@ IMP-T002 (Pre-commit) ──► Dépend de T001 (tests) pour être utile
 | ❌ Annulé | Abandonné ou reporté |
 
 > **Instructions de mise à jour** : Remplacer 🔲 par 🔵/🟡/✅/❌ au fur et à mesure de l'avancement. Renseigner les dates et branches quand pertinent.
+>
+> **v1.2 update** : IMP-T001 terminé — 257 tests, couverture 87% (core: 92-100%, modes: 69-97%).
 
 ---
 
