@@ -24,7 +24,7 @@
 | Ordre | ID | Amélioration | Priorité | Branche prévue |
 |-------|----|-------------|----------|----------------|
 | 1 | **IMP-T001** | Tests unitaires du code existant | Haute | ✅ `feat/IMP-T001-tests-unitaires` |
-| 2 | **IMP-T007** | Chemins locaux (Docker vs local) | Moyenne | `feat/IMP-T007-chemins-locaux` |
+| 2 | **IMP-T007** | Chemins locaux (Docker vs local) | Moyenne | ✅ `feat/IMP-T007-chemins-locaux` |
 | 3 | **IMP-T006** | Cache intelligent de traductions | Haute | `feat/IMP-T006-cache-intelligent` |
 | 4 | **IMP-T003** | Rate limiter adaptatif | Haute | `feat/IMP-T003-rate-limiter` |
 | 5 | **IMP-T005** | Interface CLI (argparse) | Moyenne | `feat/IMP-T005-interface-cli` |
@@ -105,8 +105,10 @@
 
 ### IMP-T007 — Chemins Locaux (Docker vs Local)
 
-**Statut :** 🔲 Non commencé
+**Statut :** ✅ Terminé
 **Branche :** `feat/IMP-T007-chemins-locaux`
+**Date début :** 2026-05-08
+**Date fin :** 2026-05-08
 **Priorité :** Moyenne
 **Description :** Adapter `config.py` pour détecter automatiquement l'environnement (Docker vs local) et utiliser les chemins appropriés.
 
@@ -114,25 +116,26 @@
 
 | Étape | Action | Statut |
 |-------|--------|--------|
-| 🔴 | Écrire les tests pour `_is_docker()` | 🔲 |
-| 🔴 | Écrire les tests pour les fonctions `_default_*_dir()` | 🔲 |
-| 🟢 | Implémenter `_is_docker()` | 🔲 |
-| 🟢 | Implémenter les fonctions `_default_output_dir()`, `_default_source_dir()`, etc. | 🔲 |
-| 🔵 | Refactorer `Config` pour utiliser les nouvelles fonctions | 🔲 |
-| ✅ | Tous les tests passent | 🔲 |
+| 🔴 | Écrire les tests pour `_is_docker()` | ✅ |
+| 🔴 | Écrire les tests pour les fonctions `_default_*_dir()` | ✅ |
+| 🟢 | Implémenter `_is_docker()` | ✅ |
+| 🟢 | Implémenter les fonctions `_default_output_dir()`, `_default_source_dir()`, etc. | ✅ |
+| 🔵 | Refactorer `Config` pour utiliser les nouvelles fonctions | ✅ |
+| ✅ | Tous les tests passent | ✅ 287/287 |
 
 #### Fichiers modifiés
 
-- `translator/core/config.py` — Ajout de `_is_docker()`, `_default_*_dir()`
+- `translator/core/config.py` — Ajout de `_is_docker()`, `_default_dir()`, `_default_*_dir()`, mise à jour de `Config`
+- `translator/tests/test_config.py` — 30 nouveaux tests : `TestIsDocker` (5), `TestDefaultDir` (5), `TestDefaultOutputDir` (4), `TestDefaultSourceDir` (4), `TestDefaultExcelDir` (4), `TestDefaultDocDir` (4), `TestConfigEnvironmentAwareDefaults` (4)
 - `translator/core/cache.py` (futur) — Chemins du cache adaptatifs
 - `translator/core/rate_limiter.py` (futur) — Chemins du state adaptatifs
-- `translator/tests/test_config.py` — Tests des nouveaux chemins
 
 #### Critère de validation
 
-- [ ] `python service.py` fonctionne en local sans Docker ni env vars
-- [ ] `docker compose up` fonctionne toujours avec les chemins `/app/*`
-- [ ] Les tests couvrent les deux environnements (mock de `_is_docker()`)
+- [x] `python service.py` fonctionne en local sans Docker ni env vars
+- [x] `docker compose up` fonctionne toujours avec les chemins `/app/*`
+- [x] Les tests couvrent les deux environnements (mock de `_is_docker()`)
+- [x] Couverture `config.py` : 100%
 
 ---
 
@@ -322,6 +325,7 @@
 | 2026-05-08 | `main` | `573504e` | feat: initial commit — service de traduction COP v1.0 |
 | 2026-05-08 | `feat/IMP-T001-tests-unitaires` | `c03e3a8` | test(core): add unit tests for core modules — 130 tests, 92-100% coverage |
 | 2026-05-08 | `feat/IMP-T001-tests-unitaires` | `48dc8ae` | test(modes): add unit tests for all 3 modes — 257 tests total, 87% coverage |
+| 2026-05-08 | `feat/IMP-T007-chemins-locaux` | — | feat(config): add Docker/local path detection — 287 tests, 100% config coverage |
 
 ---
 
@@ -335,6 +339,9 @@
 | 2026-05-08 | Implémentation séquentielle | Éviter les conflits et les dépendances croisées |
 | 2026-05-08 | Exécution locale exclusive | Pas de CI/CD critique, pre-commit hooks suffisent |
 | 2026-05-08 | Données (sources/outputs) exclues de git | Ce repo est un outil, pas un entrepôt de données |
+| 2026-05-08 | Détection Docker via `/.dockerenv` ou `/run/.containerenv` | Simple, fiable, couvre Docker et Podman |
+| 2026-05-08 | Helper `_default_dir()` pour résolution des chemins | Réduit la duplication, facilite l'ajout futur de chemins (cache, rate limiter) |
+| 2026-05-08 | Chemins locaux basés sur `Path.cwd()` | Permet `python service.py` sans config manuelle hors Docker |
 
 ### Conventions de branches
 

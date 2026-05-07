@@ -25,6 +25,58 @@ LANGUAGES: Dict[str, Dict[str, str]] = {
 }
 
 
+def _is_docker() -> bool:
+    """
+    Detect whether the service is running inside a Docker container.
+
+    Checks for the presence of /.dockerenv (Docker) or /run/.containerenv (Podman).
+
+    Returns:
+        True if running inside a container, False otherwise.
+    """
+    return os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")
+
+
+def _default_dir(env_var: str, docker_default: str, local_default: str) -> str:
+    """
+    Return a directory path adapted to the execution environment.
+
+    In Docker, returns the env var value or docker_default.
+    Outside Docker, returns the env var value or local_default.
+
+    Args:
+        env_var: Name of the environment variable to check.
+        docker_default: Default path when running in Docker.
+        local_default: Default path when running locally.
+
+    Returns:
+        The resolved directory path.
+    """
+    if _is_docker():
+        return os.environ.get(env_var, docker_default)
+    return os.environ.get(env_var, local_default)
+
+
+def _default_output_dir() -> str:
+    """Return the default output directory, adapted to the execution environment."""
+    return _default_dir("OUTPUT_DIR", "/app/output", str(Path.cwd() / "output"))
+
+
+def _default_source_dir() -> str:
+    """Return the default source directory, adapted to the execution environment."""
+    return _default_dir("SOURCE_DIR", "/app/source", str(Path.cwd() / "source"))
+
+
+def _default_excel_dir() -> str:
+    """Return the default excel directory, adapted to the execution environment."""
+    return _default_dir("EXCEL_DIR", "/app/excel", str(Path.cwd() / "excel"))
+
+
+def _default_doc_dir() -> str:
+    """Return the default doc directory, adapted to the execution environment."""
+    return _default_dir("DOC_DIR", "/app/doc", str(Path.cwd() / "Doc"))
+
+
 def _find_latest_import_folder(source_dir: str) -> str | None:
     """
     Find the most recent YYYY_MM_DD_Import folder in source_dir.
@@ -111,17 +163,11 @@ class Config:
     # Source file path (empty means auto-detect latest import)
     SOURCE_FILE: str = field(default_factory=lambda: os.environ.get("SOURCE_FILE", ""))
 
-    # Directory paths
-    OUTPUT_DIR: str = field(
-        default_factory=lambda: os.environ.get("OUTPUT_DIR", "/app/output")
-    )
-    EXCEL_DIR: str = field(
-        default_factory=lambda: os.environ.get("EXCEL_DIR", "/app/excel")
-    )
-    DOC_DIR: str = field(default_factory=lambda: os.environ.get("DOC_DIR", "/app/doc"))
-    SOURCE_DIR: str = field(
-        default_factory=lambda: os.environ.get("SOURCE_DIR", "/app/source")
-    )
+    # Directory paths (environment-aware: Docker vs local)
+    OUTPUT_DIR: str = field(default_factory=_default_output_dir)
+    EXCEL_DIR: str = field(default_factory=_default_excel_dir)
+    DOC_DIR: str = field(default_factory=_default_doc_dir)
+    SOURCE_DIR: str = field(default_factory=_default_source_dir)
 
     # Batch translation languages (comma-separated)
     BATCH_LANGS: str = field(

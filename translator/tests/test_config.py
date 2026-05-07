@@ -3,6 +3,9 @@ Tests for core/config.py — Configuration module.
 
 Covers:
 - Config defaults and environment variable overrides
+- _is_docker(): Docker environment detection
+- _default_output_dir(), _default_source_dir(), _default_excel_dir(), _default_doc_dir():
+  environment-aware default paths
 - _find_latest_import_folder(): finding the most recent import folder
 - _find_source_file_in_import(): finding the source file inside an import folder
 - Config.get_source_path(): auto-detection, fallback, and error handling
@@ -21,8 +24,14 @@ from core.config import (
     MODE_TRANSLATE_DROPDOWNS,
     MODE_TRANSLATE_JSON,
     Config,
+    _default_dir,
+    _default_doc_dir,
+    _default_excel_dir,
+    _default_output_dir,
+    _default_source_dir,
     _find_latest_import_folder,
     _find_source_file_in_import,
+    _is_docker,
     get_config,
 )
 
@@ -360,3 +369,283 @@ class TestGetConfig:
         config1 = get_config()
         config2 = get_config()
         assert config1 is config2
+
+
+# ─── _is_docker ────────────────────────────────────────────────────
+
+
+# ─── _default_dir ──────────────────────────────────────────────────
+
+
+class TestDefaultDir:
+    """Tests for _default_dir() — generic environment-aware path resolver."""
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_docker_default_when_no_env_var(self, mock_docker, monkeypatch):
+        """In Docker with no env var, returns the Docker default."""
+        monkeypatch.delenv("MY_DIR", raising=False)
+        result = _default_dir("MY_DIR", "/app/mydir", "/local/mydir")
+        assert result == "/app/mydir"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_local_default_when_no_env_var(self, mock_docker, monkeypatch):
+        """Outside Docker with no env var, returns the local default."""
+        monkeypatch.delenv("MY_DIR", raising=False)
+        result = _default_dir("MY_DIR", "/app/mydir", "/local/mydir")
+        assert result == "/local/mydir"
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_docker_env_var_overrides_default(self, mock_docker):
+        """In Docker, env var takes precedence over Docker default."""
+        with patch.dict(os.environ, {"MY_DIR": "/custom/dir"}):
+            result = _default_dir("MY_DIR", "/app/mydir", "/local/mydir")
+            assert result == "/custom/dir"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_local_env_var_overrides_default(self, mock_docker):
+        """Outside Docker, env var takes precedence over local default."""
+        with patch.dict(os.environ, {"MY_DIR": "/custom/dir"}):
+            result = _default_dir("MY_DIR", "/app/mydir", "/local/mydir")
+            assert result == "/custom/dir"
+
+    @patch("core.config._is_docker")
+    def test_delegates_to_is_docker(self, mock_is_docker):
+        """_default_dir calls _is_docker() to determine the environment."""
+        mock_is_docker.return_value = True
+        _default_dir("TEST_VAR", "/docker/path", "/local/path")
+        mock_is_docker.assert_called_once()
+
+
+# ─── _is_docker ────────────────────────────────────────────────────
+
+
+class TestIsDocker:
+    """Tests for _is_docker() — Docker environment detection."""
+
+    @patch("core.config.os.path.exists")
+    def test_returns_true_when_dockerenv_exists(self, mock_exists):
+        """Returns True when /.dockerenv exists."""
+
+        def exists_side_effect(path):
+            return path == "/.dockerenv"
+
+        mock_exists.side_effect = exists_side_effect
+
+        assert _is_docker() is True
+
+    @patch("core.config.os.path.exists")
+    def test_returns_true_when_containerenv_exists(self, mock_exists):
+        """Returns True when /run/.containerenv exists (e.g. Podman)."""
+
+        def exists_side_effect(path):
+            return path == "/run/.containerenv"
+
+        mock_exists.side_effect = exists_side_effect
+
+        assert _is_docker() is True
+
+    @patch("core.config.os.path.exists")
+    def test_returns_true_when_both_exist(self, mock_exists):
+        """Returns True when both indicators exist."""
+        mock_exists.return_value = True
+
+        assert _is_docker() is True
+
+    @patch("core.config.os.path.exists")
+    def test_returns_false_when_neither_exists(self, mock_exists):
+        """Returns False when no Docker indicator file exists."""
+        mock_exists.return_value = False
+
+        assert _is_docker() is False
+
+    @patch("core.config.os.path.exists")
+    def test_checks_dockerenv_first(self, mock_exists):
+        """Checks /.dockerenv first (short-circuit if found)."""
+
+        def exists_side_effect(path):
+            return path == "/.dockerenv"
+
+        mock_exists.side_effect = exists_side_effect
+
+        _is_docker()
+        # /.dockerenv should be the first path checked
+        assert mock_exists.call_args_list[0][0][0] == "/.dockerenv"
+
+
+# ─── _default_output_dir ──────────────────────────────────────────
+
+
+class TestDefaultOutputDir:
+    """Tests for _default_output_dir() — environment-aware output path."""
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_docker_default(self, mock_docker):
+        """In Docker, default is /app/output."""
+        result = _default_output_dir()
+        assert result == "/app/output"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_local_default(self, mock_docker, monkeypatch):
+        """Outside Docker, default is CWD/output."""
+        monkeypatch.delenv("OUTPUT_DIR", raising=False)
+        result = _default_output_dir()
+        assert result == str(Path.cwd() / "output")
+
+    @patch("core.config._is_docker", return_value=True)
+    @patch.dict(os.environ, {"OUTPUT_DIR": "/custom/output"})
+    def test_docker_env_var_overrides_default(self, mock_docker):
+        """In Docker, OUTPUT_DIR env var overrides the Docker default."""
+        result = _default_output_dir()
+        assert result == "/custom/output"
+
+    @patch("core.config._is_docker", return_value=False)
+    @patch.dict(os.environ, {"OUTPUT_DIR": "/custom/output"})
+    def test_local_env_var_overrides_default(self, mock_docker):
+        """Outside Docker, OUTPUT_DIR env var overrides the local default."""
+        result = _default_output_dir()
+        assert result == "/custom/output"
+
+
+# ─── _default_source_dir ──────────────────────────────────────────
+
+
+class TestDefaultSourceDir:
+    """Tests for _default_source_dir() — environment-aware source path."""
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_docker_default(self, mock_docker):
+        """In Docker, default is /app/source."""
+        result = _default_source_dir()
+        assert result == "/app/source"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_local_default(self, mock_docker, monkeypatch):
+        """Outside Docker, default is CWD/source."""
+        monkeypatch.delenv("SOURCE_DIR", raising=False)
+        result = _default_source_dir()
+        assert result == str(Path.cwd() / "source")
+
+    @patch("core.config._is_docker", return_value=True)
+    @patch.dict(os.environ, {"SOURCE_DIR": "/custom/source"})
+    def test_docker_env_var_overrides_default(self, mock_docker):
+        """In Docker, SOURCE_DIR env var overrides the Docker default."""
+        result = _default_source_dir()
+        assert result == "/custom/source"
+
+    @patch("core.config._is_docker", return_value=False)
+    @patch.dict(os.environ, {"SOURCE_DIR": "/custom/source"})
+    def test_local_env_var_overrides_default(self, mock_docker):
+        """Outside Docker, SOURCE_DIR env var overrides the local default."""
+        result = _default_source_dir()
+        assert result == "/custom/source"
+
+
+# ─── _default_excel_dir ────────────────────────────────────────────
+
+
+class TestDefaultExcelDir:
+    """Tests for _default_excel_dir() — environment-aware excel path."""
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_docker_default(self, mock_docker):
+        """In Docker, default is /app/excel."""
+        result = _default_excel_dir()
+        assert result == "/app/excel"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_local_default(self, mock_docker, monkeypatch):
+        """Outside Docker, default is CWD/excel."""
+        monkeypatch.delenv("EXCEL_DIR", raising=False)
+        result = _default_excel_dir()
+        assert result == str(Path.cwd() / "excel")
+
+    @patch("core.config._is_docker", return_value=True)
+    @patch.dict(os.environ, {"EXCEL_DIR": "/custom/excel"})
+    def test_docker_env_var_overrides_default(self, mock_docker):
+        """In Docker, EXCEL_DIR env var overrides the Docker default."""
+        result = _default_excel_dir()
+        assert result == "/custom/excel"
+
+    @patch("core.config._is_docker", return_value=False)
+    @patch.dict(os.environ, {"EXCEL_DIR": "/custom/excel"})
+    def test_local_env_var_overrides_default(self, mock_docker):
+        """Outside Docker, EXCEL_DIR env var overrides the local default."""
+        result = _default_excel_dir()
+        assert result == "/custom/excel"
+
+
+# ─── _default_doc_dir ──────────────────────────────────────────────
+
+
+class TestDefaultDocDir:
+    """Tests for _default_doc_dir() — environment-aware doc path."""
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_docker_default(self, mock_docker):
+        """In Docker, default is /app/doc."""
+        result = _default_doc_dir()
+        assert result == "/app/doc"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_local_default(self, mock_docker, monkeypatch):
+        """Outside Docker, default is CWD/Doc."""
+        monkeypatch.delenv("DOC_DIR", raising=False)
+        result = _default_doc_dir()
+        assert result == str(Path.cwd() / "Doc")
+
+    @patch("core.config._is_docker", return_value=True)
+    @patch.dict(os.environ, {"DOC_DIR": "/custom/doc"})
+    def test_docker_env_var_overrides_default(self, mock_docker):
+        """In Docker, DOC_DIR env var overrides the Docker default."""
+        result = _default_doc_dir()
+        assert result == "/custom/doc"
+
+    @patch("core.config._is_docker", return_value=False)
+    @patch.dict(os.environ, {"DOC_DIR": "/custom/doc"})
+    def test_local_env_var_overrides_default(self, mock_docker):
+        """Outside Docker, DOC_DIR env var overrides the local default."""
+        result = _default_doc_dir()
+        assert result == "/custom/doc"
+
+
+# ─── Config with environment-aware defaults ────────────────────────
+
+
+class TestConfigEnvironmentAwareDefaults:
+    """Tests for Config defaults using _default_*_dir() functions."""
+
+    @patch("core.config._is_docker", return_value=True)
+    def test_docker_defaults(self, mock_docker):
+        """In Docker, all directory defaults use /app/* paths."""
+        config = Config()
+        assert config.OUTPUT_DIR == "/app/output"
+        assert config.SOURCE_DIR == "/app/source"
+        assert config.EXCEL_DIR == "/app/excel"
+        assert config.DOC_DIR == "/app/doc"
+
+    @patch("core.config._is_docker", return_value=False)
+    def test_local_defaults(self, mock_docker, monkeypatch):
+        """Outside Docker, all directory defaults use CWD-relative paths."""
+        for key in ("OUTPUT_DIR", "SOURCE_DIR", "EXCEL_DIR", "DOC_DIR"):
+            monkeypatch.delenv(key, raising=False)
+        config = Config()
+        assert config.OUTPUT_DIR == str(Path.cwd() / "output")
+        assert config.SOURCE_DIR == str(Path.cwd() / "source")
+        assert config.EXCEL_DIR == str(Path.cwd() / "excel")
+        assert config.DOC_DIR == str(Path.cwd() / "Doc")
+
+    @patch("core.config._is_docker", return_value=False)
+    @patch.dict(os.environ, {"OUTPUT_DIR": "/my/output", "SOURCE_DIR": "/my/source"})
+    def test_env_vars_override_local_defaults(self, mock_docker):
+        """Env vars take precedence over local defaults."""
+        config = Config()
+        assert config.OUTPUT_DIR == "/my/output"
+        assert config.SOURCE_DIR == "/my/source"
+
+    @patch("core.config._is_docker", return_value=True)
+    @patch.dict(os.environ, {"OUTPUT_DIR": "/my/output", "SOURCE_DIR": "/my/source"})
+    def test_env_vars_override_docker_defaults(self, mock_docker):
+        """Env vars take precedence over Docker defaults."""
+        config = Config()
+        assert config.OUTPUT_DIR == "/my/output"
+        assert config.SOURCE_DIR == "/my/source"
