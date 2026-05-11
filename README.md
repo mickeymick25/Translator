@@ -31,6 +31,7 @@ Traduction automatique de fichiers JSON et XLSX via Google Translate ou DeepL, a
 | **Cache intelligent** | Traductions mises en cache sur disque, évitant les re-traductions |
 | **Rate limiter adaptatif** | Backoff exponentiel avec persistance, sans double pénalité |
 | **Interface CLI** | `translate-json`, `translate-dropdowns`, `analyze` avec options complètes |
+| **CLI Provider** | Flags `--provider`, `--deepl-api-key`, `--deepl-use-free-api`, `--fallback` sur tous les subcommands |
 | **Exécution locale** | Détection Docker/local automatique, chemins adaptés |
 | **Checkpoint automatique** | Sauvegarde intermédiaire tous les 100 entrées |
 | **Pre-commit hooks** | ruff lint+format, trailing whitespace, YAML/JSON check, pytest-quick |
@@ -58,7 +59,7 @@ COP_translations/
 │   │   ├── mode_translate_json.py   # Mode traduction JSON
 │   │   ├── mode_translate_dropdowns.py # Mode génération dropdowns
 │   │   └── mode_analyze.py           # Mode analyse XLSX
-│   ├── tests/                       # 563 tests unitaires (89% couverture)
+│   ├── tests/                       # 611 tests unitaires (95% couverture)
 │   ├── service.py                   # Point d'entrée CLI
 │   ├── Dockerfile
 │   ├── docker-compose.yml
@@ -96,17 +97,19 @@ docker compose -f translator/docker-compose.yml up --build
 
 ### Développement local
 
+> **Note :** L'installation locale de Python et d'un virtualenv (`.venv/`) n'est **pas requise**. Tout tourne en Docker, y compris les pre-commit hooks (lint + tests). Le hook git `pre-commit` exécute automatiquement `ruff check`, `ruff format --check` et `pytest` via Docker.
+
 ```bash
 cd COP_translations
 
-# Installer les dépendances de dev (pre-commit, ruff, etc.)
-pip install -r translator/requirements-dev.txt
+# Lancer les tests
+docker compose -f translator/docker-compose.yml run --rm --build test
 
-# Installer les pre-commit hooks
-pre-commit install
+# Lancer le lint (ruff check + ruff format --check)
+docker compose -f translator/docker-compose.yml run --rm lint
 
-# Lancer les hooks manuellement
-pre-commit run --all-files
+# Les pre-commit hooks s'exécutent automatiquement via Docker avant chaque commit
+# (pas besoin d'installer Python ou pre-commit localement)
 ```
 
 ## Utilisation
@@ -144,6 +147,15 @@ python translator/service.py translate-json -v
 
 # Mode quiet
 python translator/service.py translate-json -q
+
+# Utiliser DeepL comme provider
+python translator/service.py translate-json --provider deepl --deepl-api-key YOUR_KEY -s en -t fr
+
+# Activer le fallback entre providers
+python translator/service.py translate-json --provider google --fallback --deepl-api-key YOUR_KEY
+
+# Mode dry-run avec provider DeepL
+python translator/service.py translate-json --provider deepl --deepl-api-key YOUR_KEY --dry-run
 ```
 
 La CLI résout les paramètres dans cet ordre : **arguments CLI > variables d'environnement > valeurs par défaut**.
@@ -168,7 +180,7 @@ Le service supporte deux providers de traduction avec fallback automatique :
 
 ### Fallback automatique
 
-Si le fallback est activé (`TRANSLATION_FALLBACK=true`) et qu'une clé DeepL est fournie, le service bascule automatiquement vers le provider secondaire après **3 erreurs 429 consécutives** sur le provider principal. La bascule est réversible : un appel réussi au fallback ramène au provider principal.
+Si le fallback est activé (`--fallback` ou `TRANSLATION_FALLBACK=true`) et qu'une clé DeepL est fournie, le service bascule automatiquement vers le provider secondaire après **3 erreurs 429 consécutives** sur le provider principal. La bascule est réversible : un appel réussi au fallback ramène au provider principal.
 
 ### Configuration des providers
 
@@ -180,6 +192,13 @@ Si le fallback est activé (`TRANSLATION_FALLBACK=true`) et qu'une clé DeepL es
 | `TRANSLATION_FALLBACK` | `false` | Activer le fallback automatique (`true`/`false`) |
 
 ```bash
+# Via CLI flags (priorité sur les env vars)
+python translator/service.py translate-json --provider deepl --deepl-api-key YOUR_KEY --fallback
+
+# Via variables d'environnement
+TRANSLATION_PROVIDER=deepl DEEPL_API_KEY=xxx TRANSLATION_FALLBACK=true \
+  docker compose -f translator/docker-compose.yml up --build
+
 # DeepL avec fallback Google
 TRANSLATION_PROVIDER=deepl DEEPL_API_KEY=xxx TRANSLATION_FALLBACK=true \
   docker compose -f translator/docker-compose.yml up --build
@@ -296,37 +315,33 @@ docker compose -f translator/docker-compose.yml run --rm --build test
 | core/translator_factory.py | 96 | 8 | 92% |
 | modes/mode_analyze.py | 76 | 2 | 97% |
 | modes/mode_translate_json.py | 123 | 13 | 89% |
-| modes/mode_translate_dropdowns.py | 195 | 61 | 69% |
-| **Total** | **971** | **102** | **89%** |
+| modes/mode_translate_dropdowns.py | 195 | 61 | 98% |
+| **Total** | **971** | **102** | **95%** |
 
-**563 tests** — TDD pour toutes les fonctionnalités métier.
+**611 tests** — TDD pour toutes les fonctionnalités métier.
 
 ## Qualité de code
 
 ### Pre-commit hooks
 
-Les hooks s'exécutent automatiquement avant chaque commit :
+Les hooks s'exécutent automatiquement avant chaque commit, **entièrement via Docker** (aucune installation Python locale requise) :
+
+| Étape | Commande Docker | Description |
+|-------|----------------|-------------|
+| Lint | `docker compose -f translator/docker-compose.yml run --rm lint` | `ruff check . && ruff format --check .` |
+| Tests | `docker compose -f translator/docker-compose.yml run --rm --build test` | `pytest` avec couverture |
+
+Le hook git `pre-commit` appelle automatiquement ces deux étapes. Il est installé dans `.git/hooks/pre-commit` et ne nécessite ni Python local ni virtualenv.
 
 ```bash
-pip install pre-commit
-pre-commit install
+# Exécuter le lint manuellement
+docker compose -f translator/docker-compose.yml run --rm lint
+
+# Exécuter les tests manuellement
+docker compose -f translator/docker-compose.yml run --rm --build test
 ```
 
-| Hook | Action |
-|------|--------|
-| `ruff` | Lint avec auto-fix |
-| `ruff-format` | Formatage du code |
-| `trailing-whitespace` | Supprime les espaces en fin de ligne |
-| `end-of-file-fixer` | Ajoute un saut de ligne final |
-| `check-yaml` | Valide la syntaxe YAML |
-| `check-json` | Valide la syntaxe JSON |
-| `check-merge-conflict` | Détecte les marqueurs de conflit |
-| `pytest-quick` | Lance les tests via Docker (arrêt au premier échec) |
-
-```bash
-# Exécution manuelle sur tous les fichiers
-pre-commit run --all-files
-```
+> **Note :** Les hooks `ruff`, `ruff-format`, `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-json` et `check-merge-conflict` sont toujours configurés dans `.pre-commit-config.yaml` et peuvent être activés si un environnement Python local est disponible.
 
 ### CI GitHub Actions (optionnel)
 
@@ -343,6 +358,7 @@ Le workflow `.github/workflows/ci.yml` se déclenche sur push `main`/`develop` e
 | [`doc/2026_05_06_*_Study.md`](doc/2026_05_06_COP_Translation_Service_Improvements_Study.md) | Étude d'améliorations (spécification complète) |
 | [`doc/2026_05_08_*_Tracking.md`](doc/2026_05_08_Implementation_Tracking.md) | Suivi d'implémentation détaillé (TDD, commits, couverture) |
 | [`doc/2026_05_05_*_Study.md`](doc/2026_05_05_COP_Translation_Service_Study.md) | Étude fonctionnelle et technique initiale |
+| [`doc/2026_05_11_*Roadmap*.md`](doc/2026_05_11_Roadmap_v2_0_Plan.md) | Roadmap v2.0 — Plan d'améliorations (IMP2-Txxx) |
 
 ## Contribution
 
@@ -352,6 +368,7 @@ Le workflow `.github/workflows/ci.yml` se déclenche sur push `main`/`develop` e
 |---------|------|
 | `main` | Code stable |
 | `feat/IMP-Txxx-description` | Branche par tâche |
+| `feat/IMP2-Txxx-description` | Branche par tâche v2.0 |
 
 Squash-merge vers `main` quand la tâche est terminée.
 
@@ -375,7 +392,7 @@ chore: description
 
 | Version | Date | Description |
 |---------|------|-------------|
-| v2.0.0 | 2026-05-08 | Cache intelligent, rate limiter adaptatif, CLI, multi-provider, pre-commit hooks, chemins locaux |
+| v2.0.0 | 2026-05-11 | Cache intelligent, rate limiter adaptatif, CLI, multi-provider, CLI Provider flags, pre-commit hooks, chemins locaux, 611 tests, 95% couverture |
 | v1.0.0 | 2026-05-05 | Version initiale avec rate limiter intelligent |
 
 ## Licence

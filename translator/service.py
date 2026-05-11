@@ -34,6 +34,10 @@ Variables d'environnement :
     BATCH_LANGS     : Langues à générer en batch, séparées par virgules
                       (défaut: en,fr,cz,sk,de,it,ar)
     OUTPUT_FORMAT   : Format de sortie — json, xlsx, ou auto (défaut: auto)
+    TRANSLATION_PROVIDER : Provider de traduction — google ou deepl (défaut: google)
+    DEEPL_API_KEY   : Clé API DeepL (requise pour le provider deepl)
+    DEEPL_USE_FREE_API  : Utiliser l'API gratuite DeepL (défaut: true)
+    TRANSLATION_FALLBACK : Activer le fallback automatique (défaut: false)
 """
 
 import argparse
@@ -49,7 +53,7 @@ from core.config import (
     get_config,
 )
 
-__version__ = "1.1.0"
+__version__ = "2.0.0"
 
 # Configuration du logging (will be adjusted based on --verbose/--quiet)
 logging.basicConfig(
@@ -66,6 +70,40 @@ _MODES = {
     MODE_TRANSLATE_DROPDOWNS: ("modes.mode_translate_dropdowns", "run"),
     MODE_ANALYZE: ("modes.mode_analyze", "run"),
 }
+
+
+def _add_provider_args(parser: argparse.ArgumentParser) -> None:
+    """Add provider-related arguments to a subcommand parser (IMP2-T001).
+
+    These flags are shared across all subcommands since the translation
+    provider is a global concern, not specific to any mode.
+
+    Args:
+        parser: The argparse subparser to add provider flags to.
+    """
+    parser.add_argument(
+        "--provider",
+        choices=["google", "deepl"],
+        default=None,
+        help="Provider de traduction: google ou deepl (défaut: google)",
+    )
+    parser.add_argument(
+        "--deepl-api-key",
+        default=None,
+        help="Clé API DeepL (requise pour le provider deepl)",
+    )
+    parser.add_argument(
+        "--deepl-use-free-api",
+        action="store_true",
+        default=None,
+        help="Utiliser l'API gratuite DeepL (défaut: true)",
+    )
+    parser.add_argument(
+        "--fallback",
+        action="store_true",
+        default=None,
+        help="Activer le fallback automatique entre providers (défaut: false)",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -139,6 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Simuler sans appels API de traduction",
     )
+    _add_provider_args(p_json)
 
     # ─── translate-dropdowns ────────────────────────────────────────
     p_dd = subparsers.add_parser(
@@ -178,6 +217,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Simuler sans appels API de traduction",
     )
+    _add_provider_args(p_dd)
 
     # ─── analyze ─────────────────────────────────────────────────────
     p_analyze = subparsers.add_parser("analyze", help="Analyser un fichier XLSX")
@@ -198,6 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Simuler sans appels API de traduction",
     )
+    _add_provider_args(p_analyze)
 
     return parser
 
@@ -242,6 +283,16 @@ def build_config_from_args(args: argparse.Namespace) -> Config:
         kwargs["BATCH_LANGS"] = args.batch_langs
     if getattr(args, "format", None) is not None:
         kwargs["OUTPUT_FORMAT"] = args.format
+
+    # IMP2-T001: Provider flags — CLI > env > default
+    if getattr(args, "provider", None) is not None:
+        kwargs["TRANSLATION_PROVIDER"] = args.provider
+    if getattr(args, "deepl_api_key", None) is not None:
+        kwargs["DEEPL_API_KEY"] = args.deepl_api_key
+    if getattr(args, "deepl_use_free_api", None) is not None:
+        kwargs["DEEPL_USE_FREE_API"] = "true" if args.deepl_use_free_api else "false"
+    if getattr(args, "fallback", None) is not None:
+        kwargs["TRANSLATION_FALLBACK"] = "true" if args.fallback else "false"
 
     # Reset global config to force re-creation with new values
     import core.config as config_module
@@ -350,6 +401,16 @@ def main() -> None:
 
     if config.dry_run:
         logger.info("  Dry run      : YES (no API calls will be made)")
+
+    # IMP2-T001: Provider info in startup banner
+    logger.info(f"  Provider     : {config.TRANSLATION_PROVIDER}")
+    if config.TRANSLATION_PROVIDER.lower() == "deepl" or config.DEEPL_API_KEY:
+        logger.info(
+            f"  DeepL API    : {'Free' if config.deepl_use_free_api_enabled else 'Pro'}"
+        )
+    logger.info(
+        f"  Fallback     : {'Enabled' if config.fallback_enabled else 'Disabled'}"
+    )
 
     if mode == MODE_TRANSLATE_DROPDOWNS:
         logger.info(f"  Batch langs  : {config.BATCH_LANGS}")

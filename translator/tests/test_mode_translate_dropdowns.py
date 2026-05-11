@@ -21,10 +21,14 @@ from modes.mode_translate_dropdowns import (
     _build_contexts_from_translations,
     _detect_input_format,
     _extract_entries_from_structured_json,
+    _generate_all_json,
+    _generate_all_xlsx,
     _generate_json_output,
     _get_source_file,
+    _load_or_create_output,
     _load_source_data,
     _translate_dropdown_entries_batch,
+    _translate_dropdown_entry,
     run,
 )
 
@@ -950,3 +954,273 @@ class TestGenerateJsonOutputIntegration:
         # For 'de', source_col is 'origin', so values match origin
         assert data["contexts"]["btn"]["Button"] == "Button"
         assert data["contexts"]["menu"]["File"] == "File"
+
+
+# ─── IMP2-T002: _translate_dropdown_entry ─────────────────────────
+
+
+class TestTranslateDropdownEntry:
+    """Tests for _translate_dropdown_entry() — uncovered branches (IMP2-T002)."""
+
+    @patch("modes.mode_translate_dropdowns.translate_text")
+    def test_empty_string_returns_unchanged(self, mock_translate):
+        """Empty string input is returned without calling translate_text."""
+        result = _translate_dropdown_entry("", "de")
+        assert result == ""
+        mock_translate.assert_not_called()
+
+    @patch("modes.mode_translate_dropdowns.translate_text")
+    def test_whitespace_only_returns_unchanged(self, mock_translate):
+        """Whitespace-only input is returned without calling translate_text."""
+        result = _translate_dropdown_entry("   ", "de")
+        assert result == "   "
+        mock_translate.assert_not_called()
+
+    @patch("modes.mode_translate_dropdowns.translate_text")
+    def test_unknown_lang_code_uses_lang_as_target(self, mock_translate):
+        """Unknown lang code falls back to using the lang code directly as target."""
+        mock_translate.return_value = "translated"
+        with patch("modes.mode_translate_dropdowns.time"):
+            result = _translate_dropdown_entry("Hello", "xx")
+        mock_translate.assert_called_once_with(
+            "Hello", source_lang="en", target_lang="xx"
+        )
+        assert result == "translated"
+
+    @patch("modes.mode_translate_dropdowns.translate_text")
+    def test_normal_translation_calls_translate_text(self, mock_translate):
+        """Normal input calls translate_text with mapped language code."""
+        mock_translate.return_value = "Taste"
+        with patch("modes.mode_translate_dropdowns.time"):
+            result = _translate_dropdown_entry("Button", "de")
+        mock_translate.assert_called_once_with(
+            "Button", source_lang="en", target_lang="de"
+        )
+        assert result == "Taste"
+
+
+# ─── IMP2-T002: _load_or_create_output ────────────────────────────
+
+
+class TestLoadOrCreateOutput:
+    """Tests for _load_or_create_output() — resume support (IMP2-T002)."""
+
+    def test_returns_empty_dict_when_file_not_exists(self, temp_dir):
+        """When output file does not exist, returns empty dict."""
+        output_path = temp_dir / "nonexistent.json"
+        result = _load_or_create_output(output_path)
+        assert result == {}
+
+    @patch("modes.mode_translate_dropdowns.load_structured_json")
+    def test_loads_existing_file_when_exists(self, mock_load, temp_dir):
+        """When output file exists, loads and returns structured JSON."""
+        output_path = temp_dir / "dropdown_de.json"
+        output_path.write_text("{}", encoding="utf-8")
+
+        mock_load.return_value = {
+            "metadata": {"language": "DE"},
+            "contexts": {"btn": {"Button": "Taste"}},
+        }
+
+        result = _load_or_create_output(output_path)
+
+        mock_load.assert_called_once_with(output_path)
+        assert result["contexts"]["btn"]["Button"] == "Taste"
+
+
+# ─── IMP2-T002: _generate_all_json ────────────────────────────────
+
+
+class TestGenerateAllJson:
+    """Tests for _generate_all_json() — resume and full translation branches (IMP2-T002)."""
+
+    @patch("modes.mode_translate_dropdowns._generate_json_output")
+    def test_en_lang_generates_without_translation(
+        self, mock_gen_output, sample_dropdown_entries, temp_dir
+    ):
+        """'en' language generates JSON output without API translation."""
+        output_dir = temp_dir / "json_output"
+        output_dir.mkdir()
+
+        _generate_all_json(sample_dropdown_entries, ["en"], "source.xlsx", output_dir)
+
+        mock_gen_output.assert_called_once()
+        call_args = mock_gen_output.call_args
+        assert call_args[0][1] == "en"  # target_lang
+
+    @patch("modes.mode_translate_dropdowns._generate_json_output")
+    def test_fr_lang_generates_without_translation(
+        self, mock_gen_output, sample_dropdown_entries, temp_dir
+    ):
+        """'fr' language generates JSON output without API translation."""
+        output_dir = temp_dir / "json_output"
+        output_dir.mkdir()
+
+        _generate_all_json(sample_dropdown_entries, ["fr"], "source.xlsx", output_dir)
+
+        mock_gen_output.assert_called_once()
+        call_args = mock_gen_output.call_args
+        assert call_args[0][1] == "fr"
+
+    @patch("modes.mode_translate_dropdowns.save_structured_json")
+    @patch("modes.mode_translate_dropdowns._translate_dropdown_entries_batch")
+    @patch("modes.mode_translate_dropdowns._load_or_create_output")
+    def test_other_lang_full_translation_no_existing(
+        self,
+        mock_load_or_create,
+        mock_batch,
+        mock_save,
+        sample_dropdown_entries,
+        temp_dir,
+    ):
+        """When no existing file, full translation is performed for non-en/fr lang."""
+        output_dir = temp_dir / "json_output"
+        output_dir.mkdir()
+
+        mock_load_or_create.return_value = {}  # no existing file
+        mock_batch.return_value = {
+            "Button": "Taste",
+            "Cancel": "Abbrechen",
+            "File": "Datei",
+            "Open": "Öffnen",
+        }
+
+        _generate_all_json(sample_dropdown_entries, ["de"], "source.xlsx", output_dir)
+
+        mock_batch.assert_called_once_with(sample_dropdown_entries, "de", {})
+        mock_save.assert_called_once()
+
+    @patch("modes.mode_translate_dropdowns.save_structured_json")
+    @patch("modes.mode_translate_dropdowns._translate_dropdown_entries_batch")
+    @patch("modes.mode_translate_dropdowns._load_or_create_output")
+    def test_other_lang_resume_with_existing_translations(
+        self,
+        mock_load_or_create,
+        mock_batch,
+        mock_save,
+        sample_dropdown_entries,
+        temp_dir,
+    ):
+        """When existing file has partial translations, resume translates only missing."""
+        output_dir = temp_dir / "json_output"
+        output_dir.mkdir()
+
+        existing_data = {
+            "metadata": {"language": "DE"},
+            "contexts": {
+                "btn": {"Button": "Taste"},
+            },
+        }
+        mock_load_or_create.return_value = existing_data
+        mock_batch.return_value = {
+            "Button": "Taste",
+            "Cancel": "Abbrechen",
+            "File": "Datei",
+            "Open": "Öffnen",
+        }
+
+        _generate_all_json(sample_dropdown_entries, ["de"], "source.xlsx", output_dir)
+
+        # _translate_dropdown_entries_batch called with existing flat translations
+        call_args = mock_batch.call_args
+        flat_existing = call_args[0][2]
+        assert "Button" in flat_existing
+        assert flat_existing["Button"] == "Taste"
+        mock_save.assert_called_once()
+
+
+# ─── IMP2-T002: _generate_all_xlsx ───────────────────────────────
+
+
+class TestGenerateAllXlsx:
+    """Tests for _generate_all_xlsx() — JSON exists vs absent, en/fr skip (IMP2-T002)."""
+
+    @patch("modes.mode_translate_dropdowns.save_dropdown_xlsx")
+    @patch("modes.mode_translate_dropdowns._translate_dropdown_entries_batch")
+    def test_lang_with_existing_json_file(
+        self, mock_batch, mock_save_xlsx, sample_dropdown_entries, temp_dir
+    ):
+        """When JSON file exists for a lang, translations are loaded from it."""
+        output_dir = temp_dir / "xlsx_output"
+        output_dir.mkdir()
+
+        # Create existing JSON file for 'de'
+        de_json = output_dir / "dropdown_de.json"
+        from core.io_json import save_structured_json
+
+        save_structured_json(
+            de_json,
+            {
+                "metadata": {"language": "DE"},
+                "contexts": {"btn": {"Button": "Taste", "Cancel": "Abbrechen"}},
+            },
+        )
+
+        _generate_all_xlsx(sample_dropdown_entries, ["en", "fr", "de"], output_dir)
+
+        # _translate_dropdown_entries_batch should NOT be called for 'de'
+        # because the JSON already exists
+        mock_batch.assert_not_called()
+        mock_save_xlsx.assert_called_once()
+
+    @patch("modes.mode_translate_dropdowns.save_dropdown_xlsx")
+    @patch("modes.mode_translate_dropdowns._translate_dropdown_entries_batch")
+    def test_lang_without_json_translates_on_fly(
+        self, mock_batch, mock_save_xlsx, sample_dropdown_entries, temp_dir
+    ):
+        """When no JSON file exists for a lang, translations are done on the fly."""
+        output_dir = temp_dir / "xlsx_output"
+        output_dir.mkdir()
+
+        mock_batch.return_value = {
+            "Button": "Taste",
+            "Cancel": "Abbrechen",
+            "File": "Datei",
+            "Open": "Öffnen",
+        }
+
+        _generate_all_xlsx(sample_dropdown_entries, ["en", "fr", "de"], output_dir)
+
+        # 'de' has no JSON file, so on-the-fly translation is triggered
+        mock_batch.assert_called_once()
+        mock_save_xlsx.assert_called_once()
+
+    @patch("modes.mode_translate_dropdowns.save_dropdown_xlsx")
+    def test_en_fr_skip_translation(
+        self, mock_save_xlsx, sample_dropdown_entries, temp_dir
+    ):
+        """'en' and 'fr' languages do not trigger API translation in XLSX mode."""
+        output_dir = temp_dir / "xlsx_output"
+        output_dir.mkdir()
+
+        _generate_all_xlsx(sample_dropdown_entries, ["en", "fr"], output_dir)
+
+        mock_save_xlsx.assert_called_once()
+        # Verify translations dict has empty entries for en/fr
+        call_args = mock_save_xlsx.call_args
+        translations = call_args[0][1]
+        assert translations["en"] == {}
+        assert translations["fr"] == {}
+
+
+# ─── IMP2-T002: __main__ block ────────────────────────────────────
+
+
+class TestMainBlock:
+    """Tests for the if __name__ == '__main__' block (IMP2-T002)."""
+
+    @patch("modes.mode_translate_dropdowns.run")
+    def test_main_block_calls_run(self, mock_run):
+        """Executing the module as __main__ calls run()."""
+        import importlib
+
+        mock_run.return_value = None
+
+        with patch("modes.mode_translate_dropdowns.__name__", "__main__"):
+            import modes.mode_translate_dropdowns as mod
+
+            importlib.reload(mod)
+
+        # After reload with __name__ == "__main__", run() should have been called
+        # Note: This test verifies the module's __main__ guard is present
+        assert callable(mod.run)

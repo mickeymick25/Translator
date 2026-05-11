@@ -8,10 +8,13 @@ Covers:
 - --dry-run flag
 - --version flag
 - Each subcommand: translate-json, translate-dropdowns, analyze
+- IMP2-T001: Provider flags (--provider, --deepl-api-key, --deepl-use-free-api, --fallback)
 """
 
 import os
 from unittest.mock import patch
+
+import pytest
 
 # ─── build_parser ─────────────────────────────────────────────────
 
@@ -790,4 +793,507 @@ class TestBuildConfigFromArgsDefaults:
             assert config.SOURCE_FILE == "/cli/file.json"
             assert config.OUTPUT_DIR == "/cli/output"
             assert config.BATCH_LANGS == "it,de,fr"
+            config_module._config = None
+
+
+# ─── IMP2-T001: Provider CLI flags on parser ──────────────────────
+
+
+class TestProviderFlagsOnParser:
+    """Tests for --provider, --deepl-api-key, --deepl-use-free-api, --fallback
+    flags availability on all subcommands (IMP2-T001)."""
+
+    # ─── --provider ─────────────────────────────────────────────────
+
+    def test_provider_flag_on_translate_json(self):
+        """--provider is available on translate-json subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json", "--provider", "google"])
+        assert args.provider == "google"
+
+    def test_provider_flag_on_translate_dropdowns(self):
+        """--provider is available on translate-dropdowns subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-dropdowns", "--provider", "deepl"])
+        assert args.provider == "deepl"
+
+    def test_provider_flag_on_analyze(self):
+        """--provider is available on analyze subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["analyze", "--provider", "google"])
+        assert args.provider == "google"
+
+    def test_provider_choices_google_and_deepl(self):
+        """--provider accepts 'google' and 'deepl' values."""
+        from service import build_parser
+
+        parser = build_parser()
+        args_google = parser.parse_args(["translate-json", "--provider", "google"])
+        assert args_google.provider == "google"
+
+        args_deepl = parser.parse_args(["translate-json", "--provider", "deepl"])
+        assert args_deepl.provider == "deepl"
+
+    def test_provider_default_none(self):
+        """--provider defaults to None (falls through to env/default)."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+        assert args.provider is None
+
+    def test_provider_rejects_invalid_choice(self):
+        """--provider rejects invalid provider names."""
+        from service import build_parser
+
+        parser = build_parser()
+
+        with pytest.raises(SystemExit):
+            parser.parse_args(["translate-json", "--provider", "invalid"])
+
+    # ─── --deepl-api-key ────────────────────────────────────────────
+
+    def test_deepl_api_key_flag_on_translate_json(self):
+        """--deepl-api-key is available on translate-json subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json", "--deepl-api-key", "my-key-123"])
+        assert args.deepl_api_key == "my-key-123"
+
+    def test_deepl_api_key_flag_on_translate_dropdowns(self):
+        """--deepl-api-key is available on translate-dropdowns subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(
+            ["translate-dropdowns", "--deepl-api-key", "my-key-456"]
+        )
+        assert args.deepl_api_key == "my-key-456"
+
+    def test_deepl_api_key_flag_on_analyze(self):
+        """--deepl-api-key is available on analyze subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["analyze", "--deepl-api-key", "my-key-789"])
+        assert args.deepl_api_key == "my-key-789"
+
+    def test_deepl_api_key_default_none(self):
+        """--deepl-api-key defaults to None (falls through to env/default)."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+        assert args.deepl_api_key is None
+
+    # ─── --deepl-use-free-api ───────────────────────────────────────
+
+    def test_deepl_use_free_api_flag_on_translate_json(self):
+        """--deepl-use-free-api is available on translate-json subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json", "--deepl-use-free-api"])
+        assert args.deepl_use_free_api is True
+
+    def test_deepl_use_free_api_flag_on_translate_dropdowns(self):
+        """--deepl-use-free-api is available on translate-dropdowns subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-dropdowns", "--deepl-use-free-api"])
+        assert args.deepl_use_free_api is True
+
+    def test_deepl_use_free_api_flag_on_analyze(self):
+        """--deepl-use-free-api is available on analyze subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["analyze", "--deepl-use-free-api"])
+        assert args.deepl_use_free_api is True
+
+    def test_deepl_use_free_api_default_none(self):
+        """--deepl-use-free-api defaults to None (falls through to env/default)."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+        assert args.deepl_use_free_api is None
+
+    # ─── --fallback ─────────────────────────────────────────────────
+
+    def test_fallback_flag_on_translate_json(self):
+        """--fallback is available on translate-json subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json", "--fallback"])
+        assert args.fallback is True
+
+    def test_fallback_flag_on_translate_dropdowns(self):
+        """--fallback is available on translate-dropdowns subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-dropdowns", "--fallback"])
+        assert args.fallback is True
+
+    def test_fallback_flag_on_analyze(self):
+        """--fallback is available on analyze subcommand."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["analyze", "--fallback"])
+        assert args.fallback is True
+
+    def test_fallback_default_none(self):
+        """--fallback defaults to None (falls through to env/default)."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+        assert args.fallback is None
+
+    def test_all_provider_flags_combined(self):
+        """All provider flags can be combined on a single command."""
+        from service import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "translate-json",
+                "--provider",
+                "deepl",
+                "--deepl-api-key",
+                "test-key",
+                "--deepl-use-free-api",
+                "--fallback",
+            ]
+        )
+        assert args.provider == "deepl"
+        assert args.deepl_api_key == "test-key"
+        assert args.deepl_use_free_api is True
+        assert args.fallback is True
+
+
+# ─── IMP2-T001: Provider CLI > env > default priority ──────────────
+
+
+class TestBuildConfigFromArgsProviderPriority:
+    """Tests for CLI > env > default resolution of provider flags (IMP2-T001)."""
+
+    # ─── --provider ─────────────────────────────────────────────────
+
+    def test_cli_overrides_env_for_provider(self):
+        """CLI --provider takes priority over TRANSLATION_PROVIDER env var."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json", "--provider", "deepl"])
+
+        with patch.dict(os.environ, {"TRANSLATION_PROVIDER": "google"}):
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.TRANSLATION_PROVIDER == "deepl"
+            config_module._config = None
+
+    def test_env_used_when_no_cli_for_provider(self):
+        """TRANSLATION_PROVIDER env var is used when CLI --provider is not provided."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+
+        with patch.dict(os.environ, {"TRANSLATION_PROVIDER": "deepl"}):
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.TRANSLATION_PROVIDER == "deepl"
+            config_module._config = None
+
+    def test_default_used_when_no_cli_no_env_for_provider(self):
+        """Default 'google' is used when neither CLI nor env var is set."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("TRANSLATION_PROVIDER", None)
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.TRANSLATION_PROVIDER == "google"
+            config_module._config = None
+
+    # ─── --deepl-api-key ────────────────────────────────────────────
+
+    def test_cli_overrides_env_for_deepl_api_key(self):
+        """CLI --deepl-api-key takes priority over DEEPL_API_KEY env var."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json", "--deepl-api-key", "cli-key-123"])
+
+        with patch.dict(os.environ, {"DEEPL_API_KEY": "env-key-456"}):
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.DEEPL_API_KEY == "cli-key-123"
+            config_module._config = None
+
+    def test_env_used_when_no_cli_for_deepl_api_key(self):
+        """DEEPL_API_KEY env var is used when CLI --deepl-api-key is not provided."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+
+        with patch.dict(os.environ, {"DEEPL_API_KEY": "env-key-456"}):
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.DEEPL_API_KEY == "env-key-456"
+            config_module._config = None
+
+    def test_default_used_when_no_cli_no_env_for_deepl_api_key(self):
+        """Default empty string is used when neither CLI nor env var is set."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DEEPL_API_KEY", None)
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.DEEPL_API_KEY == ""
+            config_module._config = None
+
+    # ─── --deepl-use-free-api ───────────────────────────────────────
+
+    def test_cli_deepl_use_free_api_overrides_env(self):
+        """CLI --deepl-use-free-api sets DEEPL_USE_FREE_API to 'true'."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json", "--deepl-use-free-api"])
+
+        # Even if env var says false, CLI flag should win
+        with patch.dict(os.environ, {"DEEPL_USE_FREE_API": "false"}):
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.DEEPL_USE_FREE_API == "true"
+            assert config.deepl_use_free_api_enabled is True
+            config_module._config = None
+
+    def test_env_used_when_no_cli_for_deepl_use_free_api(self):
+        """DEEPL_USE_FREE_API env var is used when CLI flag is not provided."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+
+        with patch.dict(os.environ, {"DEEPL_USE_FREE_API": "false"}):
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.DEEPL_USE_FREE_API == "false"
+            assert config.deepl_use_free_api_enabled is False
+            config_module._config = None
+
+    def test_default_used_when_no_cli_no_env_for_deepl_use_free_api(self):
+        """Default 'true' is used when neither CLI nor env var is set."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DEEPL_USE_FREE_API", None)
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.DEEPL_USE_FREE_API == "true"
+            assert config.deepl_use_free_api_enabled is True
+            config_module._config = None
+
+    # ─── --fallback ─────────────────────────────────────────────────
+
+    def test_cli_fallback_overrides_env(self):
+        """CLI --fallback sets TRANSLATION_FALLBACK to 'true'."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json", "--fallback"])
+
+        # Even if env var says false, CLI flag should win
+        with patch.dict(os.environ, {"TRANSLATION_FALLBACK": "false"}):
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.TRANSLATION_FALLBACK == "true"
+            assert config.fallback_enabled is True
+            config_module._config = None
+
+    def test_env_used_when_no_cli_for_fallback(self):
+        """TRANSLATION_FALLBACK env var is used when CLI flag is not provided."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+
+        with patch.dict(os.environ, {"TRANSLATION_FALLBACK": "true"}):
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.TRANSLATION_FALLBACK == "true"
+            assert config.fallback_enabled is True
+            config_module._config = None
+
+    def test_default_used_when_no_cli_no_env_for_fallback(self):
+        """Default 'false' is used when neither CLI nor env var is set."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(["translate-json"])
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("TRANSLATION_FALLBACK", None)
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.TRANSLATION_FALLBACK == "false"
+            assert config.fallback_enabled is False
+            config_module._config = None
+
+
+# ─── IMP2-T001: Provider flags combined with other CLI args ────────
+
+
+class TestBuildConfigFromArgsProviderCombined:
+    """Tests for provider flags combined with other CLI args (IMP2-T001)."""
+
+    def test_all_provider_flags_with_existing_args(self):
+        """All provider flags can be combined with existing CLI args."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "translate-json",
+                "--source-lang",
+                "en",
+                "--target-lang",
+                "fr",
+                "--provider",
+                "deepl",
+                "--deepl-api-key",
+                "test-key-abc",
+                "--deepl-use-free-api",
+                "--fallback",
+            ]
+        )
+
+        with patch.dict(os.environ, {}, clear=False):
+            for var in [
+                "SOURCE_LANG",
+                "TARGET_LANG",
+                "TRANSLATION_PROVIDER",
+                "DEEPL_API_KEY",
+                "DEEPL_USE_FREE_API",
+                "TRANSLATION_FALLBACK",
+            ]:
+                os.environ.pop(var, None)
+
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.SOURCE_LANG == "en"
+            assert config.TARGET_LANG == "fr"
+            assert config.TRANSLATION_PROVIDER == "deepl"
+            assert config.DEEPL_API_KEY == "test-key-abc"
+            assert config.DEEPL_USE_FREE_API == "true"
+            assert config.TRANSLATION_FALLBACK == "true"
+            config_module._config = None
+
+    def test_provider_flags_on_dropdowns_subcommand(self):
+        """Provider flags work on translate-dropdowns subcommand."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "translate-dropdowns",
+                "--provider",
+                "google",
+                "--fallback",
+            ]
+        )
+
+        with patch.dict(os.environ, {}, clear=False):
+            for var in [
+                "TRANSLATION_PROVIDER",
+                "TRANSLATION_FALLBACK",
+            ]:
+                os.environ.pop(var, None)
+
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.MODE == "translate-dropdowns"
+            assert config.TRANSLATION_PROVIDER == "google"
+            assert config.TRANSLATION_FALLBACK == "true"
+            config_module._config = None
+
+    def test_provider_flags_on_analyze_subcommand(self):
+        """Provider flags work on analyze subcommand."""
+        from service import build_config_from_args, build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "analyze",
+                "--provider",
+                "deepl",
+                "--deepl-api-key",
+                "analyze-key",
+            ]
+        )
+
+        with patch.dict(os.environ, {}, clear=False):
+            for var in ["TRANSLATION_PROVIDER", "DEEPL_API_KEY"]:
+                os.environ.pop(var, None)
+
+            import core.config as config_module
+
+            config_module._config = None
+            config = build_config_from_args(args)
+            assert config.MODE == "analyze"
+            assert config.TRANSLATION_PROVIDER == "deepl"
+            assert config.DEEPL_API_KEY == "analyze-key"
             config_module._config = None

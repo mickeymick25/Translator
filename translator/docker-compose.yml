@@ -23,6 +23,10 @@ services:
       - SOURCE_DIR=${SOURCE_DIR:-/app/source}
       - BATCH_LANGS=${BATCH_LANGS:-en,fr,cz,sk,de,it,ar}
       - OUTPUT_FORMAT=${OUTPUT_FORMAT:-auto}
+      - TRANSLATION_PROVIDER=${TRANSLATION_PROVIDER:-google}
+      - DEEPL_API_KEY=${DEEPL_API_KEY:-}
+      - DEEPL_USE_FREE_API=${DEEPL_USE_FREE_API:-true}
+      - TRANSLATION_FALLBACK=${TRANSLATION_FALLBACK:-false}
     working_dir: /app
 
   test:
@@ -47,6 +51,22 @@ services:
       - EXCEL_DIR=/app/excel
       - DOC_DIR=/app/doc
     working_dir: /app
+
+  lint:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cop_translator_lint
+    entrypoint: ["bash", "-c"]
+    command: ["ruff check . && ruff format --check ."]
+    volumes:
+      - ./core:/app/core
+      - ./modes:/app/modes
+      - ./service.py:/app/service.py
+      - ./tests:/app/tests
+    working_dir: /app
+    environment:
+      - PYTHONUNBUFFERED=1
 
 volumes:
   output:
