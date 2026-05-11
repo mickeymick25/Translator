@@ -1,6 +1,6 @@
-# CI Pipeline — IMP-T002 (optionnel)
+# CI Pipeline — IMP2-T003 (v2.0)
 # Déclenché sur push main/develop + PR vers main/develop
-# Actions : lint (ruff, black) + tests (pytest) + build Docker (vérification)
+# Actions : lint (ruff check + ruff format) + tests (pytest) + build Docker (vérification)
 
 name: CI Pipeline
 
@@ -19,19 +19,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
-      - name: Install lint dependencies
-        run: |
-          pip install ruff black
-          pip install -r translator/requirements.txt
+      - name: Install ruff
+        run: pip install ruff
 
-      - name: Run linting (ruff)
+      - name: Run ruff check
         run: ruff check translator/
 
-      - name: Run black check
-        run: black --check translator/
+      - name: Run ruff format check
+        run: ruff format --check translator/
 
   test:
     runs-on: ubuntu-latest
@@ -41,17 +39,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
-        run: pip install -r translator/requirements.txt
-
-      - name: Install test dependencies
-        run: pip install pytest pytest-cov pytest-mock
+        run: |
+          pip install -r translator/requirements.txt
+          pip install -r translator/requirements-dev.txt
 
       - name: Run tests
-        run: pytest translator/tests/ -v --cov=translator --cov-report=xml
+        working-directory: translator
+        run: pytest tests/ -v --tb=short --cov=core --cov=modes --cov-report=term-missing
 
   build:
     runs-on: ubuntu-latest
@@ -63,4 +61,4 @@ jobs:
         run: docker build -t translator-test translator/
 
       - name: Run smoke test
-        run: docker run --rm translator-test python -c "from core import translator; print('OK')"
+        run: docker run --rm --entrypoint python translator-test -c "from core.translator import get_provider; print('OK')"
