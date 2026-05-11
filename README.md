@@ -59,7 +59,7 @@ COP_translations/
 │   │   ├── mode_translate_json.py   # Mode traduction JSON
 │   │   ├── mode_translate_dropdowns.py # Mode génération dropdowns
 │   │   └── mode_analyze.py           # Mode analyse XLSX
-│   ├── tests/                       # 611 tests unitaires (95% couverture)
+│   ├── tests/                       # 620 tests unitaires (96% couverture)
 │   ├── service.py                   # Point d'entrée CLI
 │   ├── Dockerfile
 │   ├── docker-compose.yml
@@ -311,14 +311,14 @@ docker compose -f translator/docker-compose.yml run --rm --build test
 | core/io_json.py | 46 | 0 | 100% |
 | core/io_xlsx.py | 95 | 7 | 93% |
 | core/rate_limiter.py | 67 | 2 | 97% |
-| core/translator.py | 92 | 7 | 92% |
+| core/translator.py | 93 | 0 | 100% |
 | core/translator_factory.py | 96 | 8 | 92% |
 | modes/mode_analyze.py | 76 | 2 | 97% |
 | modes/mode_translate_json.py | 123 | 13 | 89% |
-| modes/mode_translate_dropdowns.py | 195 | 61 | 98% |
-| **Total** | **971** | **102** | **95%** |
+| modes/mode_translate_dropdowns.py | 195 | 3 | 98% |
+| **Total** | **972** | **37** | **96%** |
 
-**611 tests** — TDD pour toutes les fonctionnalités métier.
+**620 tests** — TDD pour toutes les fonctionnalités métier.
 
 ## Qualité de code
 
@@ -392,7 +392,7 @@ chore: description
 
 | Version | Date | Description |
 |---------|------|-------------|
-| v2.0.0 | 2026-05-11 | Cache intelligent, rate limiter adaptatif, CLI, multi-provider, CLI Provider flags, pre-commit hooks, chemins locaux, 611 tests, 95% couverture |
+| v2.0.0 | 2026-05-11 | Cache intelligent, rate limiter adaptatif, CLI, multi-provider, CLI Provider flags, pre-commit hooks, chemins locaux, 620 tests, 96% couverture |
 | v1.0.0 | 2026-05-05 | Version initiale avec rate limiter intelligent |
 
 ## Licence

@@ -32,6 +32,11 @@ def get_provider() -> TranslationProvider:
     global _provider
     if _provider is None:
         config = get_config()
+        logger.info(
+            "Creating translation provider: %s (fallback=%s)",
+            config.TRANSLATION_PROVIDER,
+            config.fallback_enabled,
+        )
         _provider = create_provider(
             provider_type=config.TRANSLATION_PROVIDER,
             deepl_api_key=config.DEEPL_API_KEY,

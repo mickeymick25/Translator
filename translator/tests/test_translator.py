@@ -9,6 +9,7 @@ Covers:
 - translate_batch_generator(): generator mode
 """
 
+import logging
 import os
 import time
 from unittest.mock import MagicMock, patch
@@ -220,6 +221,29 @@ class TestTranslateTextRetry:
         assert len(sleep_calls) >= 1
         assert sleep_calls[0] == 2.0
 
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.get_provider")
+    def test_rate_limit_exhausted_returns_original(self, mock_get_provider, mock_sleep):
+        """When rate limit errors exhaust all retries, original text is returned."""
+        mock_provider = MagicMock()
+        mock_provider.translate.side_effect = Exception("429 Too Many Requests")
+        mock_get_provider.return_value = mock_provider
+
+        result = translate_text("Test", "en", "fr", max_retries=3)
+        assert result == "Test"
+        assert mock_provider.translate.call_count == 3
+
+    @patch("core.translator.get_provider")
+    def test_max_retries_zero_returns_original(self, mock_get_provider):
+        """With max_retries=0, no translation is attempted and original text is returned."""
+        mock_provider = MagicMock()
+        mock_provider.translate.return_value = "Translated"
+        mock_get_provider.return_value = mock_provider
+
+        result = translate_text("Test", "en", "fr", max_retries=0)
+        assert result == "Test"
+        mock_provider.translate.assert_not_called()
+
 
 # ─── translate_batch ──────────────────────────────────────────────
 
@@ -292,6 +316,36 @@ class TestTranslateBatch:
         assert results == []
         mock_translate.assert_not_called()
 
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.translate_text")
+    def test_batch_with_rate_limit_sleep(self, mock_translate, mock_sleep):
+        """translate_batch calls time.sleep with rate_limit_seconds between items."""
+        mock_translate.side_effect = ["A", "B", "C"]
+
+        translate_batch(
+            ["item1", "item2", "item3"],
+            "en",
+            "fr",
+            rate_limit_seconds=0.5,
+        )
+        # sleep should be called once per item with rate_limit_seconds
+        sleep_calls = [c.args[0] for c in mock_sleep.call_args_list]
+        assert all(s == 0.5 for s in sleep_calls)
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.translate_text")
+    def test_batch_progress_log_at_100_items(self, mock_translate, mock_sleep, caplog):
+        """translate_batch logs progress every 100 items."""
+        mock_translate.return_value = "translated"
+        mock_sleep.return_value = None
+        items = [f"item{i}" for i in range(101)]
+
+        with caplog.at_level(logging.INFO, logger="core.translator"):
+            translate_batch(items, "en", "fr", rate_limit_seconds=0)
+
+        progress_logs = [r for r in caplog.records if "Progress" in r.message]
+        assert len(progress_logs) >= 1
+
 
 # ─── translate_batch_generator ────────────────────────────────────
 
@@ -323,6 +377,39 @@ class TestTranslateBatchGenerator:
         results = list(translate_batch_generator([], "en", "fr", rate_limit_seconds=0))
         assert results == []
         mock_translate.assert_not_called()
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.translate_text")
+    def test_generator_with_rate_limit_sleep(self, mock_translate, mock_sleep):
+        """translate_batch_generator calls time.sleep with rate_limit_seconds between items."""
+        mock_translate.side_effect = ["A", "B"]
+
+        list(
+            translate_batch_generator(
+                ["item1", "item2"],
+                "en",
+                "fr",
+                rate_limit_seconds=0.3,
+            )
+        )
+        sleep_calls = [c.args[0] for c in mock_sleep.call_args_list]
+        assert all(s == 0.3 for s in sleep_calls)
+
+    @patch("core.translator.time.sleep")
+    @patch("core.translator.translate_text")
+    def test_generator_progress_log_at_100_items(
+        self, mock_translate, mock_sleep, caplog
+    ):
+        """translate_batch_generator logs progress every 100 items."""
+        mock_translate.return_value = "translated"
+        mock_sleep.return_value = None
+        items = [f"item{i}" for i in range(101)]
+
+        with caplog.at_level(logging.INFO, logger="core.translator"):
+            list(translate_batch_generator(items, "en", "fr", rate_limit_seconds=0))
+
+        progress_logs = [r for r in caplog.records if "Progress" in r.message]
+        assert len(progress_logs) >= 1
 
 
 # ─── translate_text with cache ─────────────────────────────────────
@@ -809,3 +896,58 @@ class TestGetProvider:
             assert isinstance(provider, FallbackProvider)
         finally:
             config_module._config = None
+
+    def test_lazy_init_provider_none_then_instance(self):
+        """get_provider() lazy init: _provider is None before first call, becomes a valid instance after."""
+        import core.translator as translator_module
+        from core.translator_factory import GoogleProvider
+
+        # Before first call, _provider should be None
+        assert translator_module._provider is None
+
+        # After first call, _provider should be a GoogleProvider instance
+        provider = get_provider()
+        assert translator_module._provider is not None
+        assert isinstance(translator_module._provider, GoogleProvider)
+        assert provider is translator_module._provider
+
+    def test_lazy_init_logs_provider_creation(self, caplog):
+        """get_provider() logs an info message when creating the provider for the first time."""
+        import core.translator as translator_module
+
+        # Ensure provider is None so creation path is triggered
+        assert translator_module._provider is None
+
+        with caplog.at_level(logging.INFO, logger="core.translator"):
+            get_provider()
+
+        # Verify that a creation log was emitted on the core.translator logger
+        creation_logs = [
+            r
+            for r in caplog.records
+            if r.name == "core.translator"
+            and "creating" in r.message.lower()
+            and "provider" in r.message.lower()
+        ]
+        assert len(creation_logs) >= 1, (
+            f"Expected at least one provider creation log on core.translator logger, "
+            f"got: {[r.message for r in caplog.records]}"
+        )
+
+    def test_idempotent_second_call_does_not_recreate(self):
+        """get_provider() does not call create_provider again on subsequent calls."""
+        import core.translator as translator_module
+        from core.translator_factory import TranslationProvider
+
+        # Reset provider to force lazy init path
+        translator_module._provider = None
+
+        with patch("core.translator.create_provider") as mock_create:
+            mock_provider = MagicMock(spec=TranslationProvider)
+            mock_create.return_value = mock_provider
+
+            provider1 = get_provider()
+            provider2 = get_provider()
+
+            assert provider1 is provider2
+            assert mock_create.call_count == 1

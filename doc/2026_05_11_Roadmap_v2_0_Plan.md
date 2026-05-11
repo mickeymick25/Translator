@@ -14,7 +14,7 @@ Toutes les tâches IMP-T (v1.0) et IMP2-T001 (v2.0) sont terminées. Le service 
 
 | Fonctionnalité | Statut |
 |---------------|--------|
-| Tests unitaires (611 tests, 95% couverture) | ✅ |
+| Tests unitaires (620 tests, 96% couverture) | ✅ |
 | Chemins locaux Docker vs local | ✅ |
 | Cache intelligent persistant | ✅ |
 | Rate limiter adaptatif | ✅ |
@@ -223,7 +223,7 @@ Toutes les tâches IMP-T (v1.0) et IMP2-T001 (v2.0) sont terminées. Le service 
 
 ### IMP2-T005 — Améliorer couverture `translator.py` — `get_provider()`
 
-**Statut :** 🔲 À faire
+**Statut :** ✅
 **Branche :** `test/IMP2-T005-translator-coverage`
 **Priorité :** Basse
 **Description :** `translator.py` est à 92% de couverture. La fonction `get_provider()` (lignes 33-41) effectue un lazy init du provider avec logs, mais ces logs ne sont pas vérifiés par des tests dédiés. Les tests existants (`TestGetProvider`) couvrent les types de provider retournés mais pas le comportement du lazy init ni les messages de log.
@@ -233,30 +233,42 @@ Toutes les tâches IMP-T (v1.0) et IMP2-T001 (v2.0) sont terminées. Le service 
 | Lignes | Fonction | Branche non couverte | Type de test à ajouter |
 |--------|----------|---------------------|----------------------|
 | 33-41 | `get_provider()` | Lazy init : premier appel crée le provider, logs de création | Vérifier que `_provider` passe de `None` à une instance, vérifier les logs |
+| 128-133 | `translate_text()` | Rate limit error sur dernière tentative | Test avec 429 sur toutes les tentatives |
+| 153 | `translate_text()` | `return text` final après boucle | Test avec `max_retries=0` |
+| 203 | `translate_batch()` | `time.sleep(rate_limit_seconds)` avec délai > 0 | Test batch avec `rate_limit_seconds > 0` |
+| 213 | `translate_batch()` | Progress log à 100 items | Test batch avec ≥101 items |
+| 271 | `translate_batch_generator()` | `time.sleep(rate_limit_seconds)` avec délai > 0 | Test générateur avec `rate_limit_seconds > 0` |
+| 274 | `translate_batch_generator()` | Progress log à 100 items | Test générateur avec ≥101 items |
 
 #### Cycle TDD
 
-1. 🔴 **Tests** — Ajouter 2-3 tests :
-   - Test lazy init : `_provider` est `None` avant le premier appel, instance valide après
-   - Test log de création : vérifier que `logger.info` est appelé lors du premier appel
-   - Test idempotence : deuxième appel retourne la même instance sans recréer
+1. 🔴 **Tests** — Ajout de 9 tests :
+   - `test_lazy_init_provider_none_then_instance` : `_provider` est `None` avant le premier appel, instance valide après
+   - `test_lazy_init_logs_provider_creation` : vérifier que `logger.info` est appelé lors du premier appel → **échoue** (pas de log existant)
+   - `test_idempotent_second_call_does_not_recreate` : deuxième appel retourne la même instance sans recréer (`create_provider` appelé 1 seule fois)
+   - `test_rate_limit_exhausted_returns_original` : 429 sur toutes les tentatives → retourne le texte original
+   - `test_max_retries_zero_returns_original` : `max_retries=0` → aucun appel API, retourne le texte original
+   - `test_batch_with_rate_limit_sleep` : `rate_limit_seconds > 0` → `time.sleep` appelé
+   - `test_batch_progress_log_at_100_items` : ≥101 items → log "Progress" émis
+   - `test_generator_with_rate_limit_sleep` : `rate_limit_seconds > 0` → `time.sleep` appelé
+   - `test_generator_progress_log_at_100_items` : ≥101 items → log "Progress" émis
 
-2. 🟢 **Implémentation** — Aucune modification de code métier (les tests révèlent le comportement existant)
+2. 🟢 **Implémentation** — Aucune modification de code métier existant
 
-3. 🔵 **Refactor** — Si les logs sont absents de `get_provider()`, les ajouter pour traçabilité
+3. 🔵 **Refactor** — Ajout de `logger.info("Creating translation provider: %s (fallback=%s)", ...)` dans `get_provider()` pour traçabilité. Le test `test_lazy_init_logs_provider_creation` passe ensuite.
 
-#### Fichiers modifiés (prévus)
+#### Fichiers modifiés (réels)
 
 | Fichier | Changement |
 |---------|-----------|
-| `translator/tests/test_translator.py` | 2-3 nouveaux tests dans `TestGetProvider` |
-| `translator/core/translator.py` | Ajout log de création provider (si absent) |
+| `translator/tests/test_translator.py` | +9 tests (3 lazy init `TestGetProvider`, 2 retry edge-cases, 2 batch, 2 generator) |
+| `translator/core/translator.py` | Ajout `logger.info()` de création provider dans `get_provider()` |
 
 #### Critère de validation
 
-- [ ] Couverture `translator.py` ≥ 95%
-- [ ] Lazy init de `get_provider()` vérifié par test
-- [ ] Couverture globale ≥ 89%
+- [x] Couverture `translator.py` ≥ 95% → **100%** (92% → 100%)
+- [x] Lazy init de `get_provider()` vérifié par test
+- [x] Couverture globale ≥ 89% → **96%** (95% → 96%)
 
 ---
 
@@ -269,12 +281,12 @@ Toutes les tâches IMP-T (v1.0) et IMP2-T001 (v2.0) sont terminées. Le service 
 | `core/io_json.py` | 100% | 100% | — |
 | `core/io_xlsx.py` | 93% | 93% | — |
 | `core/rate_limiter.py` | 97% | 97% | — |
-| `core/translator.py` | 92% | ≥ 95% | IMP2-T005 |
+| `core/translator.py` | 100% | 100% | IMP2-T005 ✅ |
 | `core/translator_factory.py` | 92% | 92% | — |
 | `modes/mode_analyze.py` | 97% | 97% | — |
 | `modes/mode_translate_json.py` | 89% | 89% | — |
 | `modes/mode_translate_dropdowns.py` | 98% | 98% | IMP2-T002 |
-| **TOTAL** | **95%** | **≥ 95%** | — |
+| **TOTAL** | **96%** | **≥ 96%** | — |
 
 ---
 
@@ -299,6 +311,7 @@ Toutes les tâches IMP-T (v1.0) et IMP2-T001 (v2.0) sont terminées. Le service 
 | 2026-05-11 | `--fallback` comme `store_true` (défaut : env var ou `false`) | Fallback désactivé par défaut pour ne pas gaspiller le quota DeepL |
 | 2026-05-11 | Harmonisation CI : `ruff format --check` remplace `black --check` | Un seul outil de format (ruff), suppression de la dépendance black en CI |
 | 2026-05-11 | Suppression `.venv/` — remplacé par hook git Docker | Tout tourne en Docker ; le hook `pre-commit` exécute `ruff check` + `ruff format --check` (service `lint`) et `pytest` (service `test`) via `docker compose`. Plus aucune dépendance Python locale. |
+| 2026-05-11 | Ajout `logger.info()` dans `get_provider()` à la création du provider | Traçabilité : le lazy init est silencieux sans log ; le message `Creating translation provider: %s (fallback=%s)` permet de diagnostiquer quel provider est instancié et si le fallback est actif, sans impacter le comportement métier |
 
 ---
 
@@ -308,6 +321,7 @@ Toutes les tâches IMP-T (v1.0) et IMP2-T001 (v2.0) sont terminées. Le service 
 |------|---------|--------|-------------|
 | 2026-05-11 | `main` | `1a2b1ed` | docs: rewrite README.md for v2.0 |
 | 2026-05-11 | `main` | — | docs: add roadmap v2.0 plan |
+| 2026-05-11 | `test/IMP2-T005-translator-coverage` | `b08a8de` | feat(IMP2-T005): translator.py 92%→100% coverage, lazy init + log tests |
 | 2026-05-11 | `feat/IMP2-T001-cli-providers` | `8a93f06` | feat(cli): add provider flags to CLI (IMP2-T001) |
 | 2026-05-11 | `feat/IMP2-T002-dropdowns-coverage` | `2c19018` | test(dropdowns): add coverage for mode_translate_dropdowns.py (IMP2-T002) |
 | 2026-05-11 | `chore/IMP2-T004-cleanup-venv` | *(local)* | chore: remove .venv/ (83 Mo), add note to README (IMP2-T004) |
