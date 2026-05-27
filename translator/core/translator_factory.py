@@ -149,15 +149,27 @@ def create_provider(
     deepl_api_key: str = "",
     deepl_use_free_api: bool = True,
     fallback_enabled: bool = False,
+    ollama_url: str = "http://localhost:11434",
+    ollama_model: str = "minimax-m2.7:cloud",
+    ollama_chunk_size: int = 50,
+    ollama_temperature: float = 0,
+    ollama_timeout: int = 300,
+    ollama_max_retries: int = 2,
 ) -> TranslationProvider:
     """Factory function to create a translation provider, optionally with fallback.
 
     Args:
-        provider_type: "google" or "deepl" (case-insensitive).
+        provider_type: "google", "deepl", or "ollama" (case-insensitive).
         deepl_api_key: API key for DeepL. Required if provider_type is "deepl".
         deepl_use_free_api: Whether to use DeepL's free API tier.
         fallback_enabled: If True and deepl_api_key is provided, wraps the
             provider in a FallbackProvider with the other provider as fallback.
+        ollama_url: URL for Ollama server (default: http://localhost:11434).
+        ollama_model: Ollama model to use (default: qwen3).
+        ollama_chunk_size: Number of items per chunk (default: 50).
+        ollama_temperature: LLM temperature (default: 0).
+        ollama_timeout: Request timeout in seconds (default: 300).
+        ollama_max_retries: Max retries per chunk (default: 2).
 
     Returns:
         A TranslationProvider instance.
@@ -174,6 +186,17 @@ def create_provider(
         provider = GoogleProvider()
     elif provider_lower == "deepl":
         provider = DeepLProvider(api_key=deepl_api_key, use_free_api=deepl_use_free_api)
+    elif provider_lower == "ollama":
+        from core.ollama_provider import OllamaProvider
+
+        provider = OllamaProvider(
+            model=ollama_model,
+            base_url=ollama_url,
+            chunk_size=ollama_chunk_size,
+            temperature=ollama_temperature,
+            timeout=ollama_timeout,
+            max_retries=ollama_max_retries,
+        )
     else:
         raise ValueError(f"Unknown provider type: {provider_type}")
 
@@ -182,6 +205,9 @@ def create_provider(
             fallback = DeepLProvider(
                 api_key=deepl_api_key, use_free_api=deepl_use_free_api
             )
+        elif provider_lower == "ollama":
+            # For Ollama with fallback, use Google as fallback
+            fallback = GoogleProvider()
         else:
             fallback = GoogleProvider()
         return FallbackProvider(provider, fallback)

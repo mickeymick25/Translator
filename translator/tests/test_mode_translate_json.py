@@ -24,12 +24,12 @@ class TestCreateCheckpointCallback:
 
     @patch("modes.mode_translate_json.save_flat_json")
     def test_callback_saves_partial_data(self, mock_save):
-        """Checkpoint callback saves a dict with completed keys only."""
+        """Checkpoint callback saves merged data with completed keys only."""
         keys = ["key_a", "key_b", "key_c"]
         results = ["trans_a", "trans_b", "trans_c"]
         output_path = Path("/tmp/test_checkpoint.json")
 
-        cb = _create_checkpoint_callback(output_path, keys)
+        cb = _create_checkpoint_callback(output_path, keys, existing_data={})
         cb(completed=2, results=results)
 
         mock_save.assert_called_once()
@@ -43,7 +43,7 @@ class TestCreateCheckpointCallback:
         results = ["v1", "v2"]
         output_path = Path("/tmp/test_full.json")
 
-        cb = _create_checkpoint_callback(output_path, keys)
+        cb = _create_checkpoint_callback(output_path, keys, existing_data={})
         cb(completed=2, results=results)
 
         saved_data = mock_save.call_args[0][1]
@@ -56,7 +56,7 @@ class TestCreateCheckpointCallback:
         results = ["v1"]
         output_path = Path("/custom/path/checkpoint.json")
 
-        cb = _create_checkpoint_callback(output_path, keys)
+        cb = _create_checkpoint_callback(output_path, keys, existing_data={})
         cb(completed=1, results=results)
 
         assert mock_save.call_args[0][0] == output_path
@@ -68,11 +68,61 @@ class TestCreateCheckpointCallback:
         results = []
         output_path = Path("/tmp/empty.json")
 
-        cb = _create_checkpoint_callback(output_path, keys)
+        cb = _create_checkpoint_callback(output_path, keys, existing_data={})
         cb(completed=0, results=results)
 
         saved_data = mock_save.call_args[0][1]
         assert saved_data == {}
+
+    @patch("modes.mode_translate_json.save_flat_json")
+    def test_callback_merges_with_existing_data(self, mock_save):
+        """Checkpoint callback merges new translations with existing data."""
+        keys = ["k3", "k4"]
+        results = ["v3", "v4"]
+        output_path = Path("/tmp/test_merge.json")
+        existing_data = {"k1": "v1", "k2": "v2"}
+
+        cb = _create_checkpoint_callback(output_path, keys, existing_data)
+        cb(completed=1, results=results)
+
+        saved_data = mock_save.call_args[0][1]
+        # Merged data contains both existing and new translations
+        assert saved_data == {"k1": "v1", "k2": "v2", "k3": "v3"}
+
+    @patch("modes.mode_translate_json.save_flat_json")
+    def test_callback_existing_data_updated_on_subsequent_calls(self, mock_save):
+        """Subsequent checkpoint calls include previously checkpointed translations."""
+        keys = ["k2", "k3"]
+        results = ["v2", "v3"]
+        output_path = Path("/tmp/test_incremental.json")
+        existing_data = {"k1": "v1"}
+
+        cb = _create_checkpoint_callback(output_path, keys, existing_data)
+
+        # First checkpoint: completed=1 (k2 translated)
+        cb(completed=1, results=results)
+        first_save = mock_save.call_args[0][1]
+        assert first_save == {"k1": "v1", "k2": "v2"}
+
+        # Second checkpoint: completed=2 (k2 and k3 translated)
+        cb(completed=2, results=results)
+        second_save = mock_save.call_args[0][1]
+        assert second_save == {"k1": "v1", "k2": "v2", "k3": "v3"}
+
+    @patch("modes.mode_translate_json.save_flat_json")
+    def test_callback_new_translations_override_existing(self, mock_save):
+        """New translations take precedence over existing data on merge."""
+        keys = ["k1"]
+        results = ["new_v1"]
+        output_path = Path("/tmp/test_override.json")
+        existing_data = {"k1": "old_v1", "k2": "v2"}
+
+        cb = _create_checkpoint_callback(output_path, keys, existing_data)
+        cb(completed=1, results=results)
+
+        saved_data = mock_save.call_args[0][1]
+        # New translation for k1 overrides existing value
+        assert saved_data == {"k1": "new_v1", "k2": "v2"}
 
 
 # ─── _translate_single_language ────────────────────────────────────

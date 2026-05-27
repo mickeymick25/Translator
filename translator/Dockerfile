@@ -20,4 +20,6 @@ COPY pytest.ini .
 # Création des répertoires de travail
 RUN mkdir -p /app/output /app/output/excel /app/source /app/doc
 
+# ENTRYPOINT set via docker-compose
+# Default: python service.py
 ENTRYPOINT ["python", "service.py"]

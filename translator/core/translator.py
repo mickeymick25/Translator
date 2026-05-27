@@ -42,6 +42,12 @@ def get_provider() -> TranslationProvider:
             deepl_api_key=config.DEEPL_API_KEY,
             deepl_use_free_api=config.deepl_use_free_api_enabled,
             fallback_enabled=config.fallback_enabled,
+            ollama_url=config.OLLAMA_URL,
+            ollama_model=config.OLLAMA_MODEL,
+            ollama_chunk_size=config.ollama_chunk_size_int,
+            ollama_temperature=config.ollama_temperature_float,
+            ollama_timeout=config.ollama_timeout_int,
+            ollama_max_retries=config.ollama_max_retries_int,
         )
     return _provider
 

@@ -73,7 +73,7 @@ _MODES = {
 
 
 def _add_provider_args(parser: argparse.ArgumentParser) -> None:
-    """Add provider-related arguments to a subcommand parser (IMP2-T001).
+    """Add provider-related arguments to a subcommand parser (IMP2-T001, IMP3-T004).
 
     These flags are shared across all subcommands since the translation
     provider is a global concern, not specific to any mode.
@@ -83,9 +83,9 @@ def _add_provider_args(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument(
         "--provider",
-        choices=["google", "deepl"],
+        choices=["google", "deepl", "ollama"],
         default=None,
-        help="Provider de traduction: google ou deepl (défaut: google)",
+        help="Provider de traduction: google, deepl ou ollama (défaut: google)",
     )
     parser.add_argument(
         "--deepl-api-key",
@@ -103,6 +103,41 @@ def _add_provider_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         default=None,
         help="Activer le fallback automatique entre providers (défaut: false)",
+    )
+    # Ollama-specific flags (IMP3-T004)
+    parser.add_argument(
+        "--ollama-url",
+        default=None,
+        help="URL du serveur Ollama (défaut: http://localhost:11434)",
+    )
+    parser.add_argument(
+        "--ollama-model",
+        default=None,
+        help="Modèle Ollama à utiliser (défaut: minimax-m2.7:cloud)",
+    )
+    parser.add_argument(
+        "--ollama-chunk-size",
+        type=int,
+        default=None,
+        help="Taille des chunks Ollama (défaut: 50)",
+    )
+    parser.add_argument(
+        "--ollama-temperature",
+        type=float,
+        default=None,
+        help="Température du modèle Ollama (défaut: 0)",
+    )
+    parser.add_argument(
+        "--ollama-timeout",
+        type=int,
+        default=None,
+        help="Timeout par chunk en secondes (défaut: 300)",
+    )
+    parser.add_argument(
+        "--ollama-max-retries",
+        type=int,
+        default=None,
+        help="Max retries par chunk Ollama (défaut: 2)",
     )
 
 
@@ -294,6 +329,20 @@ def build_config_from_args(args: argparse.Namespace) -> Config:
     if getattr(args, "fallback", None) is not None:
         kwargs["TRANSLATION_FALLBACK"] = "true" if args.fallback else "false"
 
+    # IMP3-T004: Ollama flags — CLI > env > default
+    if getattr(args, "ollama_url", None) is not None:
+        kwargs["OLLAMA_URL"] = args.ollama_url
+    if getattr(args, "ollama_model", None) is not None:
+        kwargs["OLLAMA_MODEL"] = args.ollama_model
+    if getattr(args, "ollama_chunk_size", None) is not None:
+        kwargs["OLLAMA_CHUNK_SIZE"] = str(args.ollama_chunk_size)
+    if getattr(args, "ollama_temperature", None) is not None:
+        kwargs["OLLAMA_TEMPERATURE"] = str(args.ollama_temperature)
+    if getattr(args, "ollama_timeout", None) is not None:
+        kwargs["OLLAMA_TIMEOUT"] = str(args.ollama_timeout)
+    if getattr(args, "ollama_max_retries", None) is not None:
+        kwargs["OLLAMA_MAX_RETRIES"] = str(args.ollama_max_retries)
+
     # Reset global config to force re-creation with new values
     import core.config as config_module
 
@@ -408,6 +457,12 @@ def main() -> None:
         logger.info(
             f"  DeepL API    : {'Free' if config.deepl_use_free_api_enabled else 'Pro'}"
         )
+    if config.TRANSLATION_PROVIDER.lower() == "ollama":
+        logger.info(f"  Ollama URL   : {config.OLLAMA_URL}")
+        logger.info(f"  Ollama Model : {config.OLLAMA_MODEL}")
+        logger.info(f"  Ollama Chunk : {config.ollama_chunk_size_int}")
+        logger.info(f"  Ollama Temp  : {config.ollama_temperature_float}")
+        logger.info(f"  Ollama Retry : {config.ollama_max_retries_int}")
     logger.info(
         f"  Fallback     : {'Enabled' if config.fallback_enabled else 'Disabled'}"
     )

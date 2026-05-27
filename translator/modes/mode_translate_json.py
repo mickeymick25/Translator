@@ -16,11 +16,12 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from core.config import LANGUAGES, get_config
 from core.io_json import load_flat_json, save_flat_json
 from core.translator import translate_batch
+from core.translator_factory import TranslationProvider
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +33,18 @@ _output_path: Optional[Path] = None
 def _create_checkpoint_callback(
     output_path: Path,
     keys_to_translate: list[str],
-) -> callable:
+    existing_data: dict[str, str],
+) -> Callable:
     """
     Create a checkpoint callback for progressive saving.
+
+    The callback merges new translations with existing data before saving,
+    ensuring that previously translated entries are never lost on interruption.
 
     Args:
         output_path: Path to the output file.
         keys_to_translate: Ordered list of keys being translated.
+        existing_data: Previously translated data to preserve in checkpoints.
 
     Returns:
         A callback function that saves progress.
@@ -46,17 +52,105 @@ def _create_checkpoint_callback(
 
     def checkpoint_callback(completed: int, results: list[str]) -> None:
         """Save current translation progress to disk."""
-        checkpoint_data = dict(zip(keys_to_translate[:completed], results[:completed]))
-        save_flat_json(output_path, checkpoint_data)
+        new_translations = dict(zip(keys_to_translate[:completed], results[:completed]))
+        # Merge new translations with existing data (new takes precedence)
+        merged_data = {**existing_data, **new_translations}
+        save_flat_json(output_path, merged_data)
+        # Update existing_data so subsequent checkpoints include previous new translations
+        existing_data.update(new_translations)
         logger.info(
-            "Checkpoint saved: %d/%d entries (%.1f%%) -> %s",
+            "Checkpoint saved: %d/%d entries (%.1f%%) -> %s (total: %d)",
             completed,
             len(results),
             completed / len(results) * 100 if results else 0,
             output_path.name,
+            len(merged_data),
         )
 
     return checkpoint_callback
+
+
+def _create_batch_checkpoint_callback(
+    output_path: Path,
+    all_keys: list[str],
+    existing_data: dict[str, str],
+) -> Callable:
+    """Create a checkpoint callback for batch provider chunk-level saving (IMP3-T005).
+
+    Called after each chunk completes, receives the chunk's translated dict
+    and merges it with existing data before saving.
+
+    Args:
+        output_path: Path to the output file.
+        all_keys: All keys being translated (for logging).
+        existing_data: Previously translated data to preserve.
+
+    Returns:
+        A callback function(chunk_idx, total_chunks, chunk_result).
+    """
+    total_keys = len(all_keys)
+
+    def batch_checkpoint_callback(
+        chunk_idx: int, total_chunks: int, chunk_result: dict[str, str]
+    ) -> None:
+        """Save progress after a chunk completes."""
+        existing_data.update(chunk_result)
+        merged_data = dict(existing_data)
+        save_flat_json(output_path, merged_data)
+        logger.info(
+            "Batch checkpoint: chunk %d/%d -> %s (total: %d/%d entries)",
+            chunk_idx + 1,
+            total_chunks,
+            output_path.name,
+            len(merged_data),
+            total_keys,
+        )
+
+    return batch_checkpoint_callback
+
+
+def _translate_with_batch_provider(
+    provider: TranslationProvider,
+    items: dict[str, str],
+    source_lang: str,
+    target_lang: str,
+    checkpoint_callback: Callable | None = None,
+) -> dict[str, str]:
+    """Translate items using a batch-capable provider with chunk-level checkpoint (IMP3-T005).
+
+    Chunks the items according to the provider's chunk_size, calls
+    translate_batch on each chunk, and triggers checkpoint after each chunk.
+
+    Args:
+        provider: Batch-capable TranslationProvider (e.g. OllamaProvider).
+        items: Key-value pairs to translate.
+        source_lang: Source language code.
+        target_lang: Target language code.
+        checkpoint_callback: Optional callback(chunk_idx, total_chunks, chunk_result).
+
+    Returns:
+        Dict with all keys and their translated values.
+    """
+    # Chunk items using the provider's chunk_size
+    chunk_size = getattr(provider, "_chunk_size", 50)
+    keys = list(items.keys())
+    chunks = []
+    for i in range(0, len(keys), chunk_size):
+        chunk_keys = keys[i : i + chunk_size]
+        chunks.append({k: items[k] for k in chunk_keys})
+
+    total_chunks = len(chunks)
+    results: dict[str, str] = {}
+
+    for chunk_idx, chunk in enumerate(chunks):
+        chunk_result = provider.translate_batch(chunk, source_lang, target_lang)
+        results.update(chunk_result)
+
+        # Checkpoint after each chunk
+        if checkpoint_callback:
+            checkpoint_callback(chunk_idx, total_chunks, chunk_result)
+
+    return results
 
 
 def _setup_signal_handlers() -> None:
@@ -143,24 +237,60 @@ def _translate_single_language(
     # Prepare texts to translate
     texts_to_translate = [source_data[key] for key in keys_to_translate]
 
-    # Create checkpoint callback
-    checkpoint_cb = _create_checkpoint_callback(output_path, keys_to_translate)
+    # IMP3-T005: Detect batch-capable provider (e.g. Ollama) for chunk-level checkpoint
+    from core.translator import get_provider
 
-    # Translate in batch with rate limiting
-    logger.info(f"[{target_lang.upper()}] Starting translation...")
+    current_provider = get_provider()
+    use_batch_provider = hasattr(current_provider, "translate_batch")
 
-    translated_texts = translate_batch(
-        items=texts_to_translate,
-        source_lang=source_lang,
-        target_lang=api_target_lang,
-        rate_limit_seconds=0.15,
-        checkpoint_callback=checkpoint_cb,
-        checkpoint_every=100,
-    )
+    if use_batch_provider:
+        # Batch mode: use provider's translate_batch with chunk-level checkpoint
+        logger.info(
+            f"[{target_lang.upper()}] Using batch provider: {current_provider.name}"
+        )
 
-    # Merge new translations into the global data
-    for key, translated in zip(keys_to_translate, translated_texts):
-        _translated_data[key] = translated
+        items_to_translate = dict(zip(keys_to_translate, texts_to_translate))
+
+        # Create a chunk-level checkpoint callback
+        batch_checkpoint_cb = _create_batch_checkpoint_callback(
+            output_path, keys_to_translate, _translated_data
+        )
+
+        # Translate using the batch provider
+        logger.info(f"[{target_lang.upper()}] Starting batch translation...")
+
+        translated_dict = _translate_with_batch_provider(
+            current_provider,
+            items_to_translate,
+            source_lang,
+            api_target_lang,
+            batch_checkpoint_cb,
+        )
+
+        # Merge new translations into the global data
+        _translated_data.update(translated_dict)
+    else:
+        # Classic mode: translate item by item with entry-level checkpoint
+        # Create checkpoint callback (pass existing data so checkpoints preserve it)
+        checkpoint_cb = _create_checkpoint_callback(
+            output_path, keys_to_translate, _translated_data
+        )
+
+        # Translate in batch with rate limiting
+        logger.info(f"[{target_lang.upper()}] Starting translation...")
+
+        translated_texts = translate_batch(
+            items=texts_to_translate,
+            source_lang=source_lang,
+            target_lang=api_target_lang,
+            rate_limit_seconds=0.15,
+            checkpoint_callback=checkpoint_cb,
+            checkpoint_every=100,
+        )
+
+        # Merge new translations into the global data
+        for key, translated in zip(keys_to_translate, translated_texts):
+            _translated_data[key] = translated
 
     # Final save
     save_flat_json(_output_path, _translated_data)

@@ -1,15 +1,44 @@
-
 # COP Generic Translation Service
 
-Service de traduction générique pour le projet COP, capable de traduire à la fois des fichiers JSON plats et des fichiers de dropdowns (XLSX/JSON) multi-langues.
+Service de traduction générique pour le projet COP, avec support Google Translate, DeepL et **Ollama** (LLM local/cloud).
 
 ## Modes d'opération
 
 | Mode | Description |
 |------|-------------|
-| `translate-json` | Traduit un fichier JSON plat source (EN) vers une langue cible via Google Translate |
-| `translate-dropdowns` | Génère les fichiers de traduction multi-langues depuis un XLSX source (dropdowns) |
+| `translate-json` | Traduit un fichier JSON plat source (EN) vers une langue cible |
+| `translate-dropdowns` | Génère les fichiers de traduction multi-langues depuis un XLSX source |
 | `analyze` | Analyse la structure d'un fichier XLSX et génère un rapport JSON |
+
+## Providers
+
+| Provider | Clé API | Qualité | Réseau |
+|----------|---------|---------|--------|
+| **Google Translate** | Aucune | Standard | Oui (scraping) |
+| **DeepL** | Requise | Supérieure | Oui (API) |
+| **Ollama** | Aucune | Variable | Non (local/cloud) |
+
+## Utilisation avec Docker
+
+```bash
+# Google Translate (par défaut)
+docker compose up --build
+
+# Ollama (modèle cloud)
+TRANSLATION_PROVIDER=ollama docker compose up --build
+
+# Ollama avec modèle spécifique
+TRANSLATION_PROVIDER=ollama OLLAMA_MODEL=glm-5.1:cloud docker compose up --build
+
+# DeepL
+TRANSLATION_PROVIDER=deepl DEEPL_API_KEY=xxx docker compose up --build
+
+# Tests
+docker compose run --rm --build test
+
+# Lint
+docker compose run --rm lint
+```
 
 ## Variables d'environnement
 
@@ -17,47 +46,38 @@ Service de traduction générique pour le projet COP, capable de traduire à la 
 |----------|--------|-------------|
 | `MODE` | `translate-json` | Mode d'opération |
 | `SOURCE_LANG` | `en` | Langue source |
-| `TARGET_LANG` | `cs` | Langue cible (mode `translate-json` uniquement) |
-| `SOURCE_FILE` | *(auto)* | Chemin vers le fichier source |
-| `OUTPUT_DIR` | `/app/output` | Répertoire de sortie |
-| `EXCEL_DIR` | `/app/excel` | Répertoire des fichiers Excel |
-| `DOC_DIR` | `/app/doc` | Répertoire de documentation |
-| `SOURCE_DIR` | `/app/source` | Répertoire des fichiers source JSON |
-| `BATCH_LANGS` | `en,fr,cz,sk,de,it,ar` | Langues à générer (mode `translate-dropdowns`) |
-| `OUTPUT_FORMAT` | `auto` | Format de sortie — `json`, `xlsx`, ou `auto` |
-
-## Utilisation avec Docker
-
-```bash
-# Mode par défaut : traduction JSON
-docker compose up --build
-
-# Traduction JSON EN → CS
-SOURCE_LANG=en TARGET_LANG=cs MODE=translate-json docker compose up --build
-
-# Génération des dropdowns multi-langues
-MODE=translate-dropdowns docker compose up --build
-
-# Analyse d'un fichier XLSX
-MODE=analyze docker compose up --build
-```
+| `TARGET_LANG` | `cs` | Langue cible |
+| `BATCH_LANGS` | `en,fr,cz,sk,de,it,ar` | Langues batch |
+| `TRANSLATION_PROVIDER` | `google` | Provider : `google`, `deepl` ou `ollama` |
+| `OLLAMA_URL` | `http://host.docker.internal:11434` | URL serveur Ollama |
+| `OLLAMA_MODEL` | `minimax-m2.7:cloud` | Modèle Ollama |
+| `OLLAMA_CHUNK_SIZE` | `50` | Entrées par chunk |
+| `OLLAMA_TEMPERATURE` | `0` | Température (0 = déterministe) |
+| `OLLAMA_TIMEOUT` | `300` | Timeout par chunk (s) |
+| `OLLAMA_MAX_RETRIES` | `2` | Max retries par chunk |
+| `DEEPL_API_KEY` | *(vide)* | Clé API DeepL |
+| `DEEPL_USE_FREE_API` | `true` | API gratuite DeepL |
+| `TRANSLATION_FALLBACK` | `false` | Fallback automatique |
 
 ## Structure du projet
 
 ```
 translator/
-├── service.py              # Point d'entrée unique
-├── core/                   # Modules communs
-│   ├── __init__.py
-│   ├── config.py           # Configuration centralisée (env vars)
-│   ├── translator.py       # Logique de traduction API (retry, rate limiting)
-│   ├── io_json.py          # Lecture/écriture JSON (plat et structuré)
-│   └── io_xlsx.py          # Lecture/écriture XLSX et analyse
-├── modes/                  # Implémentation des modes
-│   ├── __init__.py
-│   ├── mode_translate_json.py      # Mode translate-json
-│   ├── mode_translate_dropdowns.py # Mode translate-dropdowns
-│   └── mode_analyze.py             # Mode analyze
+├── service.py                          # Point d'entrée CLI
+├── core/
+│   ├── config.py                       # Configuration (env + CLI)
+│   ├── ollama_provider.py              # Provider Ollama (IMP3)
+│   ├── translator.py                   # Logique de traduction
+│   ├── translator_factory.py           # Factory (Google, DeepL, Ollama, Fallback)
+│   ├── cache.py                        # Cache intelligent
+│   ├── rate_limiter.py                # Rate limiter adaptatif
+│   ├── io_json.py                      # Lecture/écriture JSON
+│   └── io_xlsx.py                      # Lecture/écriture XLSX
+├── modes/
+│   ├── mode_translate_json.py          # Mode translate-json (checkpoint par chunk)
+│   ├── mode_translate_dropdowns.py      # Mode translate-dropdowns
+│   └── mode_analyze.py                 # Mode analyze
+├── tests/                              # 723 tests (94% couverture)
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt
@@ -65,16 +85,12 @@ translator/
 
 ## Langues supportées
 
-| Code | Langue | Cible API | Colonne source |
-|------|--------|-----------|----------------|
-| `en` | Anglais | `en` | `origin` |
-| `fr` | Français | `fr` | `french` |
-| `cz` | Tchèque | `cs` | `origin` |
-| `sk` | Slovaque | `sk` | `origin` |
-| `de` | Allemand | `de` | `origin` |
-| `it` | Italien | `it` | `origin` |
-| `ar` | Arabe | `ar` | `origin` |
-
----
-
-*Document généré automatiquement le 2026-04-20*
+| Code | Langue | Cible API |
+|------|--------|-----------|
+| `en` | Anglais | `en` |
+| `fr` | Français | `fr` |
+| `cz` | Tchèque | `cs` |
+| `sk` | Slovaque | `sk` |
+| `de` | Allemand | `de` |
+| `it` | Italien | `it` |
+| `ar` | Arabe | `ar` |

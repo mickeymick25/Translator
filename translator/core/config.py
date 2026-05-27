@@ -225,6 +225,26 @@ class Config:
         default_factory=lambda: os.environ.get("TRANSLATION_FALLBACK", "false")
     )
 
+    # Ollama provider settings (IMP3-T004)
+    OLLAMA_URL: str = field(
+        default_factory=lambda: os.environ.get("OLLAMA_URL", "http://localhost:11434")
+    )
+    OLLAMA_MODEL: str = field(
+        default_factory=lambda: os.environ.get("OLLAMA_MODEL", "minimax-m2.7:cloud")
+    )
+    OLLAMA_CHUNK_SIZE: str = field(
+        default_factory=lambda: os.environ.get("OLLAMA_CHUNK_SIZE", "50")
+    )
+    OLLAMA_TEMPERATURE: str = field(
+        default_factory=lambda: os.environ.get("OLLAMA_TEMPERATURE", "0")
+    )
+    OLLAMA_TIMEOUT: str = field(
+        default_factory=lambda: os.environ.get("OLLAMA_TIMEOUT", "300")
+    )
+    OLLAMA_MAX_RETRIES: str = field(
+        default_factory=lambda: os.environ.get("OLLAMA_MAX_RETRIES", "2")
+    )
+
     # CLI flags (set by build_config_from_args, not by env vars)
     dry_run: bool = False
     verbose: bool = False
@@ -244,6 +264,38 @@ class Config:
     def fallback_enabled(self) -> bool:
         """Whether automatic provider fallback is enabled."""
         return self.TRANSLATION_FALLBACK.lower() in ("true", "1", "yes")
+
+    @property
+    def ollama_chunk_size_int(self) -> int:
+        """OLLAMA_CHUNK_SIZE as integer."""
+        try:
+            return int(self.OLLAMA_CHUNK_SIZE)
+        except (ValueError, TypeError):
+            return 50
+
+    @property
+    def ollama_temperature_float(self) -> float:
+        """OLLAMA_TEMPERATURE as float."""
+        try:
+            return float(self.OLLAMA_TEMPERATURE)
+        except (ValueError, TypeError):
+            return 0.0
+
+    @property
+    def ollama_timeout_int(self) -> int:
+        """OLLAMA_TIMEOUT as integer."""
+        try:
+            return int(self.OLLAMA_TIMEOUT)
+        except (ValueError, TypeError):
+            return 300
+
+    @property
+    def ollama_max_retries_int(self) -> int:
+        """OLLAMA_MAX_RETRIES as integer."""
+        try:
+            return int(self.OLLAMA_MAX_RETRIES)
+        except (ValueError, TypeError):
+            return 2
 
     @property
     def batch_langs_list(self) -> list[str]:
