@@ -29,6 +29,20 @@ def provider():
     )
 
 
+@pytest.fixture(autouse=True)
+def disable_cache_for_ollama_tests():
+    """Disable translation cache for all OllamaProvider tests.
+
+    translate_batch() now checks the cache before chunking. Without this
+    fixture, cached results from a previous test would be returned instead
+    of reaching the mocked _make_request, causing false positives.
+    """
+    with patch("core.config.get_config") as mock_config:
+        mock_config.return_value.cache_enabled = False
+        mock_config.return_value.TRANSLATION_CACHE_PATH = "/tmp/nonexistent_cache.json"
+        yield
+
+
 @pytest.fixture
 def provider_no_retries():
     """OllamaProvider with 0 retries for simpler test scenarios."""

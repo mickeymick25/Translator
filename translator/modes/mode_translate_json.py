@@ -180,6 +180,9 @@ def _translate_single_language(
     """
     Translate all entries for a single target language.
 
+    Thread-safe: uses local variables instead of module globals to avoid
+    race conditions when running multiple languages in parallel.
+
     Args:
         source_file: Path to source file for logging.
         source_data: Dictionary of source translations.
@@ -190,14 +193,15 @@ def _translate_single_language(
     Returns:
         Tuple of (target_lang, success, entries_translated)
     """
-    global _translated_data, _output_path
-
     # Get API target code (e.g., 'cz' user code -> 'cs' for Google Translate)
     lang_info = LANGUAGES.get(target_lang, {})
     api_target_lang = lang_info.get("target", target_lang)
 
     # Create output path for this language
     output_path = output_dir / f"translation_{source_lang}_{target_lang}.json"
+
+    # Use thread-local data instead of module globals
+    global _output_path  # only for signal handler (main thread)
     _output_path = output_path
 
     logger.info("-" * 40)
@@ -208,13 +212,12 @@ def _translate_single_language(
     keys = list(source_data.keys())
     total = len(keys)
 
-    # Check for resume
-    _translated_data = {}
+    # Check for resume — use local variable for thread safety
+    translated_data: dict[str, str] = {}
     if output_path.exists():
         logger.info("Output file exists, loading existing translations for resume...")
-        existing_data = load_flat_json(output_path)
-        _translated_data = existing_data
-        existing_keys = set(existing_data.keys())
+        translated_data = load_flat_json(output_path)
+        existing_keys = set(translated_data.keys())
         logger.info(f"Loaded {len(existing_keys)} existing translations")
     else:
         existing_keys = set()
@@ -253,7 +256,7 @@ def _translate_single_language(
 
         # Create a chunk-level checkpoint callback
         batch_checkpoint_cb = _create_batch_checkpoint_callback(
-            output_path, keys_to_translate, _translated_data
+            output_path, keys_to_translate, translated_data
         )
 
         # Translate using the batch provider
@@ -267,13 +270,13 @@ def _translate_single_language(
             batch_checkpoint_cb,
         )
 
-        # Merge new translations into the global data
-        _translated_data.update(translated_dict)
+        # Merge new translations into local data
+        translated_data.update(translated_dict)
     else:
         # Classic mode: translate item by item with entry-level checkpoint
         # Create checkpoint callback (pass existing data so checkpoints preserve it)
         checkpoint_cb = _create_checkpoint_callback(
-            output_path, keys_to_translate, _translated_data
+            output_path, keys_to_translate, translated_data
         )
 
         # Translate in batch with rate limiting
@@ -288,15 +291,15 @@ def _translate_single_language(
             checkpoint_every=100,
         )
 
-        # Merge new translations into the global data
+        # Merge new translations into local data
         for key, translated in zip(keys_to_translate, translated_texts):
-            _translated_data[key] = translated
+            translated_data[key] = translated
 
-    # Final save
-    save_flat_json(_output_path, _translated_data)
+    # Final save — use local output_path, not global _output_path
+    save_flat_json(output_path, translated_data)
 
     logger.info(
-        f"[{target_lang.upper()}] Completed! Total entries: {len(_translated_data)}"
+        f"[{target_lang.upper()}] Completed! Total entries: {len(translated_data)}"
     )
     return target_lang, True, remaining
 

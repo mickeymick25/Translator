@@ -106,6 +106,10 @@ class OllamaProvider(TranslationProvider):
         Splits items into chunks, translates each chunk via the Ollama LLM,
         and applies structural validation with retry on failure.
 
+        If the translation cache is enabled, checks the cache first for each
+        item and only sends uncached items to Ollama. Newly translated items
+        are stored in the cache for future reuse.
+
         Args:
             items: Key-value pairs to translate (values are source texts).
             source: Source language code.
@@ -116,6 +120,47 @@ class OllamaProvider(TranslationProvider):
             values are preserved for the failing chunk.
         """
         results: dict[str, str] = {}
+
+        # Check cache for all items before chunking
+        from core.cache import get_cache
+        from core.config import get_config
+
+        config = get_config()
+        cache = (
+            get_cache(cache_path=config.TRANSLATION_CACHE_PATH)
+            if config.cache_enabled
+            else None
+        )
+
+        if cache:
+            cached_items: dict[str, str] = {}
+            uncached_items: dict[str, str] = {}
+            for key, text in items.items():
+                if not text or len(text.strip()) == 0:
+                    # Empty values: pass through without caching
+                    cached_items[key] = text
+                else:
+                    cached_result = cache.get(source, target, text)
+                    if cached_result is not None:
+                        cached_items[key] = cached_result
+                    else:
+                        uncached_items[key] = text
+
+            results.update(cached_items)
+            cache_hits = len(cached_items)
+            cache_misses = len(uncached_items)
+            logger.info(
+                "Cache lookup: %d hits, %d misses (skipping Ollama for %d items)",
+                cache_hits,
+                cache_misses,
+                cache_hits,
+            )
+            items = uncached_items
+
+        if not items:
+            logger.info("All items found in cache — no Ollama call needed")
+            return results
+
         chunks = self._chunk_items(items)
         total_chunks = len(chunks)
 
@@ -134,6 +179,12 @@ class OllamaProvider(TranslationProvider):
                         chunk, source, target, error_context=error_context
                     )
                     results.update(chunk_result)
+                    # Store successful translations in cache
+                    if cache:
+                        for k, v in chunk_result.items():
+                            original_text = chunk.get(k, v)
+                            if original_text and len(original_text.strip()) > 0:
+                                cache.put(source, target, original_text, v)
                     error_context = None  # Reset on success
                     break
                 except OllamaValidationError as e:
@@ -175,6 +226,18 @@ class OllamaProvider(TranslationProvider):
                             self._max_retries + 1,
                         )
                         results.update({k: v for k, v in chunk.items()})
+
+        # Flush cache to disk after all chunks
+        if cache:
+            cache.flush()
+            stats = cache.stats()
+            logger.info(
+                "Cache stats after batch: %d hits, %d misses (%.1f%% hit rate)",
+                stats["hits"],
+                stats["misses"],
+                stats["hit_rate_pct"],
+            )
+
         return results
 
     def _chunk_items(self, items: dict[str, str]) -> list[dict[str, str]]:
