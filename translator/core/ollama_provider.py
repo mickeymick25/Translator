@@ -205,8 +205,18 @@ class OllamaProvider(TranslationProvider):
                             total_chunks,
                             self._max_retries + 1,
                         )
-                        # Fallback: keep original values for this chunk
-                        results.update({k: v for k, v in chunk.items()})
+                        # Per-key fallback: try Google Translate for each item
+                        fallback_result = self._fallback_per_key(chunk, source, target)
+                        results.update(fallback_result)
+                        if cache:
+                            for k, v in fallback_result.items():
+                                original_text = chunk.get(k, v)
+                                if (
+                                    original_text
+                                    and len(original_text.strip()) > 0
+                                    and v != original_text
+                                ):
+                                    cache.put(source, target, original_text, v)
                 except Exception as e:
                     # Non-validation errors (connection, timeout, etc.)
                     logger.warning(
@@ -225,7 +235,18 @@ class OllamaProvider(TranslationProvider):
                             total_chunks,
                             self._max_retries + 1,
                         )
-                        results.update({k: v for k, v in chunk.items()})
+                        # Per-key fallback: try Google Translate for each item
+                        fallback_result = self._fallback_per_key(chunk, source, target)
+                        results.update(fallback_result)
+                        if cache:
+                            for k, v in fallback_result.items():
+                                original_text = chunk.get(k, v)
+                                if (
+                                    original_text
+                                    and len(original_text.strip()) > 0
+                                    and v != original_text
+                                ):
+                                    cache.put(source, target, original_text, v)
 
         # Flush cache to disk after all chunks
         if cache:
@@ -238,6 +259,52 @@ class OllamaProvider(TranslationProvider):
                 stats["hit_rate_pct"],
             )
 
+        return results
+
+    def _fallback_per_key(
+        self, items: dict[str, str], source: str, target: str
+    ) -> dict[str, str]:
+        """Attempt per-key translation via Google Translate as fallback.
+
+        Called when Ollama fails to translate a chunk after all retries.
+        Tries each key individually via Google Translate. If Google also
+        fails for a key, keeps the original text.
+
+        Args:
+            items: Key-value pairs that Ollama failed to translate.
+            source: Source language code.
+            target: Target language code.
+
+        Returns:
+            Dict with same keys and translated (or original) values.
+        """
+        results: dict[str, str] = {}
+        try:
+            from core.translator_factory import GoogleProvider
+
+            google = GoogleProvider()
+            logger.info("Falling back to Google Translate for %d items", len(items))
+        except Exception as e:
+            logger.warning("Cannot create Google Translate fallback: %s", e)
+            return dict(items)
+
+        for key, text in items.items():
+            if not text or len(text.strip()) == 0:
+                results[key] = text
+                continue
+            try:
+                translated = google.translate(text, source, target)
+                if translated and translated != text:
+                    results[key] = translated
+                    logger.debug("Google fallback OK for key '%s'", key)
+                else:
+                    results[key] = text
+                    logger.warning(
+                        "Google fallback returned same text for key '%s'", key
+                    )
+            except Exception as e:
+                results[key] = text
+                logger.warning("Google fallback failed for key '%s': %s", key, e)
         return results
 
     def _chunk_items(self, items: dict[str, str]) -> list[dict[str, str]]:
@@ -305,6 +372,9 @@ STRICT RULES:
 - Preserve ALL placeholders exactly: {{name}}, %s, %d, {{count}}, {{value}}, etc.
 - Preserve ALL escape characters exactly: \\n, \\t, \\", etc.
 - Preserve ALL HTML tags exactly: <b>, <br/>, <strong>, etc.
+- Translate ALL text including content inside HTML tags (e.g. text between <strong> and </strong>)
+- Keep HTML tags in their exact position but translate the text they wrap
+- NEVER return the original {source_name} text untranslated — always translate to {target_name}
 - If a value is empty, keep it empty
 - If a value is a technical term that doesn't need translation, keep it as-is
 - Output ONLY the JSON object — no other text before or after

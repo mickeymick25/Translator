@@ -170,6 +170,55 @@ def _setup_signal_handlers() -> None:
     signal.signal(signal.SIGTERM, signal_handler)
 
 
+def _check_untranslated_keys(
+    source_data: dict[str, str],
+    translated_data: dict[str, str],
+    target_lang: str,
+    min_length: int = 15,
+) -> list[str]:
+    """Detect untranslated keys by comparing translated values to source.
+
+    A value is considered potentially untranslated if it is identical to the
+    source text and longer than min_length characters. Short texts (like
+    "OK" or "Cancel") may legitimately be the same across languages.
+
+    Args:
+        source_data: Original key-value pairs.
+        translated_data: Translated key-value pairs.
+        target_lang: Target language code (for logging).
+        min_length: Minimum text length to flag (default: 15).
+
+    Returns:
+        List of keys that appear untranslated.
+    """
+    untranslated: list[str] = []
+    for key, source_text in source_data.items():
+        translated = translated_data.get(key, "")
+        if (
+            source_text
+            and len(source_text.strip()) >= min_length
+            and translated == source_text
+        ):
+            untranslated.append(key)
+            logger.warning(
+                "[%s] Untranslated key '%s': value matches source (%d chars)",
+                target_lang.upper(),
+                key,
+                len(source_text),
+            )
+
+    if untranslated:
+        logger.warning(
+            "[%s] %d key(s) appear untranslated (value == source, len >= %d): %s",
+            target_lang.upper(),
+            len(untranslated),
+            min_length,
+            ", ".join(untranslated),
+        )
+
+    return untranslated
+
+
 def _translate_single_language(
     source_file: str,
     source_data: dict[str, str],
@@ -297,6 +346,9 @@ def _translate_single_language(
 
     # Final save — use local output_path, not global _output_path
     save_flat_json(output_path, translated_data)
+
+    # Post-translation check: detect untranslated keys (Bug #2)
+    _check_untranslated_keys(source_data, translated_data, target_lang)
 
     logger.info(
         f"[{target_lang.upper()}] Completed! Total entries: {len(translated_data)}"

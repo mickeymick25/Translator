@@ -14,6 +14,21 @@ from threading import Lock
 
 logger = logging.getLogger(__name__)
 
+# Language code normalization: API codes → user codes
+# This ensures cache keys are consistent with file names (e.g. translation_en_cz.json)
+_LANG_CODE_NORMALIZE = {
+    "cs": "cz",  # Czech: API uses 'cs', project uses 'cz'
+}
+
+
+def _normalize_lang_code(lang: str) -> str:
+    """Normalize a language code for cache key consistency.
+
+    Maps API codes to user-facing codes (e.g. 'cs' → 'cz') so that
+    cache entries match the output file naming convention.
+    """
+    return _LANG_CODE_NORMALIZE.get(lang, lang)
+
 
 class TranslationCache:
     """
@@ -49,7 +64,9 @@ class TranslationCache:
     @staticmethod
     def _make_key(source_lang: str, target_lang: str, text: str) -> str:
         """Generate a unique cache key for a (source, target, text) triplet."""
-        return f"{source_lang}:{target_lang}:{text}"
+        src = _normalize_lang_code(source_lang)
+        tgt = _normalize_lang_code(target_lang)
+        return f"{src}:{tgt}:{text}"
 
     def get(self, source_lang: str, target_lang: str, text: str) -> str | None:
         """
@@ -107,6 +124,8 @@ class TranslationCache:
             with self._path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
             self._entries = data.get("entries", {})
+            # Migrate API lang codes to user codes (e.g. en:cs: → en:cz:)
+            self.migrate_keys()
             logger.info(
                 "Loaded translation cache: %d entries from %s",
                 len(self._entries),
@@ -115,6 +134,44 @@ class TranslationCache:
         except Exception as e:
             logger.warning("Failed to load translation cache: %s — starting fresh", e)
             self._entries = {}
+
+    def migrate_keys(self) -> int:
+        """Migrate cache keys from API codes to normalized user codes.
+
+        Renames entries like 'en:cs:text' → 'en:cz:text' to ensure
+        consistency with the project's file naming convention.
+
+        Returns:
+            Number of migrated entries.
+        """
+        migrated = 0
+        with self._lock:
+            keys_to_rename: list[tuple[str, str]] = []
+            for key in list(self._entries.keys()):
+                # Parse key: format is "source:target:text"
+                parts = key.split(":", 2)
+                if len(parts) == 3:
+                    src, tgt, text = parts
+                    new_src = _normalize_lang_code(src)
+                    new_tgt = _normalize_lang_code(tgt)
+                    if new_src != src or new_tgt != tgt:
+                        new_key = f"{new_src}:{new_tgt}:{text}"
+                        if new_key not in self._entries:
+                            keys_to_rename.append((key, new_key))
+                        else:
+                            logger.debug(
+                                "Skipping migration of '%s' — '%s' already exists",
+                                key[:80],
+                                new_key[:80],
+                            )
+            for old_key, new_key in keys_to_rename:
+                self._entries[new_key] = self._entries.pop(old_key)
+                migrated += 1
+                logger.debug("Migrated cache key: %s → %s", old_key[:80], new_key[:80])
+            if migrated > 0:
+                self._dirty = True
+                logger.info("Migrated %d cache keys (API codes → user codes)", migrated)
+        return migrated
 
     def _save(self) -> None:
         """Write the cache to disk."""
