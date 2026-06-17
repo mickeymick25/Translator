@@ -793,3 +793,124 @@ class TestMakeRequest:
         with patch("core.ollama_provider.requests.post", return_value=mock_resp):
             with pytest.raises(Exception, match="500 Server Error"):
                 provider._make_request("prompt")
+
+
+# ─── Per-Key Fallback (Bug #2) ──────────────────────────────────────────
+
+
+class TestFallbackPerKey:
+    """Tests for OllamaProvider._fallback_per_key() — Google Translate fallback (Bug #2).
+
+    When Ollama fails to translate a chunk after all retries, _fallback_per_key
+    is called to retry each key individually via Google Translate. If Google
+    also fails or returns the same text, the original value is kept.
+    """
+
+    def test_falls_back_to_google_for_each_key(self, provider):
+        """Each key is translated individually by GoogleProvider."""
+        items = {"k1": "Hello", "k2": "World"}
+        mock_google = MagicMock()
+        mock_google.translate.side_effect = lambda text, source, target: (
+            f"FR:{text}" if text else text
+        )
+
+        with patch("core.translator_factory.GoogleProvider", return_value=mock_google):
+            result = provider._fallback_per_key(items, "en", "fr")
+
+        assert result == {"k1": "FR:Hello", "k2": "FR:World"}
+        # Google.translate was called once per non-empty key.
+        assert mock_google.translate.call_count == 2
+
+    def test_keeps_original_when_google_returns_same_text(self, provider):
+        """If Google returns the source text unchanged, the original is kept."""
+        items = {"k1": "Hello"}
+
+        mock_google = MagicMock()
+        # Google fails to translate and returns the source text as-is.
+        mock_google.translate.return_value = "Hello"
+
+        with patch("core.translator_factory.GoogleProvider", return_value=mock_google):
+            result = provider._fallback_per_key(items, "en", "fr")
+
+        assert result == {"k1": "Hello"}
+
+    def test_keeps_original_when_google_raises(self, provider):
+        """If Google raises an exception, the original is kept for that key."""
+        items = {"k1": "Hello", "k2": "World"}
+
+        mock_google = MagicMock()
+        mock_google.translate.side_effect = [
+            Exception("429 rate limit"),  # k1 fails
+            "FR:World",  # k2 succeeds
+        ]
+
+        with patch("core.translator_factory.GoogleProvider", return_value=mock_google):
+            result = provider._fallback_per_key(items, "en", "fr")
+
+        assert result == {"k1": "Hello", "k2": "FR:World"}
+
+    def test_keeps_original_when_google_raises_for_all_keys(self, provider):
+        """If Google fails for every key, all originals are kept."""
+        items = {"k1": "Hello", "k2": "World"}
+
+        mock_google = MagicMock()
+        mock_google.translate.side_effect = Exception("connection error")
+
+        with patch("core.translator_factory.GoogleProvider", return_value=mock_google):
+            result = provider._fallback_per_key(items, "en", "fr")
+
+        assert result == {"k1": "Hello", "k2": "World"}
+
+    def test_skips_empty_text_values(self, provider):
+        """Keys with empty or whitespace-only text are not sent to Google."""
+        items = {"k1": "Hello", "k2": "", "k3": "   ", "k4": "World"}
+
+        mock_google = MagicMock()
+        mock_google.translate.side_effect = lambda text, source, target: f"FR:{text}"
+
+        with patch("core.translator_factory.GoogleProvider", return_value=mock_google):
+            result = provider._fallback_per_key(items, "en", "fr")
+
+        # k1 and k4 are translated; k2 and k3 keep their original empty values.
+        assert result["k1"] == "FR:Hello"
+        assert result["k2"] == ""
+        assert result["k3"] == "   "
+        assert result["k4"] == "FR:World"
+        # Google is only called for the non-empty keys.
+        assert mock_google.translate.call_count == 2
+
+    def test_keeps_originals_when_google_cannot_be_imported(self, provider):
+        """If GoogleProvider instantiation fails, originals are kept for all keys."""
+        items = {"k1": "Hello", "k2": "World"}
+
+        # Patch GoogleProvider so that instantiation raises. The from-import
+        # in _fallback_per_key fetches it from core.translator_factory.
+        with patch(
+            "core.translator_factory.GoogleProvider",
+            side_effect=Exception("import error"),
+        ):
+            result = provider._fallback_per_key(items, "en", "fr")
+
+        # The function returns a copy of the original items dict.
+        assert result == {"k1": "Hello", "k2": "World"}
+
+    def test_empty_items_returns_empty_dict(self, provider):
+        """Calling _fallback_per_key with empty items returns an empty dict."""
+        result = provider._fallback_per_key({}, "en", "fr")
+        assert result == {}
+
+    def test_passed_source_and_target_to_google(self, provider):
+        """source and target parameters are forwarded to Google.translate()."""
+        items = {"k1": "Hello"}
+
+        mock_google = MagicMock()
+        mock_google.translate.return_value = "Bonjour"
+
+        with patch("core.translator_factory.GoogleProvider", return_value=mock_google):
+            provider._fallback_per_key(items, "en", "fr")
+
+        # The call passes the source and target codes.
+        call_args = mock_google.translate.call_args
+        assert call_args[0][0] == "Hello"
+        assert call_args[0][1] == "en"
+        assert call_args[0][2] == "fr"

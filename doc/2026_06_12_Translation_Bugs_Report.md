@@ -162,17 +162,42 @@ if attempt == self._max_retries:
 
 Le fallback conserve le **texte source anglais** au lieu de signaler l'échec ou de réessayer avec un prompt différent.
 
-### Correction proposée
+### Correction appliquée (juin 2026)
 
-1. **Post-traduction** — Retraduire manuellement ces 9 clés dans les fichiers d'export
-2. **Détection des clés non traduites** — Ajouter un check post-traduction qui compare chaque valeur au texte source et alerte si elles sont identiques pour des textes longs (> 15 caractères)
-3. **Prompt Ollama amélioré** — Renforcer les instructions du prompt pour les textes avec HTML/placeholders
-4. **Fallback par clé** — Quand Ollama échoue sur un chunk, retenter clé par clé avec Google Translate comme fallback
+**Statut :** 🟡 Partiellement corrigé — la détection et le fallback par clé sont implémentés et testés. La post-traduction des 9 clés reste à faire manuellement.
 
-### Fichiers à modifier
+**Solution retenue :**
 
-- `translator/core/ollama_provider.py` — Améliorer le fallback et le prompt
-- `translator/modes/mode_translate_json.py` — Ajouter un check post-traduction
+1. **Détection post-traduction** (`_check_untranslated_keys` dans `mode_translate_json.py`) ✅
+   - Compare chaque valeur traduite à la valeur source
+   - Flag les textes identiques au source de longueur ≥ 15 caractères
+   - Logs WARNING avec le code langue et la liste des clés affectées
+   - Appelée automatiquement en fin de `_translate_single_language`
+   - **Test :** `TestCheckUntranslatedKeys` (10 tests)
+
+2. **Fallback par clé** (`_fallback_per_key` dans `ollama_provider.py`) ✅
+   - Quand Ollama échoue sur un chunk après tous les retries, chaque clé est retentée individuellement via Google Translate
+   - Si Google échoue ou renvoie le même texte, l'original est conservé
+   - Si l'import de GoogleProvider échoue, tous les originaux sont conservés
+   - **Test :** `TestFallbackPerKey` (8 tests)
+
+**Garanties :**
+- Les traductions longues identiques au source sont flaggées en WARNING (FR, CZ, SK, DE, IT, AR)
+- Quand Ollama échoue, Google est tenté clé par clé (limite le scope des fallbacks)
+- Pas de régression : la signature publique de `translate_batch` est inchangée
+
+**Tests ajoutés** :
+- `tests/test_mode_translate_json.py::TestCheckUntranslatedKeys` — 10 tests
+- `tests/test_ollama_provider.py::TestFallbackPerKey` — 8 tests
+
+**Résultat couverture :** `core/ollama_provider.py` 83% → 87%, `modes/mode_translate_json.py` 75% → 76%.
+
+**Reste à faire :**
+- Post-traduire manuellement les 9 clés identifiées (cf. tableau des clés affectées) dans les exports finaux
+- Envisager de réduire `min_length=15` à une valeur plus permissive (ex. 8) pour attraper les textes courts
+- Renforcer le prompt Ollama pour les textes avec HTML/placeholders (peut réduire le taux d'échec à la source)
+
+**Branch :** `test/post-translation-validation`
 
 ---
 

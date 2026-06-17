@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from modes.mode_translate_json import (
+    _check_untranslated_keys,
     _create_checkpoint_callback,
     _translate_single_language,
     run,
@@ -449,3 +450,189 @@ class TestModeTranslateJsonThreadSafety:
             assert len(cs_results) == 15
             assert all(r == "fr:Hello" for r in fr_results)
             assert all(r == "cs:Hello" for r in cs_results)
+
+
+# ─── Post-Translation Validation (Bug #2) ─────────────────────────
+
+
+class TestCheckUntranslatedKeys:
+    """Tests for _check_untranslated_keys() — post-translation quality check (Bug #2).
+
+    Bug #2: Ollama (and any provider) can fail to translate a key — e.g. it
+    returns the source text unchanged, or it returns an empty string. The
+    post-translation check compares each translated value to the source and
+    flags any text longer than `min_length` (default 15) that came back
+    identical to the source.
+    """
+
+    def test_detects_key_with_value_identical_to_source(self):
+        """A long translation identical to the source is flagged."""
+        source = {"KEY_1": "This is a long sentence in English."}
+        translated = {"KEY_1": "This is a long sentence in English."}
+
+        result = _check_untranslated_keys(source, translated, target_lang="fr")
+
+        assert result == ["KEY_1"]
+
+    def test_does_not_flag_short_identical_values(self):
+        """Short values (e.g. 'OK', 'Cancel') identical to source are not flagged."""
+        source = {"OK_BTN": "OK", "CANCEL_BTN": "Cancel"}
+        translated = {"OK_BTN": "OK", "CANCEL_BTN": "Cancel"}
+
+        result = _check_untranslated_keys(source, translated, target_lang="fr")
+
+        # Both are short (len < 15), so they are accepted as legitimate.
+        assert result == []
+
+    def test_does_not_flag_proper_translation(self):
+        """Proper translations (different from source) are not flagged."""
+        source = {"KEY_1": "This is a long sentence in English."}
+        translated = {"KEY_1": "C'est une longue phrase en français."}
+
+        result = _check_untranslated_keys(source, translated, target_lang="fr")
+
+        assert result == []
+
+    def test_detects_only_long_untranslated_keys(self):
+        """A mix of translated, short-unchanged and long-unchanged keys."""
+        source = {
+            "SHORT": "OK",  # short, OK
+            "LONG_KEY": "Data integrity alerts",  # long, identical → untranslated
+            "TRANSLATED": "Data integrity alerts",  # long, will be translated
+            "WHITESPACE": "   ",  # only whitespace → not flagged (empty after strip)
+        }
+        translated = {
+            "SHORT": "OK",
+            "LONG_KEY": "Data integrity alerts",  # untranslated!
+            "TRANSLATED": "Alertes d'intégrité des données",
+            "WHITESPACE": "",
+        }
+
+        result = _check_untranslated_keys(
+            source, translated, target_lang="fr", min_length=15
+        )
+
+        assert "LONG_KEY" in result
+        assert "SHORT" not in result
+        assert "TRANSLATED" not in result
+        assert "WHITESPACE" not in result  # source.strip() is empty
+
+    def test_missing_key_in_translated_data_is_flagged(self):
+        """A key present in source but missing from translated is flagged
+        (translated = '' which never equals source text)."""
+        source = {
+            "PRESENT": "This is a long sentence.",
+            "MISSING": "Another long sentence here.",
+        }
+        translated = {"PRESENT": "Une longue phrase."}  # MISSING absent
+
+        result = _check_untranslated_keys(source, translated, target_lang="fr")
+
+        # The missing key is treated as having value '', which does not equal
+        # the source. So it is NOT flagged by the "identical to source" check.
+        # (The function is scoped to detect same-value, not missing keys.)
+        assert "PRESENT" not in result
+        assert "MISSING" not in result
+
+    def test_empty_source_value_not_flagged(self):
+        """Keys with empty source values are not flagged (no translation needed)."""
+        source = {"EMPTY_KEY": ""}
+        translated = {"EMPTY_KEY": ""}
+
+        result = _check_untranslated_keys(source, translated, target_lang="fr")
+
+        assert result == []
+
+    def test_whitespace_only_source_not_flagged(self):
+        """Keys with whitespace-only source are not flagged."""
+        source = {"WS_KEY": "   \t\n  "}
+        translated = {"WS_KEY": "   \t\n  "}
+
+        result = _check_untranslated_keys(source, translated, target_lang="fr")
+
+        assert result == []
+
+    def test_min_length_threshold(self):
+        """min_length controls the minimum source length to flag."""
+        source = {
+            "BORDERLINE": "12345678901234",  # 14 chars
+            "OVER": "123456789012345",  # 15 chars
+        }
+        translated = {
+            "BORDERLINE": "12345678901234",  # unchanged
+            "OVER": "123456789012345",  # unchanged
+        }
+
+        # With min_length=15, only OVER is flagged.
+        result = _check_untranslated_keys(
+            source, translated, target_lang="fr", min_length=15
+        )
+        assert "OVER" in result
+        assert "BORDERLINE" not in result
+
+        # With min_length=10, both are flagged.
+        result = _check_untranslated_keys(
+            source, translated, target_lang="fr", min_length=10
+        )
+        assert "OVER" in result
+        assert "BORDERLINE" in result
+
+    def test_returns_empty_list_when_all_translated(self):
+        """If every key is properly translated, return an empty list."""
+        source = {f"KEY_{i}": f"English sentence number {i}." for i in range(5)}
+        translated = {f"KEY_{i}": f"Phrase française numéro {i}." for i in range(5)}
+
+        result = _check_untranslated_keys(source, translated, target_lang="fr")
+
+        assert result == []
+
+    def test_logs_warning_per_untranslated_key(self):
+        """Each untranslated key produces a warning log with the key name."""
+        import logging
+
+        source = {
+            "UNTRANS_1": "This long text is identical to source.",
+            "UNTRANS_2": "Another long identical text for testing.",
+            "OK_KEY": "Proper translation here",
+        }
+        translated = {
+            "UNTRANS_1": "This long text is identical to source.",
+            "UNTRANS_2": "Another long identical text for testing.",
+            "OK_KEY": "Une bonne traduction ici",
+        }
+
+        logger_obj = logging.getLogger("modes.mode_translate_json")
+        captured: list[str] = []
+
+        class ListHandler(logging.Handler):
+            def emit(self, record):
+                captured.append(self.format(record))
+
+        handler = ListHandler(level=logging.WARNING)
+        handler.setFormatter(logging.Formatter("%(levelname)s [%(lang)s] %(message)s"))
+        # Inject the target_lang into the record for our format string.
+        old_make_record = logger_obj.makeRecord
+
+        def make_record(*args, **kwargs):
+            record = old_make_record(*args, **kwargs)
+            record.lang = "FR"
+            return record
+
+        logger_obj.addHandler(handler)
+        logger_obj.makeRecord = make_record
+        old_level = logger_obj.level
+        logger_obj.setLevel(logging.WARNING)
+        try:
+            result = _check_untranslated_keys(
+                source, translated, target_lang="fr", min_length=15
+            )
+        finally:
+            logger_obj.removeHandler(handler)
+            logger_obj.makeRecord = old_make_record
+            logger_obj.setLevel(old_level)
+
+        assert "UNTRANS_1" in result
+        assert "UNTRANS_2" in result
+        # The logs contain the language code and the key names.
+        assert any("UNTRANS_1" in log for log in captured), captured
+        assert any("UNTRANS_2" in log for log in captured), captured
