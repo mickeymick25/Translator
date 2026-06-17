@@ -323,6 +323,10 @@ def _translate_single_language(
         translated_data.update(translated_dict)
     else:
         # Classic mode: translate item by item with entry-level checkpoint
+        logger.info(
+            f"[{target_lang.upper()}] Using provider: {current_provider.name} "
+            f"(serialized — provider is not batch-capable)"
+        )
         # Create checkpoint callback (pass existing data so checkpoints preserve it)
         checkpoint_cb = _create_checkpoint_callback(
             output_path, keys_to_translate, translated_data
