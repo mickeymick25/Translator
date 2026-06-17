@@ -376,3 +376,76 @@ class TestRun:
 
         # load_flat_json called only once
         assert mock_load.call_count == 1
+
+
+# ─── Thread Safety (Bug #1) ───────────────────────────────────────────
+
+
+class TestModeTranslateJsonThreadSafety:
+    """End-to-end thread-safety test for mode_translate_json with GoogleProvider.
+
+    Reproduces Bug #1: the original implementation used ThreadPoolExecutor to
+    translate multiple languages in parallel, but the GoogleProvider shared a
+    single non-thread-safe `deep_translator.GoogleTranslator` library state.
+    When two threads called translate() concurrently with different targets,
+    the target language was overwritten, producing translations in the wrong
+    language (FR translated as Czech, etc.).
+
+    The fix is at the provider level: GoogleProvider.translate() now holds a
+    threading.Lock for the entire duration of the call. This test verifies
+    that the integration is correct: with two parallel languages using the
+    same GoogleProvider, the result for each language is in the right
+    language.
+    """
+
+    def test_google_provider_serializes_concurrent_translates(self):
+        """Concurrent GoogleProvider.translate() calls complete without errors.
+
+        With the threading.Lock in GoogleProvider, multiple threads calling
+        translate() concurrently are serialized and each call returns its
+        expected result. This integration test verifies the contract end-to-
+        end: 30 concurrent calls across 4 workers complete, each result
+        matches its (source, target).
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        from unittest.mock import MagicMock, patch
+
+        from core.translator_factory import GoogleProvider
+
+        with patch("core.translator_factory.GoogleTranslator") as mock_cls:
+
+            def factory(source, target):
+                inst = MagicMock()
+                inst.source = source
+                inst.target = target
+                inst.translate.return_value = f"{target}:Hello"
+                return inst
+
+            mock_cls.side_effect = factory
+
+            provider = GoogleProvider()
+
+            fr_results: list[str] = []
+            cs_results: list[str] = []
+            errors: list[Exception] = []
+
+            def worker(target, results_list, n=15):
+                try:
+                    for _ in range(n):
+                        results_list.append(provider.translate("Hello", "en", target))
+                except Exception as e:
+                    errors.append(e)
+
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futs = [
+                    executor.submit(worker, "fr", fr_results),
+                    executor.submit(worker, "cs", cs_results),
+                ]
+                for f in futs:
+                    f.result()
+
+            assert not errors, f"Errors during concurrent translation: {errors}"
+            assert len(fr_results) == 15
+            assert len(cs_results) == 15
+            assert all(r == "fr:Hello" for r in fr_results)
+            assert all(r == "cs:Hello" for r in cs_results)

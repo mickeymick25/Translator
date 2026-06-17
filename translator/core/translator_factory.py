@@ -7,6 +7,7 @@ with optional automatic fallback on persistent rate limit errors.
 """
 
 import logging
+import threading
 from abc import ABC, abstractmethod
 
 from deep_translator import DeeplTranslator, GoogleTranslator
@@ -40,17 +41,32 @@ class TranslationProvider(ABC):
 
 
 class GoogleProvider(TranslationProvider):
-    """Translation provider using Google Translate via deep_translator."""
+    """Translation provider using Google Translate via deep_translator.
+
+    Thread-safety: the underlying `deep_translator.GoogleTranslator` library is
+    NOT thread-safe (shared internal state across calls). To prevent the race
+    condition observed in Bug #1 (export 05_27 — target language overwritten
+    between translator construction and `.translate()` call), a single
+    `threading.Lock` serializes all calls to `translate()`. The lock is held
+    for the entire duration of the underlying HTTP request, ensuring that at
+    most one thread is interacting with the library at a time.
+
+    Note: serializing Google calls removes the network-level parallelism for
+    the multi-language batch mode. Providers that are thread-safe at the
+    network level (e.g. Ollama) can still benefit from ThreadPoolExecutor.
+    """
 
     def __init__(self):
         self._translator_cls = GoogleTranslator
+        self._lock = threading.Lock()
 
     @property
     def name(self) -> str:
         return "Google Translate"
 
     def translate(self, text: str, source: str, target: str) -> str:
-        result = self._translator_cls(source=source, target=target).translate(text)
+        with self._lock:
+            result = self._translator_cls(source=source, target=target).translate(text)
         if result is None or result == "":
             return text
         return result

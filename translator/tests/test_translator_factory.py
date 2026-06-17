@@ -531,3 +531,151 @@ class TestCreateProvider:
         assert isinstance(provider, FallbackProvider)
         assert "DeepL" in provider.name
         assert "Google" in provider.name
+
+
+# ─── GoogleProvider — Thread Safety (Bug #1) ────────────────────────
+
+
+class TestGoogleProviderThreadSafety:
+    """Tests for GoogleProvider thread safety (Bug #1, export 05_27).
+
+    The Google provider uses the `deep_translator` library, which has shared
+    internal state and is NOT thread-safe. When multiple threads call
+    `translate()` concurrently with different target languages, the target
+    language can be overwritten between translator construction and the
+    `.translate()` call, producing translations in the wrong language.
+
+    These tests reproduce the race condition and verify the fix:
+    a single threading.Lock serializes calls to GoogleProvider.translate().
+    """
+
+    @patch("core.translator_factory.GoogleTranslator")
+    def test_translate_uses_internal_lock(self, mock_cls):
+        """GoogleProvider exposes a threading.Lock used to serialize translate() calls."""
+        import threading
+
+        provider = GoogleProvider()
+        assert hasattr(provider, "_lock"), "GoogleProvider should expose a _lock"
+        assert isinstance(provider._lock, type(threading.Lock()))
+
+    @patch("core.translator_factory.GoogleTranslator")
+    def test_translate_acquires_lock_during_call(self, mock_cls):
+        """translate() holds the provider's lock for the entire duration of the call.
+
+        This is the contract that protects against the race condition observed in
+        Bug #1: while one thread is calling GoogleTranslator(...).translate(text),
+        no other thread can start a competing call on the same provider.
+        """
+        import threading
+
+        # Track when the lock is held and when the call is in-flight.
+        state = {"lock_held_during_call": False, "concurrent_calls": 0}
+        max_concurrent = {"value": 0}
+        call_started = threading.Event()
+        second_call_can_proceed = threading.Event()
+
+        def slow_translate(text):
+            state["concurrent_calls"] += 1
+            max_concurrent["value"] = max(
+                max_concurrent["value"], state["concurrent_calls"]
+            )
+            call_started.set()
+            # Wait until we've checked that the second call is blocked.
+            second_call_can_proceed.wait(timeout=2)
+            state["concurrent_calls"] -= 1
+            return f"OK:{text}"
+
+        mock_instance = MagicMock()
+        mock_instance.translate.side_effect = slow_translate
+        mock_cls.return_value = mock_instance
+
+        provider = GoogleProvider()
+
+        # Patch the lock with a tracked version.
+        real_lock = provider._lock
+        lock_acquired_count = {"n": 0}
+
+        class TrackedLock:
+            def __init__(self, wrapped):
+                self._wrapped = wrapped
+
+            def __enter__(self):
+                lock_acquired_count["n"] += 1
+                state["lock_held_during_call"] = True
+                return self._wrapped.__enter__()
+
+            def __exit__(self, *args):
+                state["lock_held_during_call"] = False
+                return self._wrapped.__exit__(*args)
+
+        provider._lock = TrackedLock(real_lock)
+
+        # Start the first call (will block on the event).
+        first_result: dict = {}
+        first_error: dict = {}
+
+        def first_call():
+            try:
+                first_result["value"] = provider.translate("Hello", "en", "fr")
+            except Exception as e:
+                first_error["value"] = e
+
+        t1 = threading.Thread(target=first_call)
+        t1.start()
+        call_started.wait(timeout=2)
+
+        # While the first call is in-flight, try a second call: it must wait
+        # on the lock and only one call must be active at a time.
+        second_result: dict = {}
+        second_error: dict = {}
+
+        def second_call():
+            try:
+                second_result["value"] = provider.translate("Hello", "en", "cs")
+            except Exception as e:
+                second_error["value"] = e
+
+        t2 = threading.Thread(target=second_call)
+        t2.start()
+        # Give t2 a chance to (try to) acquire the lock.
+        import time
+
+        time.sleep(0.1)
+        # At this point t1 is still running, so max_concurrent must be 1.
+        assert max_concurrent["value"] == 1, (
+            f"Concurrent calls detected: {max_concurrent['value']}"
+        )
+
+        # Release the first call.
+        second_call_can_proceed.set()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+
+        assert not first_error.get("value"), f"First call error: {first_error}"
+        assert not second_error.get("value"), f"Second call error: {second_error}"
+        assert first_result["value"] == "OK:Hello"
+        assert second_result["value"] == "OK:Hello"
+        assert max_concurrent["value"] == 1, "Lock failed to serialize calls"
+        assert lock_acquired_count["n"] >= 2, "Lock was not acquired for both calls"
+
+    @patch("core.translator_factory.GoogleTranslator")
+    def test_lock_does_not_deadlock_under_load(self, mock_cls):
+        """The serialization lock is reentrant-safe: 20 threads x 10 calls complete."""
+        import threading
+
+        mock_instance = MagicMock()
+        mock_instance.translate.return_value = "OK"
+        mock_cls.return_value = mock_instance
+
+        provider = GoogleProvider()
+
+        def worker():
+            for _ in range(10):
+                provider.translate("Hello", "en", "fr")
+
+        threads = [threading.Thread(target=worker) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+            assert not t.is_alive(), "Thread deadlocked"

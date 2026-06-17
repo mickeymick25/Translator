@@ -68,16 +68,45 @@ Si les threads s'exécutent simultanément, la langue cible peut être écrasée
 
 Seul l'export 05_27 est affecté. L'export 06_11 (Ollama) n'a pas ce problème car Ollama traite chaque langue séquentiellement par chunk.
 
-### Correction proposée
+### Correction appliquée (juin 2026)
 
-1. **Verrou par langue** — Ajouter un `threading.Lock` par langue cible pour sérialiser les appels au provider Google Translate
-2. **Instances séparées** — Créer une instance de provider par thread (thread-local storage)
-3. **Séquentiel pour Google** — Désactiver le parallélisme pour le provider Google et n'utiliser `ThreadPoolExecutor` que pour les providers thread-safe (Ollama)
+**Statut :** ✅ Corrigé — `GoogleProvider` est désormais thread-safe.
 
-### Fichiers à modifier
+**Solution retenue :** Un `threading.Lock` au niveau de l'instance `GoogleProvider` sérialise tous les appels à `translate()`. Le lock est tenu pendant toute la durée de l'appel à `deep_translator.GoogleTranslator(...).translate(text)`, ce qui élimine la fenêtre de course.
 
-- `translator/core/translator_factory.py` — Rendre `GoogleProvider` thread-safe
-- `translator/modes/mode_translate_json.py` — Ajouter un verrou ou désactiver le parallélisme Google
+**Implémentation :**
+
+```python
+# translator/core/translator_factory.py
+class GoogleProvider(TranslationProvider):
+    def __init__(self):
+        self._translator_cls = GoogleTranslator
+        self._lock = threading.Lock()
+
+    def translate(self, text: str, source: str, target: str) -> str:
+        with self._lock:
+            result = self._translator_cls(source=source, target=target).translate(text)
+        if result is None or result == "":
+            return text
+        return result
+```
+
+**Conséquence :** Les appels parallèles via `ThreadPoolExecutor` dans `mode_translate_json.run()` sont effectivement sérialisés pour Google (un seul appel à la fois), mais c'est correct : chaque appel est atomique. Les providers batch (Ollama) ne sont pas affectés par ce lock et conservent leur parallélisme.
+
+**Tests ajoutés** (`tests/test_translator_factory.py::TestGoogleProviderThreadSafety`) :
+- `test_translate_uses_internal_lock` — Vérifie que `_lock` existe
+- `test_translate_acquires_lock_during_call` — Vérifie que le lock est tenu pendant l'appel
+- `test_lock_does_not_deadlock_under_load` — 20 threads x 10 appels sans deadlock
+- `tests/test_mode_translate_json.py::TestModeTranslateJsonThreadSafety` — Test d'intégration end-to-end avec `ThreadPoolExecutor`
+
+**Branch :** `fix/thread-safety-google-provider`
+
+### Fichiers modifiés
+
+- `translator/core/translator_factory.py` — Ajout `import threading`, `_lock` dans `GoogleProvider.__init__`, `with self._lock:` dans `translate()`
+- `translator/tests/test_translator_factory.py` — Classe `TestGoogleProviderThreadSafety` (3 tests)
+- `translator/tests/test_mode_translate_json.py` — Classe `TestModeTranslateJsonThreadSafety` (1 test)
+- `translator/modes/mode_translate_json.py` — Log informatif lors de l'utilisation d'un provider non-batch
 
 ---
 
