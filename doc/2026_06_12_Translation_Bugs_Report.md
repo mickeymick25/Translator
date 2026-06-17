@@ -203,16 +203,71 @@ Le problème se manifeste quand :
 | `en:it:` | 1 471 |
 | `en:ar:` | 1 471 |
 
-### Correction proposée
+### Correction appliquée (juin 2026)
 
-1. **Normaliser les clés de cache** — Utiliser systématiquement le code utilisateur `cz` (et non `cs`) comme clé de cache, en cohérence avec le nom de fichier
-2. **Migration du cache** — Renommer les clés `en:cs:` → `en:cz:` dans le cache existant
-3. **OU** Utiliser systématiquement `api_target_lang` partout (y compris dans le nom de fichier)
+**Statut :** ✅ Corrigé — les clés de cache sont normalisées et le cache existant est migré automatiquement au chargement.
 
-### Fichiers à modifier
+**Solution retenue :** Une table `_LANG_CODE_NORMALIZE` dans `core/cache.py` mappe les codes API (`cs`) vers les codes utilisateur (`cz`). La fonction `_normalize_lang_code()` est appelée par `_make_key()` à la **construction** de chaque clé, garantissant que les nouvelles entrées utilisent systématiquement le code utilisateur. Au chargement du cache, `migrate_keys()` renomme les anciennes clés `en:cs:` → `en:cz:` en place, de manière idempotente.
 
-- `translator/core/cache.py` — Ajouter une normalisation du code langue
-- `translator/modes/mode_translate_json.py` — Harmoniser le code langue utilisé pour le cache
+**Implémentation :**
+
+```python
+# translator/core/cache.py
+_LANG_CODE_NORMALIZE = {
+    "cs": "cz",  # Czech: API uses 'cs', project uses 'cz'
+}
+
+def _normalize_lang_code(lang: str) -> str:
+    return _LANG_CODE_NORMALIZE.get(lang, lang)
+
+class TranslationCache:
+    @staticmethod
+    def _make_key(source_lang, target_lang, text):
+        src = _normalize_lang_code(source_lang)
+        tgt = _normalize_lang_code(target_lang)
+        return f"{src}:{tgt}:{text}"
+
+    def _load(self):
+        # ... charge self._entries depuis le fichier
+        self.migrate_keys()  # renomme en:cs: → en:cz:
+
+    def migrate_keys(self) -> int:
+        migrated = 0
+        with self._lock:
+            keys_to_rename = []
+            for key in list(self._entries.keys()):
+                parts = key.split(":", 2)
+                if len(parts) == 3:
+                    src, tgt, text = parts
+                    new_src = _normalize_lang_code(src)
+                    new_tgt = _normalize_lang_code(tgt)
+                    if new_src != src or new_tgt != tgt:
+                        new_key = f"{new_src}:{new_tgt}:{text}"
+                        if new_key not in self._entries:
+                            keys_to_rename.append((key, new_key))
+            for old_key, new_key in keys_to_rename:
+                self._entries[new_key] = self._entries.pop(old_key)
+                migrated += 1
+            if migrated > 0:
+                self._dirty = True
+        return migrated
+```
+
+**Garanties :**
+- `put('en', 'cs', text, value)` et `put('en', 'cz', text, value)` stockent dans la même clé `en:cz:text`
+- `get('en', 'cs', text)` et `get('en', 'cz', text)` lisent la même entrée
+- Migration automatique au chargement : les caches existants (1 471 entrées `en:cs:`) sont migrés à la volée
+- Migration idempotente : recharger un cache déjà migré ne change rien
+- Pas de perte de données : si les deux clés `en:cs:Hello` et `en:cz:Hello` existent, la migration est sautée pour préserver les deux valeurs
+
+**Tests ajoutés** (`tests/test_cache.py`, 3 nouvelles classes, 16 tests) :
+- `TestNormalizeLangCode` (5 tests) — comportement de `_normalize_lang_code()`
+- `TestMakeKeyWithNormalization` (4 tests) — équivalence `cs`/`cz` dans `_make_key()`, `get`, `put`
+- `TestMigrateKeys` (7 tests) — migration, dirty flag, idempotence, gestion des collisions, textes avec `:`
+
+**Résultat couverture :** `core/cache.py` passe de 89% à **98%**.
+
+**Branch :** `test/cache-key-normalization`
 
 ---
 

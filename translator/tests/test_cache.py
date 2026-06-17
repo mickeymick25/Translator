@@ -603,3 +603,223 @@ class TestGetCache:
 
         # Clean up
         cache_module._cache = None
+
+
+# ─── Language Code Normalization (Bug #3) ──────────────────────────
+
+
+class TestNormalizeLangCode:
+    """Tests for _normalize_lang_code() — language code normalization (Bug #3).
+
+    Bug #3: cache keys used the API code 'cs' for Czech, while the
+    project uses 'cz' (e.g. translation_en_cz.json). This led to
+    inconsistencies between cache keys and file names, and could cause
+    re-translations when the code was used inconsistently.
+
+    The fix normalizes API codes to user-facing codes at cache key
+    construction time and migrates existing keys on load.
+    """
+
+    def test_normalizes_czech_api_code_to_user_code(self):
+        """API code 'cs' is normalized to user code 'cz'."""
+        from core.cache import _normalize_lang_code
+
+        assert _normalize_lang_code("cs") == "cz"
+
+    def test_czech_user_code_passes_through_unchanged(self):
+        """User code 'cz' is left as-is."""
+        from core.cache import _normalize_lang_code
+
+        assert _normalize_lang_code("cz") == "cz"
+
+    def test_other_languages_pass_through_unchanged(self):
+        """Languages not in the normalization table are unchanged."""
+        from core.cache import _normalize_lang_code
+
+        for lang in ["en", "fr", "de", "it", "sk", "ar"]:
+            assert _normalize_lang_code(lang) == lang
+
+    def test_empty_string_returns_empty_string(self):
+        """Empty string is returned as-is (no mapping)."""
+        from core.cache import _normalize_lang_code
+
+        assert _normalize_lang_code("") == ""
+
+    def test_unknown_code_returns_input_unchanged(self):
+        """Unknown language code is returned as-is."""
+        from core.cache import _normalize_lang_code
+
+        assert _normalize_lang_code("xx") == "xx"
+
+
+class TestMakeKeyWithNormalization:
+    """Tests for _make_key() with language code normalization (Bug #3).
+
+    After normalization, _make_key('en', 'cs', 'Hello') and
+    _make_key('en', 'cz', 'Hello') must produce the SAME key.
+    """
+
+    def test_cs_and_cz_produce_same_key(self):
+        """API 'cs' and user 'cz' produce the same cache key for the same text."""
+        from core.cache import TranslationCache
+
+        key_cs = TranslationCache._make_key("en", "cs", "Hello")
+        key_cz = TranslationCache._make_key("en", "cz", "Hello")
+        assert key_cs == key_cz == "en:cz:Hello"
+
+    def test_normalized_key_used_in_get_and_put(self, temp_dir):
+        """put('en', 'cs', ...) and get('en', 'cz', ...) hit the same entry."""
+        from core.cache import TranslationCache
+
+        cache = TranslationCache(cache_path=str(temp_dir / "cache.json"))
+        cache.put("en", "cs", "Hello", "Ahoj")
+
+        # Retrieve with the user code — must hit the entry stored via 'cs'.
+        assert cache.get("en", "cz", "Hello") == "Ahoj"
+        # And the inverse: store with 'cz', retrieve with 'cs'.
+        cache.put("en", "cz", "Goodbye", "Nashledanou")
+        assert cache.get("en", "cs", "Goodbye") == "Nashledanou"
+
+    def test_source_lang_also_normalized(self):
+        """Source language codes are normalized too (symmetric)."""
+        from core.cache import TranslationCache
+
+        # If 'cs' were ever used as a source code, it would normalize to 'cz'.
+        # Today only 'en' is used as source, but the contract is symmetric.
+        key = TranslationCache._make_key("cs", "fr", "Hello")
+        assert key == "cz:fr:Hello"
+
+    def test_other_lang_pairs_unchanged(self):
+        """Non-Czech pairs are not affected by normalization."""
+        from core.cache import TranslationCache
+
+        assert TranslationCache._make_key("en", "fr", "Hello") == "en:fr:Hello"
+        assert TranslationCache._make_key("en", "de", "Hello") == "en:de:Hello"
+        assert TranslationCache._make_key("en", "sk", "Hello") == "en:sk:Hello"
+
+
+class TestMigrateKeys:
+    """Tests for migrate_keys() — automatic migration on cache load (Bug #3).
+
+    When the cache file is loaded, any entry keyed with the API code 'cs'
+    must be transparently renamed to 'cz' to match the project's file
+    naming convention and avoid cache misses.
+    """
+
+    def test_migrates_cs_keys_to_cz(self, temp_dir):
+        """Entries keyed with 'en:cs:...' are renamed to 'en:cz:...'."""
+        from core.cache import TranslationCache
+
+        cache = TranslationCache(cache_path=str(temp_dir / "cache.json"))
+        cache._entries = {
+            "en:cs:Hello": "Ahoj",
+            "en:cs:Goodbye": "Nashledanou",
+        }
+
+        migrated = cache.migrate_keys()
+
+        assert migrated == 2
+        assert "en:cs:Hello" not in cache._entries
+        assert "en:cz:Hello" in cache._entries
+        assert cache._entries["en:cz:Hello"] == "Ahoj"
+        assert cache._entries["en:cz:Goodbye"] == "Nashledanou"
+
+    def test_migration_sets_dirty_flag(self, temp_dir):
+        """Migration marks the cache as dirty so it gets flushed on next save."""
+        from core.cache import TranslationCache
+
+        cache = TranslationCache(cache_path=str(temp_dir / "cache.json"))
+        cache._entries = {"en:cs:Hello": "Ahoj"}
+        cache._dirty = False
+
+        cache.migrate_keys()
+
+        assert cache._dirty is True
+
+    def test_no_migration_needed_for_normalized_keys(self, temp_dir):
+        """Keys already using 'cz' are not touched."""
+        from core.cache import TranslationCache
+
+        cache = TranslationCache(cache_path=str(temp_dir / "cache.json"))
+        cache._entries = {
+            "en:cz:Hello": "Ahoj",
+            "en:fr:Bonjour": "Hello",
+        }
+        cache._dirty = False
+
+        migrated = cache.migrate_keys()
+
+        assert migrated == 0
+        assert cache._entries == {
+            "en:cz:Hello": "Ahoj",
+            "en:fr:Bonjour": "Hello",
+        }
+        # No migration → cache stays clean.
+        assert cache._dirty is False
+
+    def test_empty_cache_migration_returns_zero(self, temp_dir):
+        """Migrating an empty cache is a no-op."""
+        from core.cache import TranslationCache
+
+        cache = TranslationCache(cache_path=str(temp_dir / "cache.json"))
+
+        assert cache.migrate_keys() == 0
+        assert cache._entries == {}
+
+    def test_load_triggers_migration_automatically(self, temp_dir):
+        """Loading a cache file with 'en:cs:' keys migrates them on the fly."""
+        from core.cache import TranslationCache
+
+        cache_path = temp_dir / ".translation_cache.json"
+        data = {
+            "metadata": {"version": 1, "total_entries": 2},
+            "entries": {
+                "en:cs:Hello": "Ahoj",
+                "en:cs:World": "Svete",
+            },
+        }
+        cache_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        cache = TranslationCache(cache_path=str(cache_path))
+
+        # Both entries were migrated at load time.
+        assert "en:cs:Hello" not in cache._entries
+        assert "en:cz:Hello" in cache._entries
+        assert cache._entries["en:cz:Hello"] == "Ahoj"
+        assert cache._entries["en:cz:World"] == "Svete"
+        # And the cache is dirty so the next flush writes the migrated form.
+        assert cache._dirty is True
+
+    def test_migration_does_not_overwrite_existing_target_key(self, temp_dir):
+        """If both 'en:cs:Hello' and 'en:cz:Hello' exist, the migration is skipped
+        for the duplicate to avoid losing data."""
+        from core.cache import TranslationCache
+
+        cache = TranslationCache(cache_path=str(temp_dir / "cache.json"))
+        cache._entries = {
+            "en:cs:Hello": "OLD_CZ",
+            "en:cz:Hello": "NEW_CZ",
+        }
+
+        migrated = cache.migrate_keys()
+
+        # The 'cs' key is NOT migrated because 'cz' already exists.
+        assert migrated == 0
+        assert cache._entries["en:cs:Hello"] == "OLD_CZ"
+        assert cache._entries["en:cz:Hello"] == "NEW_CZ"
+
+    def test_migration_handles_keys_with_colons_in_text(self, temp_dir):
+        """Texts containing ':' are split correctly (key split is limited to 2)."""
+        from core.cache import TranslationCache
+
+        cache = TranslationCache(cache_path=str(temp_dir / "cache.json"))
+        cache._entries = {
+            "en:cs:Time: 10:30": "Cas: 10:30",
+        }
+
+        cache.migrate_keys()
+
+        # The key part 'en:cs:' is migrated to 'en:cz:', the rest stays intact.
+        assert "en:cs:Time: 10:30" not in cache._entries
+        assert "en:cz:Time: 10:30" in cache._entries
+        assert cache._entries["en:cz:Time: 10:30"] == "Cas: 10:30"
