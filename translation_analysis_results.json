@@ -1,0 +1,1774 @@
+{
+  "translation_en_cz.json": {
+    "target_lang": "cs",
+    "label": "Tchèque (cs)",
+    "stats": {
+      "total_keys": 2531,
+      "empty_keys": 60,
+      "issues_found": 12,
+      "by_foreign_lang": {
+        "en": 12
+      }
+    },
+    "critique": [
+      {
+        "key": "MS A01_US00_04",
+        "value": "\"Role společnosti\". Datum_zahájení by mělo být vyšší nebo stejné jako \"Typ rolí společnosti\". Effective_From_Date.",
+        "source": "\"Company Role\".Start_Date should be superior or equal to \"Company Roles Type\".Effective_From_Date.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Effective",
+          "From"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Effective, From"
+      },
+      {
+        "key": "LO_DI_CL_2108",
+        "value": "⚠️ Upozornění! You are about to close the location \"{{locationId}} – {{usualName}}\".",
+        "source": "⚠️ Warning! You are about to close the location \"{{locationId}} – {{usualName}}\".",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "you",
+          "are",
+          "about",
+          "to",
+          "close",
+          "the"
+        ],
+        "explanation": "Texte probablement non traduit (ratio anglais 75%) : « ⚠️ Upozornění! You are about to close the location \"{{locationId}} – {{usualName}}\". »"
+      }
+    ],
+    "modere": [
+      {
+        "key": "PA_US_TA_679",
+        "value": "Upravte atribut Logistic Link",
+        "source": "Edit a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_TA_681",
+        "value": "Seznam atributů Logistic Link",
+        "source": "Logistic Link attribute list",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_TA_682",
+        "value": "Vytvořte atribut Logistic Link",
+        "source": "Create a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_TA_683",
+        "value": "Odstraňte atribut Logistic Link",
+        "source": "Delete a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1269",
+        "value": "Upravte atribut Logistic Link",
+        "source": "Edit a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1270",
+        "value": "Odstraňte atribut Logistic Link",
+        "source": "Delete a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1271",
+        "value": "Vytvořte atribut Logistic Link",
+        "source": "Create a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1272",
+        "value": "Seznam atributů Logistic Link",
+        "source": "Logistic Link attribute list",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1349",
+        "value": "Parametr - Atribut Logistic Link",
+        "source": "Parameter - Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS A01_US00_05",
+        "value": "\"Role společnosti\". Datum_ukončení by mělo být menší nebo stejné jako \"Typ rolí společnosti\". Effective_to_Date.",
+        "source": "\"Company Role\".End_Date should be less or equal to \"Company Roles Type\".Effective_to_Date.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Effective"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Effective"
+      }
+    ],
+    "mineur": []
+  },
+  "translation_en_de.json": {
+    "target_lang": "de",
+    "label": "Allemand (de)",
+    "stats": {
+      "total_keys": 2531,
+      "empty_keys": 60,
+      "issues_found": 38,
+      "by_foreign_lang": {
+        "en": 38
+      }
+    },
+    "critique": [
+      {
+        "key": "MS A01_US00_04",
+        "value": "„Company Role“.Start_Date sollte größer oder gleich „Company Roles Type“.Effective_From_Date sein.",
+        "source": "\"Company Role\".Start_Date should be superior or equal to \"Company Roles Type\".Effective_From_Date.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Start",
+          "Effective",
+          "From"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Start, Effective, From"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_139",
+        "value": "Are you sure you want to delete the Identifier? Diese Aktion ist irreversibel.",
+        "source": "Are you sure you want to delete the Identifier? This action is irreversible.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "want",
+          "delete"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : want, delete"
+      }
+    ],
+    "modere": [
+      {
+        "key": "Btn_Rollback",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "CO_CO_TA_173",
+        "value": "Bearbeiten Sie den Link",
+        "source": "Edit the link",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "LO_LO_PA_431",
+        "value": "Erstellen Sie einen Link",
+        "source": "Create a link",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "NE_BU_BU_534",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "PA_US_TA_681",
+        "value": "Liste der Logistik-Link-Attribute",
+        "source": "Logistic Link attribute list",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_TA_708",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "PA_US_TA_717",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "PA_US_TA_723",
+        "value": "Fügen Sie einen Link hinzu",
+        "source": "Add a link",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_TA_724",
+        "value": "Link bearbeiten",
+        "source": "Edit Link",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "NE_AC_AC_1000",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "NE_AC_ER_1024",
+        "value": "Kein Link zum Quellort.",
+        "source": "No link with the source location.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_LO_HE_1100",
+        "value": "Logistik-Link-Attribute",
+        "source": "Logistic link attributes",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "LO_AF_SE_1321",
+        "value": "Definieren Sie das Start- und Enddatum für den Gültigkeitszeitraum.",
+        "source": "Define the start and end dates for the validity period.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Start"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Start"
+      },
+      {
+        "key": "LO_AF_SE_1326",
+        "value": "Über diesen Link können Sie eine gemeinsame Animationsstrategie definieren und Aktivitäten im gesamten Unternehmen koordinieren.",
+        "source": "This link will allow you to define a shared animation strategy and coordinate activities across the company.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1184",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "PA_US_US_1272",
+        "value": "Liste der Logistik-Link-Attribute",
+        "source": "Logistic Link attribute list",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1349",
+        "value": "Parameter – Logistik-Link-Attribut",
+        "source": "Parameter - Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS A01_US00_05",
+        "value": "„Company Role“.End_Date sollte kleiner oder gleich „Company Roles Type“.Effective_to_Date sein.",
+        "source": "\"Company Role\".End_Date should be less or equal to \"Company Roles Type\".Effective_to_Date.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Effective"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Effective"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_2",
+        "value": "Es gibt bereits einen After-Sales-Animationslink",
+        "source": "There is already an After Sales Animation Link",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "After"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : After"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_68",
+        "value": "Logistik-Link aktualisiert",
+        "source": "Logistic Link Updated",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_98",
+        "value": "Das Logistik-Link-Attribut {{name}} wurde erfolgreich aktualisiert",
+        "source": "The Logistic Link Attribute {{name}} has been successfully updated",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_99",
+        "value": "Das Logistik-Link-Attribut {{name}} wurde erfolgreich erstellt",
+        "source": "The Logistic Link Attribute {{name}} has been successfully created",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_105",
+        "value": "Die After-Sales-Animationsverknüpfung zwischen Standorten wurde erfolgreich aktualisiert",
+        "source": "The After Sales Animation link between Locations has been successfully updated",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "After"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : After"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_259",
+        "value": "Mit diesem Standort ist derzeit kein aktiver Logistik-Link verknüpft. Daher ist das Erstellen eines Animationslinks nicht möglich.",
+        "source": "No active Logistics Link is currently associated with this Location. Therefore, creating Animation link is not possible.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS_INTERNAL_INFO_001",
+        "value": "Dieser Link existiert bereits",
+        "source": "This link already exists",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS_BE_ME_014",
+        "value": "Dieser Link existiert bereits",
+        "source": "This link already exists",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS_BE_ME_015",
+        "value": "Es besteht bereits eine After-Sales-Animationsverknüpfung zwischen Standorten mit neuem Gültigkeitsstartdatum und neuem Gültigkeitsenddatum zwischen dem alten Gültigkeitsstartdatum und dem alten Gültigkeitsenddatum",
+        "source": "There is already an After Sales Animation Link between Locations with new Validity Start Date and new Validity End Date between old Validity Start Date and old Validity End Date ",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "After"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : After"
+      },
+      {
+        "key": "MS_BE_ME_021",
+        "value": "Der Name des Logistic Link-Attributs ist bereits vorhanden",
+        "source": "The Logistic Link Attribute Name already exists",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS_BE_ME_050",
+        "value": "Diese Linkänderung kann nicht angewendet werden, da sich die ausgewählten Daten mit einem vorhandenen Link überschneiden. Bitte wählen Sie einen Datumsbereich aus, der sich nicht mit aktiven Links überschneidet.",
+        "source": "This link modification cannot be applied because the selected dates overlap with an existing link. Please choose a date range that does not intersect with any active links.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_160",
+        "value": "Der Austausch ist nicht möglich, da derselbe Link mehrmals vorhanden ist",
+        "source": "Unable to Swap as the same link exists multiple times",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_176",
+        "value": "Dieser Link ist archiviert",
+        "source": "This link is archived",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "LO_LI_SU_1884",
+        "value": "Über diesen Link können Sie eine gemeinsame Logistikstrategie definieren und Aktivitäten im gesamten Unternehmen koordinieren.",
+        "source": "This link will allow you to define a shared Logistic strategy and coordinate activities across the company.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "LO_LI_DE_1886",
+        "value": "Über diesen Link können Sie die Logistikstrategie ausrichten und die Abläufe zwischen Standorten koordinieren.",
+        "source": "This link allows you to align logistics strategy and coordinate flows between locations.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "LO_LI_DE_1888",
+        "value": "Über diesen Link können Sie eine gemeinsame Werbestrategie definieren und Aktivitäten zwischen den Standorten koordinieren. Standardmäßig ist es für die Finanzkonsolidierung verantwortlich.",
+        "source": "This link will enable you to define a joint promotion strategy and coordinate activities between the locations. By default, it will be responsible for financial consolidation.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "LO_AD_CR_1915",
+        "value": "Wenn die DMS-Kennung primär ist, werden ihre Daten für den Link verwendet.",
+        "source": "When the DMS identifier is primary, its dates are used for the link.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_CR_DE_2033",
+        "value": "Geben Sie das Start- und (falls zutreffend) Enddatum des Rollentyps an",
+        "source": "Specify the start and (if applicable) end date of the role type",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Start"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Start"
+      }
+    ],
+    "mineur": []
+  },
+  "translation_en_fr.json": {
+    "target_lang": "fr",
+    "label": "Français (fr)",
+    "stats": {
+      "total_keys": 2531,
+      "empty_keys": 60,
+      "issues_found": 2,
+      "by_foreign_lang": {
+        "en": 2
+      }
+    },
+    "critique": [
+      {
+        "key": "MS A01_US00_04",
+        "value": "\"Company Role\".Start_Date doit être supérieur ou égal à \"Company Roles Type\".Effective_From_Date.",
+        "source": "\"Company Role\".Start_Date should be superior or equal to \"Company Roles Type\".Effective_From_Date.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Start",
+          "Effective",
+          "From"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Start, Effective, From"
+      }
+    ],
+    "modere": [
+      {
+        "key": "MS A01_US00_05",
+        "value": "\"Company Role\".End_Date doit être inférieur ou égal à \"Company Roles Type\".Effective_to_Date.",
+        "source": "\"Company Role\".End_Date should be less or equal to \"Company Roles Type\".Effective_to_Date.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Effective"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Effective"
+      }
+    ],
+    "mineur": []
+  },
+  "translation_en_it.json": {
+    "target_lang": "it",
+    "label": "Italien (it)",
+    "stats": {
+      "total_keys": 2531,
+      "empty_keys": 60,
+      "issues_found": 8,
+      "by_foreign_lang": {
+        "en": 8
+      }
+    },
+    "critique": [],
+    "modere": [
+      {
+        "key": "Btn_Rollback",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "NE_BU_BU_534",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "PA_US_TA_708",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "PA_US_TA_717",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "NE_AC_AC_1000",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "PA_US_US_1184",
+        "value": "Rollback",
+        "source": "Rollback",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Rollback"
+      },
+      {
+        "key": "MS A01_US00_05",
+        "value": "\"Ruolo aziendale\".End_Date deve essere inferiore o uguale a \"Tipo ruoli aziendali\".Effective_to_Date.",
+        "source": "\"Company Role\".End_Date should be less or equal to \"Company Roles Type\".Effective_to_Date.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Effective"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Effective"
+      },
+      {
+        "key": "NE_CL_TA_1759",
+        "value": "Stai per chiudere tutti i collegamenti selezionati. Questa azione avrà effetto immediato ma può essere annullata utilizzando il rollback.",
+        "source": "You are about to close all selected links. This action will take effect immediately but can be reversed using the rollback.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "rollback"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : rollback"
+      }
+    ],
+    "mineur": []
+  },
+  "translation_en_sk.json": {
+    "target_lang": "sk",
+    "label": "Slovaque (sk)",
+    "stats": {
+      "total_keys": 2531,
+      "empty_keys": 60,
+      "issues_found": 9,
+      "by_foreign_lang": {
+        "en": 9
+      }
+    },
+    "critique": [
+      {
+        "key": "MS A01_US00_04",
+        "value": "\"Company Role\". Start_Date by mal byť vyšší alebo rovný \"Company Roles Type\". Effective_From_Date.",
+        "source": "\"Company Role\".Start_Date should be superior or equal to \"Company Roles Type\".Effective_From_Date.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Start",
+          "Effective",
+          "From"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Start, Effective, From"
+      }
+    ],
+    "modere": [
+      {
+        "key": "PA_US_TA_679",
+        "value": "Upravte atribút Logistic Link",
+        "source": "Edit a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_TA_682",
+        "value": "Vytvorte atribút Logistic Link",
+        "source": "Create a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_TA_683",
+        "value": "Odstráňte atribút Logistic Link",
+        "source": "Delete a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1269",
+        "value": "Upravte atribút Logistic Link",
+        "source": "Edit a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1270",
+        "value": "Odstráňte atribút Logistic Link",
+        "source": "Delete a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1271",
+        "value": "Vytvorte atribút Logistic Link",
+        "source": "Create a Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "PA_US_US_1349",
+        "value": "Parameter – atribút Logistic Link",
+        "source": "Parameter - Logistic Link attribute",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Link"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Link"
+      },
+      {
+        "key": "MS A01_US00_05",
+        "value": "\"Company Role\".End_Date by mal byť menší alebo rovný \"Company Roles Type\".Effective_to_Date.",
+        "source": "\"Company Role\".End_Date should be less or equal to \"Company Roles Type\".Effective_to_Date.",
+        "foreign_lang": "en",
+        "foreign_words": [
+          "Effective"
+        ],
+        "explanation": "Mots probablement non traduits de l'anglais : Effective"
+      }
+    ],
+    "mineur": []
+  },
+  "translation_en_ar.json": {
+    "target_lang": "ar",
+    "label": "Arabe (ar)",
+    "stats": {
+      "total_keys": 2531,
+      "empty_keys": 60,
+      "issues_found": 93,
+      "by_foreign_lang": {
+        "latin": 93
+      }
+    },
+    "critique": [
+      {
+        "key": "LO_LO_HE_369",
+        "value": "معرف COP، معرف Tresor، رمز APE، إلخ.",
+        "source": "COP ID, Tresor ID, APE code, etc.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "COP،",
+          "Tresor،",
+          "APE،"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : COP،, Tresor،, APE،"
+      }
+    ],
+    "modere": [
+      {
+        "key": "OR_VI_TA_70",
+        "value": "سيؤدي هذا الإجراء إلى إزالة \"{{companyName}}\" من مؤسستك. هل أنت متأكد أنك تريد المتابعة؟",
+        "source": "This action will remove the \"{{companyName}}\" from your organization. Are you sure you want to proceed?",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "companyName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : companyName"
+      },
+      {
+        "key": "LO_LO_HE_369",
+        "value": "معرف COP، معرف Tresor، رمز APE، إلخ.",
+        "source": "COP ID, Tresor ID, APE code, etc.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Tresor"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Tresor"
+      },
+      {
+        "key": "NE_LO_LO_565",
+        "value": "قائمة نقل Usecase اللوجستية",
+        "source": "Logistic Usecase Transfer List",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Usecase"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Usecase"
+      },
+      {
+        "key": "NE_LO_LO_565",
+        "value": "قائمة نقل Usecase اللوجستية",
+        "source": "Logistic Usecase Transfer List",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Usecase"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Usecase"
+      },
+      {
+        "key": "PA_CO_VI_850",
+        "value": "نوع دور ActionUpdate {backend}.",
+        "source": "ActionUpdate {backend} role type",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "ActionUpdate",
+          "backend"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : ActionUpdate, backend"
+      },
+      {
+        "key": "PA_CO_VI_850",
+        "value": "نوع دور ActionUpdate {backend}.",
+        "source": "ActionUpdate {backend} role type",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "ActionUpdate",
+          "backend"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : ActionUpdate, backend"
+      },
+      {
+        "key": "NE_AC_LO_1006",
+        "value": "معرف DSM الجديد",
+        "source": "New DSM ID",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "DSM"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : DSM"
+      },
+      {
+        "key": "NE_AC_LO_1006",
+        "value": "معرف DSM الجديد",
+        "source": "New DSM ID",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "DSM"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : DSM"
+      },
+      {
+        "key": "LO_AF_PO_1294",
+        "value": "ابحث عن شركة حسب معرف COP، والاسم القانوني، وSIREN، ورقم SIRET وحدد الموقع الصحيح.",
+        "source": "Search for a company by ID COP, Legal name, SIREN, SIRET number and select the right location.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "COP،",
+          "وSIREN،"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : COP،, وSIREN،"
+      },
+      {
+        "key": "LO_AF_SE_1317",
+        "value": "أدخل الرمز الفريد الذي تم إنشاؤه بواسطة نظام Tier1 DMS للتعرف على الشريك",
+        "source": "Enter the unique code generated by the Tier1 DMS system to identifiy the partner",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Tier"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Tier"
+      },
+      {
+        "key": "LO_AF_SE_1317",
+        "value": "أدخل الرمز الفريد الذي تم إنشاؤه بواسطة نظام Tier1 DMS للتعرف على الشريك",
+        "source": "Enter the unique code generated by the Tier1 DMS system to identifiy the partner",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Tier"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Tier"
+      },
+      {
+        "key": "LO_AF_PO_1156",
+        "value": "ابحث عن شركة حسب معرف COP، والاسم القانوني، وSIREN، ورقم SIRET وحدد الموقع الصحيح.",
+        "source": "Search for a company by ID COP, Legal name, SIREN, SIRET number and select the right location.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "COP،",
+          "وSIREN،"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : COP،, وSIREN،"
+      },
+      {
+        "key": "PA_US_US_1222",
+        "value": "نقل UC اللوجستي",
+        "source": "Logistic UC Transfer",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "UC"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : UC"
+      },
+      {
+        "key": "PA_US_US_1341",
+        "value": "نقل UC اللوجستي",
+        "source": "Logistic UC Transfer",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "UC"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : UC"
+      },
+      {
+        "key": "PA_US_PA_1383",
+        "value": "ابحث عن شركة حسب الاسم القانوني وSIREN ورقم SIRET وحدد الموقع الصحيح.",
+        "source": "Search for a company by Legal name, SIREN, SIRET number and select the right location.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "وSIREN"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : وSIREN"
+      },
+      {
+        "key": "LO_ED_HE_1463",
+        "value": "تعديل موقع SV AUTOMOBILES",
+        "source": "Edit SV AUTOMOBILES location",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "AUTOMOBILES"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : AUTOMOBILES"
+      },
+      {
+        "key": "LO_ED_HE_1463",
+        "value": "تعديل موقع SV AUTOMOBILES",
+        "source": "Edit SV AUTOMOBILES location",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "SV",
+          "AUTOMOBILES"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : SV, AUTOMOBILES"
+      },
+      {
+        "key": "LO_ED_LA_1471",
+        "value": "وضح ما إذا كان هذا الموقع ينتمي إلى مجموعة Renault.",
+        "source": "Indicate whether this location belongs to the Renault Group.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Renault"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Renault"
+      },
+      {
+        "key": "LO_ED_LA_1471",
+        "value": "وضح ما إذا كان هذا الموقع ينتمي إلى مجموعة Renault.",
+        "source": "Indicate whether this location belongs to the Renault Group.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Renault"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Renault"
+      },
+      {
+        "key": "MS A01_US00_04",
+        "value": "\"دور الشركة\". يجب أن يكون تاريخ_البدء أعلى أو مساويًا لـ \"نوع أدوار الشركة\".Effective_From_Date.",
+        "source": "\"Company Role\".Start_Date should be superior or equal to \"Company Roles Type\".Effective_From_Date.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Effective",
+          "From"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Effective, From"
+      },
+      {
+        "key": "MS A01_US00_04",
+        "value": "\"دور الشركة\". يجب أن يكون تاريخ_البدء أعلى أو مساويًا لـ \"نوع أدوار الشركة\".Effective_From_Date.",
+        "source": "\"Company Role\".Start_Date should be superior or equal to \"Company Roles Type\".Effective_From_Date.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Effective",
+          "From"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Effective, From"
+      },
+      {
+        "key": "MS A01_US00_T02_01",
+        "value": "الموقع ذو المعرف القانوني \"{{legalIdentifier}}\" موجود بالفعل في COP، هل تريد فتح هذا الموقع؟",
+        "source": "The Location with legal identifier \"{{legalIdentifier}}\" already exists in COP, do you want to open this Location ?",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "legalIdentifier"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : legalIdentifier"
+      },
+      {
+        "key": "MS A01_US00_T02_01",
+        "value": "الموقع ذو المعرف القانوني \"{{legalIdentifier}}\" موجود بالفعل في COP، هل تريد فتح هذا الموقع؟",
+        "source": "The Location with legal identifier \"{{legalIdentifier}}\" already exists in COP, do you want to open this Location ?",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "COP،"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : COP،"
+      },
+      {
+        "key": "MS A03_US00_02",
+        "value": "الموقع ذو المعرف القانوني \"{{legal identifier}}\" موجود بالفعل في COP، هل تريد فتح هذا الموقع؟",
+        "source": "The Location with legal identifier \"{{legal identifier}}\" already exists in COP, do you want to open this Location ?",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "COP،"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : COP،"
+      },
+      {
+        "key": "MS A03_US00_03",
+        "value": "الموقع موجود بالفعل في RFS: ID COP، هل تريد فتح هذا الموقع؟",
+        "source": "The Location already exists in RFS : ID COP, do you want to open this Location ?",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "RFS"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : RFS"
+      },
+      {
+        "key": "MS A03_US00_03",
+        "value": "الموقع موجود بالفعل في RFS: ID COP، هل تريد فتح هذا الموقع؟",
+        "source": "The Location already exists in RFS : ID COP, do you want to open this Location ?",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "RFS",
+          "COP،"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : RFS, COP،"
+      },
+      {
+        "key": "MS A03_US00_04",
+        "value": "RFS غير قابل للوصول.",
+        "source": "RFS not Reachable.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "RFS"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : RFS"
+      },
+      {
+        "key": "MS A03_US00_04",
+        "value": "RFS غير قابل للوصول.",
+        "source": "RFS not Reachable.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "RFS"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : RFS"
+      },
+      {
+        "key": "MS A03_US00_T03_01",
+        "value": "تم ربط الموقع \"{{locationName}}\" بنجاح بالشركة \"{{companyName}}\".",
+        "source": "The Location \"{{locationName}}\" has been successfully linked to the Company \"{{companyName}}\".",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "locationName",
+          "companyName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : locationName, companyName"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_7",
+        "value": "تم حفظ السياق المفضل {{selectedContext}} بنجاح.",
+        "source": "Preferred Context {{selectedContext}} saved successfully.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "selectedContext"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : selectedContext"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_14",
+        "value": "COPID المقدم غير متوفر",
+        "source": "Provided COPID is not available",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "COPID"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : COPID"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_14",
+        "value": "COPID المقدم غير متوفر",
+        "source": "Provided COPID is not available",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "COPID"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : COPID"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_29",
+        "value": "السياق المقدم هو المنطقة ولكن الكائن المعين ليس من النوع Commercial Hub",
+        "source": "Provided context is territory but the assigned object is not of type Commercial Hub",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Hub"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Hub"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_29",
+        "value": "السياق المقدم هو المنطقة ولكن الكائن المعين ليس من النوع Commercial Hub",
+        "source": "Provided context is territory but the assigned object is not of type Commercial Hub",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Hub"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Hub"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_38",
+        "value": "لا توجد شركة تاجر مرتبطة بـ Commercial Hub",
+        "source": "No existing dealer company link to Commercial Hub",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Hub"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Hub"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_38",
+        "value": "لا توجد شركة تاجر مرتبطة بـ Commercial Hub",
+        "source": "No existing dealer company link to Commercial Hub",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Hub"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Hub"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_97",
+        "value": "لقد تم التراجع عن Transfser الأعمال بنجاح",
+        "source": "Business Tranfser Has Rollbacked Successfully",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Transfser"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Transfser"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_97",
+        "value": "لقد تم التراجع عن Transfser الأعمال بنجاح",
+        "source": "Business Tranfser Has Rollbacked Successfully",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Transfser"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Transfser"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_221",
+        "value": "فشل Siren API، يرجى الإنشاء يدويًا.",
+        "source": "Siren API fails, please create manually.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "API،"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : API،"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_241",
+        "value": "مجموعة العقدة الأصلية '{{parentName}}' والعقدة الفرعية '{{childName}}' موجودة بالفعل.",
+        "source": "Parent node '{{parentName}}' and child node '{{childName}}' combination already exists.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "parentName",
+          "childName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : parentName, childName"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_242",
+        "value": "لا يمكن إنشاء الارتباط مع R2 كأصل وR3 كطفل لدولة فرنسا",
+        "source": "Link with R2 as Parent and R3 as child cannot be created for France country",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "وR"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : وR"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_243",
+        "value": "قيمة معرف الشركة <strong> {{companyIdentifierValue}} </strong> مرتبطة بالفعل بالشركة <strong>{{companyCopId}} - {{companyLegalName}}</strong>.",
+        "source": "The Company Identifier Value <strong> {{companyIdentifierValue}} </strong> is already linked to the Company <strong>{{companyCopId}} - {{companyLegalName}}</strong>.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "companyIdentifierValue",
+          "companyCopId",
+          "companyLegalName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : companyIdentifierValue, companyCopId, companyLegalName"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_244",
+        "value": "قيمة معرف الموقع <strong> {{locationIdentifierValue}} </strong> مرتبطة بالفعل بالموقع <strong>{{locationCopId}} - {{locationLegalName}}</strong>.",
+        "source": "The Location Identifier Value <strong> {{locationIdentifierValue}} </strong> is already linked to the Location <strong>{{locationCopId}} - {{locationLegalName}}</strong>.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "locationIdentifierValue",
+          "locationCopId",
+          "locationLegalName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : locationIdentifierValue, locationCopId, locationLegalName"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_245",
+        "value": "قيمة معرف المنظمة <strong> {{organizationIdentifierValue}} </strong> مرتبطة بالفعل بالمؤسسة <strong>{{organizationCopId}} - {{organizationLabel}}</strong>.",
+        "source": "The Organization Identifier Value <strong> {{organizationIdentifierValue}} </strong> is already linked to the Organization <strong>{{organizationCopId}} - {{organizationLabel}}</strong>.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "organizationIdentifierValue",
+          "organizationCopId",
+          "organizationLabel"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : organizationIdentifierValue, organizationCopId, organizationLabel"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_246",
+        "value": "المعرف القانوني <strong> {{legalIdentifierValue}} </strong> مرتبط بالفعل بالموقع <strong>{{locationCopId}} - {{locationLegalName}}</strong>.",
+        "source": "The Legal identifier <strong> {{legalIdentifierValue}} </strong> is already linked to the Location <strong>{{locationCopId}} - {{locationLegalName}}</strong>.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "legalIdentifierValue",
+          "locationCopId",
+          "locationLegalName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : legalIdentifierValue, locationCopId, locationLegalName"
+      },
+      {
+        "key": "MS_A01_US00_02",
+        "value": "المعرف القانوني <strong> {{legalIdentifierValue}} </strong> مرتبط بالفعل بالشركة <strong>{{companyCopId}} - {{companyLegalName}}</strong>.",
+        "source": "The Legal identifier <strong> {{legalIdentifierValue}} </strong> is already linked to the Company <strong>{{companyCopId}} - {{companyLegalName}}</strong>.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "legalIdentifierValue",
+          "companyCopId",
+          "companyLegalName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : legalIdentifierValue, companyCopId, companyLegalName"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_247",
+        "value": "تم ربط {{idType}} <strong> {{tresorId}} </strong> بالفعل بالموقع <strong>{{locationId}}</strong>، حيث هو مغلق حاليًا. إذا قمت بالتأكيد، فستتم إزالته من هذا الموقع وإعادة تعيينه هنا.",
+        "source": "The {{idType}} <strong> {{tresorId}} </strong> is already linked to the Location <strong>{{locationId}}</strong>, where it is currently closed. If you confirm, it will be removed from that Location and reassigned here.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "idType",
+          "tresorId",
+          "locationId"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : idType, tresorId, locationId"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_248",
+        "value": "إن {{idType}} <strong> {{tresorId}} </strong> مرتبط بالفعل بالشركة <strong>{{companyId}}</strong>، حيث هو مغلق حاليًا. إذا قمت بالتأكيد، فستتم إزالته من تلك الشركة وإعادة تعيينه هنا.",
+        "source": "The {{idType}} <strong> {{tresorId}} </strong> is already linked to the Company <strong>{{companyId}}</strong>, where it is currently closed. If you confirm, it will be removed from that Company and reassigned here.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "idType",
+          "tresorId",
+          "companyId"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : idType, tresorId, companyId"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_249",
+        "value": "تم ربط {{idType}} <strong> {{tresorId}} </strong> بالفعل بالمؤسسة <strong>{{organizationId}}</strong>، حيث تم إغلاقه حاليًا. إذا قمت بالتأكيد، فستتم إزالته من تلك المؤسسة وإعادة تعيينه هنا.",
+        "source": "The {{idType}} <strong> {{tresorId}} </strong> is already linked to the Organization <strong>{{organizationId}}</strong>, where it is currently closed. If you confirm, it will be removed from that Organization and reassigned here.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "idType",
+          "tresorId",
+          "organizationId"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : idType, tresorId, organizationId"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_258",
+        "value": "رمز DMS <strong> {{dmdCode}} </strong> مستخدم بالفعل بواسطة موقع R1 <strong>{{locationId}} </strong>.",
+        "source": "The DMS Code <strong> {{dmdCode}} </strong> is already used by R1 Location <strong>{{locationId}} </strong>.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "dmdCode",
+          "locationId"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : dmdCode, locationId"
+      },
+      {
+        "key": "MS_INTERNAL_INFO_004",
+        "value": "الشركة موجودة بالفعل في النظام بمعرف الشركة: {{companyId}}",
+        "source": "Company already exists in the system with Company ID: {{companyId}}",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "companyId"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : companyId"
+      },
+      {
+        "key": "PROVIDED COPID IS NOT AVAILABLE",
+        "value": "COPID المقدم غير متوفر",
+        "source": "Provided COPID is not available",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "COPID"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : COPID"
+      },
+      {
+        "key": "PROVIDED COPID IS NOT AVAILABLE",
+        "value": "COPID المقدم غير متوفر",
+        "source": "Provided COPID is not available",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "COPID"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : COPID"
+      },
+      {
+        "key": "LANGUAGE_PREFERENCE_SUCCESS",
+        "value": "تم حفظ لغتك المفضلة {{language}} بنجاح",
+        "source": "Your preferred language {{language}} saved successfully",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "language"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : language"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_271",
+        "value": "تم إعادة فتح الموقع <strong>{{locationId}} - {{locationName}}</strong> بنجاح.",
+        "source": "The Location <strong>{{locationId}} - {{locationName}}</strong> has been re-opened successfully.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "locationId",
+          "locationName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : locationId, locationName"
+      },
+      {
+        "key": "MS_BE_ME_035",
+        "value": "السياق المقدم هو المنطقة ولكن الكائن المعين ليس من النوع Commercial Hub",
+        "source": "Provided context is territory but the assigned object is not of type Commercial Hub",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Hub"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Hub"
+      },
+      {
+        "key": "MS_BE_ME_035",
+        "value": "السياق المقدم هو المنطقة ولكن الكائن المعين ليس من النوع Commercial Hub",
+        "source": "Provided context is territory but the assigned object is not of type Commercial Hub",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Hub"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Hub"
+      },
+      {
+        "key": "MS_BE_ME_045",
+        "value": "وحدة Orga هذه مرتبطة بالفعل بهذا الموقع.",
+        "source": "This Orga Unit is Already Linked to this Location.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Orga"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Orga"
+      },
+      {
+        "key": "MS_BE_ME_045",
+        "value": "وحدة Orga هذه مرتبطة بالفعل بهذا الموقع.",
+        "source": "This Orga Unit is Already Linked to this Location.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Orga"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Orga"
+      },
+      {
+        "key": "MS_BE_ME_046",
+        "value": "وحدة Orga هذه مرتبطة بالفعل بموقع آخر.",
+        "source": "This Orga Unit is Already Linked to other Location.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Orga"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Orga"
+      },
+      {
+        "key": "MS_BE_ME_046",
+        "value": "وحدة Orga هذه مرتبطة بالفعل بموقع آخر.",
+        "source": "This Orga Unit is Already Linked to other Location.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Orga"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Orga"
+      },
+      {
+        "key": "PA_NE_HI_1439",
+        "value": "ابحث عن شركة Renault التابعة المسؤولة عن إدارة هذا التسلسل الهرمي.",
+        "source": "Search for the Renault subsidiary responsible for managing this hierarchy.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Renault"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Renault"
+      },
+      {
+        "key": "PA_NE_HI_1439",
+        "value": "ابحث عن شركة Renault التابعة المسؤولة عن إدارة هذا التسلسل الهرمي.",
+        "source": "Search for the Renault subsidiary responsible for managing this hierarchy.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Renault"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Renault"
+      },
+      {
+        "key": "CO_AD_SU_1512",
+        "value": "ابحث في السجل الرسمي لـ COP وINSEE",
+        "source": "Search in COP and INSEE official registry",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "وINSEE"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : وINSEE"
+      },
+      {
+        "key": "CO_AD_IN_1515",
+        "value": "<strong>المصادر:</strong> <br /> يغطي بحثك البيانات الرسمية لـ COP وINSEE.",
+        "source": "<strong>Sources:</strong> <br /> Your search covers COP and INSEE official data.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "وINSEE"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : وINSEE"
+      },
+      {
+        "key": "CO_AD_SU_1537",
+        "value": "تم اكتشاف {{locationCount}} من المواقع ({{alreadyInCOP}} موجود بالفعل في COP، {{toAdd}} للإضافة)",
+        "source": "{{locationCount}} locations detected ({{alreadyInCOP}} already in COP, {{toAdd}} to add)",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "locationCount",
+          "alreadyInCOP",
+          "toAdd"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : locationCount, alreadyInCOP, toAdd"
+      },
+      {
+        "key": "CO_AD_SU_1537",
+        "value": "تم اكتشاف {{locationCount}} من المواقع ({{alreadyInCOP}} موجود بالفعل في COP، {{toAdd}} للإضافة)",
+        "source": "{{locationCount}} locations detected ({{alreadyInCOP}} already in COP, {{toAdd}} to add)",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "COP،"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : COP،"
+      },
+      {
+        "key": "CO_AD_HE_1547",
+        "value": "الاكتمال: {{completed}}/{{total}} المواقع المحددة جاهزة.",
+        "source": "Completion: {{completed}}/{{total}} selected locations ready.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "completed"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : completed"
+      },
+      {
+        "key": "CO_AD_RE_1557",
+        "value": "البحث في COP وINSEE... قد يستغرق هذا بضع ثوانٍ",
+        "source": "Searching in COP and INSEE... This may take a few seconds",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "وINSEE"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : وINSEE"
+      },
+      {
+        "key": "CO_AD_RE_1559",
+        "value": "لقد بحثنا في COP وINSEE عن SIREN/SIRET",
+        "source": "We searched COP and INSEE for SIREN/SIRET",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "وINSEE"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : وINSEE"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_132",
+        "value": "{{message}}",
+        "source": "{{message}}",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "message"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : message"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_134",
+        "value": "تم ربط الشركة '{{companyName}}' بنجاح بالوحدة التنظيمية '{{orgaUnitLabel}}'.",
+        "source": "The Company '{{companyName}}' has been successfully linked to the organizational unit '{{orgaUnitLabel}}'.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "companyName",
+          "orgaUnitLabel"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : companyName, orgaUnitLabel"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_135",
+        "value": "تمت إزالة الشركة \"{{companyName}}\" بنجاح من الوحدة التنظيمية \"{{orgaUnitLabel}}\".",
+        "source": "The Company '{{companyName}}' has been successfully removed from the organizational unit '{{orgaUnitLabel}}'.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "companyName",
+          "orgaUnitLabel"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : companyName, orgaUnitLabel"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_154",
+        "value": "لم يتم العثور على القسم \"${{sectionId}}\" أو لم يتم تحميله بعد",
+        "source": "Section \"${{sectionId}}\" not found or not loaded yet",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "sectionId"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : sectionId"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_156",
+        "value": "تم حفظ لغتك المفضلة {{selectedlanguage}} بنجاح",
+        "source": "Your preferred language {{selectedlanguage}} saved successfully",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "selectedlanguage"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : selectedlanguage"
+      },
+      {
+        "key": "MS_SUCCESS_ERROR_145",
+        "value": "التسلسل الهرمي '{{name}}' موجود بالفعل للبلد '{{country}}'.",
+        "source": "The Hierarchy '{{name}}' already exists for the Country '{{country}}'.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "country"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : country"
+      },
+      {
+        "key": "PA_DE_DE_1660",
+        "value": "أنت على وشك حذف نوع التجميع \"{{GroupingTypeName}}\". إذا كان هذا النوع مستخدمًا بالفعل من قبل مجموعة واحدة أو أكثر، فلن يكون الحذف ممكنًا. لا يمكن التراجع عن هذا الإجراء. هل أنت متأكد أنك تريد المتابعة؟",
+        "source": "You are about to delete the grouping type \"{{GroupingTypeName}}\". If this type is already used by one or more groups, deletion will not be possible. This action cannot be undone. Are you sure you want to proceed?",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "GroupingTypeName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : GroupingTypeName"
+      },
+      {
+        "key": "MS_A02_US00_03",
+        "value": "عند توفير PivotLocationId، يجب أن يكون موقع R1",
+        "source": "When pivotLocationId is provided, it should be an R1 location",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "PivotLocationId"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : PivotLocationId"
+      },
+      {
+        "key": "MS_A02_US00_03",
+        "value": "عند توفير PivotLocationId، يجب أن يكون موقع R1",
+        "source": "When pivotLocationId is provided, it should be an R1 location",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "PivotLocationId،"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : PivotLocationId،"
+      },
+      {
+        "key": "DA_TA_TI_1786",
+        "value": "Entites مع مكررة",
+        "source": "Entites with duplicated",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Entites"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : Entites"
+      },
+      {
+        "key": "DA_TA_TI_1786",
+        "value": "Entites مع مكررة",
+        "source": "Entites with duplicated",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "Entites"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : Entites"
+      },
+      {
+        "key": "DA_TA_TI_1787",
+        "value": "المواقع ذات معرف TRESOR المكرر",
+        "source": "Locations with duplicated TRESOR ID",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "TRESOR"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : TRESOR"
+      },
+      {
+        "key": "DA_TA_TI_1787",
+        "value": "المواقع ذات معرف TRESOR المكرر",
+        "source": "Locations with duplicated TRESOR ID",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "TRESOR"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : TRESOR"
+      },
+      {
+        "key": "PA_US_QA_1928",
+        "value": "معرف مكرر DMD",
+        "source": "Duplicate ID DMD",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "DMD"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : DMD"
+      },
+      {
+        "key": "PA_US_QA_1928",
+        "value": "معرف مكرر DMD",
+        "source": "Duplicate ID DMD",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "DMD"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : DMD"
+      },
+      {
+        "key": "PA_US_QA_1929",
+        "value": "معرف مكرر TRESOR",
+        "source": "Duplicate ID TRESOR",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "TRESOR"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : TRESOR"
+      },
+      {
+        "key": "PA_US_QA_1929",
+        "value": "معرف مكرر TRESOR",
+        "source": "Duplicate ID TRESOR",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "TRESOR"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : TRESOR"
+      },
+      {
+        "key": "MS A00_US07_T012 05",
+        "value": "لقد تم بالفعل ربط طبيعة الموقع {{locationNature}} بنوع دور الشركة {{companyRoleType}}.",
+        "source": "The Location Nature {{locationNature}} has already been linked to the Company Role Type {{companyRoleType}}.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "locationNature",
+          "companyRoleType"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : locationNature, companyRoleType"
+      },
+      {
+        "key": "MS A00_US07_T012 06",
+        "value": "لم يتم العثور على نوع دور الشركة {{companyRoleType}} مع طبيعة الموقع {{locationNature}}.",
+        "source": "The Company Role Type {{companyRoleType}} with the Location Nature {{locationNature}} is not found.",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "companyRoleType",
+          "locationNature"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : companyRoleType, locationNature"
+      },
+      {
+        "key": "LO_ED_LA_2072",
+        "value": "هل هذا الموقع هو موقع ZE؟",
+        "source": "Is this location a ZE location?",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "ZE؟"
+        ],
+        "explanation": "Mots en script latin dans un texte arabe : ZE؟"
+      },
+      {
+        "key": "CO_DI_CL_2081",
+        "value": "⚠️ تحذير! أنت على وشك إغلاق الشركة \"{{companyId}} – {{legalName}}\".",
+        "source": "⚠️ Warning! You are about to close the company \"{{companyId}} – {{legalName}}\".",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "companyId",
+          "legalName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : companyId, legalName"
+      },
+      {
+        "key": "LO_DI_CL_2108",
+        "value": "⚠️ تحذير! أنت على وشك إغلاق الموقع \"{{locationId}} – {{usualName}}\".",
+        "source": "⚠️ Warning! You are about to close the location \"{{locationId}} – {{usualName}}\".",
+        "foreign_lang": "latin",
+        "foreign_words": [
+          "locationId",
+          "usualName"
+        ],
+        "explanation": "Caractères latins dans un texte arabe : locationId, usualName"
+      }
+    ],
+    "mineur": []
+  }
+}
