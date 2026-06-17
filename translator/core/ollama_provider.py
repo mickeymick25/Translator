@@ -67,7 +67,7 @@ class OllamaProvider(TranslationProvider):
 
     def __init__(
         self,
-        model: str = "minimax-m2.7:cloud",
+        model: str = "minimax-m3:cloud",
         base_url: str = "http://localhost:11434",
         chunk_size: int = 50,
         max_retries: int = 2,

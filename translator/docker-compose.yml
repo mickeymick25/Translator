@@ -28,7 +28,7 @@ services:
       - DEEPL_USE_FREE_API=${DEEPL_USE_FREE_API:-true}
       - TRANSLATION_FALLBACK=${TRANSLATION_FALLBACK:-false}
       - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-minimax-m2.7:cloud}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-minimax-m3:cloud}
       - OLLAMA_CHUNK_SIZE=${OLLAMA_CHUNK_SIZE:-50}
       - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0}
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-300}

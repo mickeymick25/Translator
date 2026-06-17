@@ -84,7 +84,7 @@ class TestOllamaProviderBasics:
 
     def test_default_constructor(self):
         p = OllamaProvider()
-        assert p._model == "minimax-m2.7:cloud"
+        assert p._model == "minimax-m3:cloud"
         assert p._base_url == "http://localhost:11434"
         assert p._chunk_size == 50
         assert p._max_retries == 2

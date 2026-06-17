@@ -166,7 +166,7 @@ def create_provider(
     deepl_use_free_api: bool = True,
     fallback_enabled: bool = False,
     ollama_url: str = "http://localhost:11434",
-    ollama_model: str = "minimax-m2.7:cloud",
+    ollama_model: str = "minimax-m3:cloud",
     ollama_chunk_size: int = 50,
     ollama_temperature: float = 0,
     ollama_timeout: int = 300,

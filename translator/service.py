@@ -113,7 +113,7 @@ def _add_provider_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--ollama-model",
         default=None,
-        help="Modèle Ollama à utiliser (défaut: minimax-m2.7:cloud)",
+        help="Modèle Ollama à utiliser (défaut: minimax-m3:cloud)",
     )
     parser.add_argument(
         "--ollama-chunk-size",

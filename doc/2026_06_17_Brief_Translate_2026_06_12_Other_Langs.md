@@ -58,7 +58,7 @@ SOURCE_FILE=/app/source/2026_06_12_Import/en 7.json
 OUTPUT_DIR=/app/output
 TRANSLATION_PROVIDER=ollama
 TRANSLATION_CACHE=true
-OLLAMA_MODEL=minimax-m2.7:cloud
+OLLAMA_MODEL=minimax-m3:cloud
 
 docker compose -f docker-compose.yml run --rm \
   -e MODE=translate-json \
@@ -68,7 +68,7 @@ docker compose -f docker-compose.yml run --rm \
   -e OUTPUT_DIR=/app/output \
   -e TRANSLATION_PROVIDER=ollama \
   -e TRANSLATION_CACHE=true \
-  -e OLLAMA_MODEL=minimax-m2.7:cloud \
+  -e OLLAMA_MODEL=minimax-m3:cloud \
   translator
 ```
 
@@ -127,15 +127,15 @@ Vérifier qu'Ollama tourne sur le host avant de lancer la traduction :
 
 ```bash
 curl http://localhost:11434/api/tags
-# Doit retourner la liste des modèles, dont minimax-m2.7:cloud
+# Doit retourner la liste des modèles, dont minimax-m3:cloud
 ```
 
 Le `docker-compose.yml` inclut `extra_hosts: host.docker.internal:host-gateway` pour que le conteneur accède à Ollama sur le host.
 
 ### Modèle Ollama
 
-`minimax-m2.7:cloud` est le modèle recommandé (cf. `2026_05_13_Ollama_Provider_Study.md`) :
-- Plus rapide que `glm-5.1:cloud` (17.8s vs 93.5s pour 30 entrées FR)
+`minimax-m3:cloud` est le modèle recommandé depuis 17/06/2026 :
+- Plus rapide que `minimax-m2.7:cloud` (21.8s vs 22.5s FR, 12.3s vs 26.4s CZ)
 - 100% de complétude, 100% des placeholders préservés
 
 ### Réseau mobile

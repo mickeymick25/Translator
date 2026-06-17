@@ -50,7 +50,7 @@ docker compose run --rm lint
 | `BATCH_LANGS` | `en,fr,cz,sk,de,it,ar` | Langues batch |
 | `TRANSLATION_PROVIDER` | `google` | Provider : `google`, `deepl` ou `ollama` |
 | `OLLAMA_URL` | `http://host.docker.internal:11434` | URL serveur Ollama |
-| `OLLAMA_MODEL` | `minimax-m2.7:cloud` | Modèle Ollama |
+| `OLLAMA_MODEL` | `minimax-m3:cloud` | Modèle Ollama |
 | `OLLAMA_CHUNK_SIZE` | `50` | Entrées par chunk |
 | `OLLAMA_TEMPERATURE` | `0` | Température (0 = déterministe) |
 | `OLLAMA_TIMEOUT` | `300` | Timeout par chunk (s) |

@@ -230,7 +230,7 @@ class Config:
         default_factory=lambda: os.environ.get("OLLAMA_URL", "http://localhost:11434")
     )
     OLLAMA_MODEL: str = field(
-        default_factory=lambda: os.environ.get("OLLAMA_MODEL", "minimax-m2.7:cloud")
+        default_factory=lambda: os.environ.get("OLLAMA_MODEL", "minimax-m3:cloud")
     )
     OLLAMA_CHUNK_SIZE: str = field(
         default_factory=lambda: os.environ.get("OLLAMA_CHUNK_SIZE", "50")

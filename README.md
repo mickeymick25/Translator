@@ -131,7 +131,7 @@ SOURCE_LANG=en TARGET_LANG=fr docker compose -f translator/docker-compose.yml up
 # S'assurer qu'Ollama est lancé localement
 ollama serve
 
-# Traduction avec Ollama (modèle par défaut : minimax-m2.7:cloud)
+# Traduction avec Ollama (modèle par défaut : minimax-m3:cloud)
 TRANSLATION_PROVIDER=ollama docker compose -f translator/docker-compose.yml up --build
 
 # Avec un modèle spécifique
@@ -157,7 +157,7 @@ python translator/service.py translate-json --provider ollama -s en -t fr -i sou
 
 # Options Ollama
 python translator/service.py translate-json --provider ollama \
-  --ollama-model minimax-m2.7:cloud \
+  --ollama-model minimax-m3:cloud \
   --ollama-chunk-size 50 \
   --ollama-temperature 0 \
   --ollama-timeout 300 \
@@ -255,7 +255,7 @@ graph TD
 | Variable | Défaut | Description |
 |----------|--------|-------------|
 | `OLLAMA_URL` | `http://localhost:11434` | URL du serveur Ollama (`http://host.docker.internal:11434` en Docker) |
-| `OLLAMA_MODEL` | `minimax-m2.7:cloud` | Modèle à utiliser |
+| `OLLAMA_MODEL` | `minimax-m3:cloud` | Modèle à utiliser |
 | `OLLAMA_CHUNK_SIZE` | `50` | Taille des chunks (entrées par requête) |
 | `OLLAMA_TEMPERATURE` | `0` | Température du modèle (0 = déterministe) |
 | `OLLAMA_TIMEOUT` | `300` | Timeout par chunk en secondes |
@@ -265,12 +265,14 @@ graph TD
 
 | Modèle | Langue | Temps | JSON | Complétude | Placeholders | Fallbacks |
 |--------|--------|-------|------|------------|-------------|-----------|
+| `minimax-m3:cloud` | FR | 21.8s | ✅ | 100% | 15/15 (100%) | 0 |
+| `minimax-m3:cloud` | CZ | 12.3s | ✅ | 100% | 15/15 (100%) | 0 |
 | `minimax-m2.7:cloud` | FR | 17.8s | ✅ | 100% | 15/15 (100%) | 0 |
 | `minimax-m2.7:cloud` | CZ | 23.1s | ✅ | 100% | 15/15 (100%) | 0 |
 | `glm-5.1:cloud` | FR | 93.5s | ✅ | 100% | 15/15 (100%) | 0 |
 | `glm-5.1:cloud` | CZ | 56.9s | ✅ | 100% | 15/15 (100%) | 0 |
 
-> **Recommandation :** `minimax-m2.7:cloud` — même qualité, 3-5x plus rapide. Modèles locaux (`qwen3`) nécessitent ≥8 GB RAM.
+> **Recommandation :** `minimax-m3:cloud` — défaut depuis 17/06/2026, plus rapide et plus stable. Modèles locaux (`qwen3`) nécessitent ≥8 GB RAM.
 
 ### Retry intelligent
 
@@ -347,7 +349,7 @@ Le rate limiter gère automatiquement les limites de l'API Google Translate :
 | `DEEPL_USE_FREE_API` | `true` | API gratuite DeepL |
 | `TRANSLATION_FALLBACK` | `false` | Fallback automatique |
 | `OLLAMA_URL` | `http://localhost:11434` | URL du serveur Ollama |
-| `OLLAMA_MODEL` | `minimax-m2.7:cloud` | Modèle Ollama |
+| `OLLAMA_MODEL` | `minimax-m3:cloud` | Modèle Ollama |
 | `OLLAMA_CHUNK_SIZE` | `50` | Taille des chunks |
 | `OLLAMA_TEMPERATURE` | `0` | Température du modèle (0 = déterministe) |
 | `OLLAMA_TIMEOUT` | `300` | Timeout par chunk (secondes) |
