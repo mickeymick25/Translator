@@ -485,6 +485,20 @@ def run() -> None:
     for ctx, count in sorted(context_counts.items()):
         logger.info("  - %s: %d entries", ctx, count)
 
+    # Dry-run: simulate without API calls and without writing output files.
+    # Report what would be generated, then bail out before any file is created.
+    if config.dry_run:
+        langs_to_translate = [lang for lang in target_langs if lang not in ("en", "fr")]
+        logger.info("=" * 60)
+        logger.info("DRY RUN -- no API calls, no files written.")
+        logger.info("  Entries: %d", len(entries))
+        logger.info("  Target languages: %s", target_langs)
+        logger.info("  Languages requiring API translation: %s", langs_to_translate)
+        logger.info("  Output format: %s", output_format)
+        logger.info("  Output folder (not created): %s", output_dir)
+        logger.info("=" * 60)
+        return
+
     # Ensure output directory exists (includes date folder)
     output_dir.mkdir(parents=True, exist_ok=True)
 

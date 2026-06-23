@@ -120,11 +120,22 @@ class TestOllamaProviderBasics:
             assert result == "Bonjour"
 
     def test_translate_single_text_returns_original_on_failure(self, provider):
-        with patch.object(
-            provider, "_make_request", side_effect=Exception("connection error")
+        # Ollama fails; the per-key Google fallback is dispatched but also
+        # fails (mocked to keep originals), so the source text is preserved.
+        with (
+            patch.object(
+                provider, "_make_request", side_effect=Exception("connection error")
+            ),
+            patch.object(
+                provider,
+                "_fallback_per_key",
+                side_effect=lambda it, s, t: dict(it),
+            ) as mock_fallback,
         ):
             result = provider.translate("Hello", "en", "fr")
             assert result == "Hello"
+            # Ollama failure dispatched the Google fallback.
+            mock_fallback.assert_called_once()
 
 
 # ─── IMP3-T002: translate_batch() + chunking ───────────────────────
@@ -193,14 +204,22 @@ class TestTranslateBatch:
 
     def test_batch_fallback_on_all_retries_exhausted(self, provider_no_retries):
         items = {"k1": "Hello", "k2": "World"}
-        with patch.object(
-            provider_no_retries,
-            "_make_request",
-            side_effect=Exception("connection error"),
+        with (
+            patch.object(
+                provider_no_retries,
+                "_make_request",
+                side_effect=Exception("connection error"),
+            ),
+            patch.object(
+                provider_no_retries,
+                "_fallback_per_key",
+                side_effect=lambda it, s, t: dict(it),
+            ) as mock_fallback,
         ):
             result = provider_no_retries.translate_batch(items, "en", "fr")
-            # Fallback: original values kept
+            # Fallback dispatched; original values kept (Google unavailable too).
             assert result == {"k1": "Hello", "k2": "World"}
+            mock_fallback.assert_called_once()
 
 
 # ─── IMP3-T003: Structural Validation ──────────────────────────────
@@ -583,15 +602,24 @@ class TestRetryIntelligent:
             assert call_count["n"] == 2
 
     def test_retry_exhausted_fallback(self, provider_no_retries):
-        """After max retries → keep original text."""
+        """After max retries → fallback dispatched, original text kept."""
         items = {"k1": "Hello"}
-        with patch.object(
-            provider_no_retries,
-            "_make_request",
-            return_value="invalid json",
+        with (
+            patch.object(
+                provider_no_retries,
+                "_make_request",
+                return_value="invalid json",
+            ),
+            patch.object(
+                provider_no_retries,
+                "_fallback_per_key",
+                side_effect=lambda it, s, t: dict(it),
+            ) as mock_fallback,
         ):
             result = provider_no_retries.translate_batch(items, "en", "fr")
             assert result["k1"] == "Hello"
+            # Validation failure dispatched the Google fallback.
+            mock_fallback.assert_called_once()
 
     def test_retry_completion_threshold_triggers_retry(self, provider):
         """Completion threshold failure triggers retry with error injection."""

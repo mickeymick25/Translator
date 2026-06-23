@@ -241,6 +241,33 @@ class TestTranslateSingleLanguage:
         assert "k1" in saved_data
         assert "k2" in saved_data
 
+    @patch("modes.mode_translate_json.get_config")
+    @patch("modes.mode_translate_json.save_flat_json")
+    @patch("modes.mode_translate_json.translate_batch")
+    @patch("modes.mode_translate_json.load_flat_json")
+    def test_dry_run_does_not_translate_or_save(
+        self, mock_load, mock_batch, mock_save, mock_get_config, tmp_path
+    ):
+        """In dry-run, no API call and no file write; returns 0 entries."""
+        config = MagicMock()
+        config.dry_run = True
+        mock_get_config.return_value = config
+        mock_load.return_value = {"k1": "Bonjour"}  # existing translation
+
+        output_path = tmp_path / "translation_en_fr.json"
+        output_path.write_text('{"k1": "Bonjour"}', encoding="utf-8")
+
+        source_data = {"k1": "Hello", "k2": "World"}
+        lang, success, count = _translate_single_language(
+            "source.json", source_data, "en", "fr", tmp_path
+        )
+
+        assert lang == "fr"
+        assert success is True
+        assert count == 0
+        mock_batch.assert_not_called()
+        mock_save.assert_not_called()
+
 
 # ─── run ────────────────────────────────────────────────────────────
 
@@ -257,6 +284,7 @@ class TestRun:
         config.batch_langs_list = ["fr"]
         config.SOURCE_LANG = "en"
         config.OUTPUT_DIR = "/tmp/output_single"
+        config.dry_run = False
         config.get_source_path.return_value = "/tmp/source.json"
         mock_get_config.return_value = config
         mock_load.return_value = {"k1": "Hello"}
@@ -280,6 +308,7 @@ class TestRun:
         config.batch_langs_list = ["fr", "de", "cz"]
         config.SOURCE_LANG = "en"
         config.OUTPUT_DIR = "/tmp/output_batch"
+        config.dry_run = False
         config.get_source_path.return_value = "/tmp/source.json"
         mock_get_config.return_value = config
         mock_load.return_value = {"k1": "Hello"}
@@ -301,6 +330,7 @@ class TestRun:
         config.batch_langs_list = ["en", "fr", "de"]
         config.SOURCE_LANG = "en"
         config.OUTPUT_DIR = "/tmp/output_skip"
+        config.dry_run = False
         config.get_source_path.return_value = "/tmp/source.json"
         mock_get_config.return_value = config
         mock_load.return_value = {"k1": "Hello"}
@@ -323,6 +353,7 @@ class TestRun:
         config.SOURCE_LANG = "en"
         config.TARGET_LANG = "sk"
         config.OUTPUT_DIR = "/tmp/output_fallback"
+        config.dry_run = False
         config.get_source_path.return_value = "/tmp/source.json"
         mock_get_config.return_value = config
         mock_load.return_value = {"k1": "Hello"}
@@ -344,6 +375,7 @@ class TestRun:
         config.batch_langs_list = ["fr"]
         config.SOURCE_LANG = "en"
         config.OUTPUT_DIR = "/tmp/output_date_folder"
+        config.dry_run = False
         config.get_source_path.return_value = "/tmp/source.json"
         mock_get_config.return_value = config
         mock_load.return_value = {"k1": "Hello"}
@@ -368,6 +400,7 @@ class TestRun:
         config.batch_langs_list = ["fr", "de"]
         config.SOURCE_LANG = "en"
         config.OUTPUT_DIR = "/tmp/output_load_once"
+        config.dry_run = False
         config.get_source_path.return_value = "/tmp/source.json"
         mock_get_config.return_value = config
         mock_load.return_value = {"k1": "Hello"}

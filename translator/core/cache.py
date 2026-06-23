@@ -62,34 +62,81 @@ class TranslationCache:
         self._load()
 
     @staticmethod
-    def _make_key(source_lang: str, target_lang: str, text: str) -> str:
-        """Generate a unique cache key for a (source, target, text) triplet."""
+    def _make_key(
+        source_lang: str, target_lang: str, text: str, key_id: str | None = None
+    ) -> str:
+        """Generate a unique cache key for a (source, target, text[, key_id]) triplet.
+
+        If key_id is provided, uses the composite format "src:tgt:key_id:text"
+        to avoid collisions when multiple i18n keys share the same source text.
+        Otherwise, falls back to the legacy format "src:tgt:text" for backward
+        compatibility with caches produced before v2.
+        """
         src = _normalize_lang_code(source_lang)
         tgt = _normalize_lang_code(target_lang)
+        if key_id:
+            return f"{src}:{tgt}:{key_id}:{text}"
         return f"{src}:{tgt}:{text}"
 
-    def get(self, source_lang: str, target_lang: str, text: str) -> str | None:
+    @staticmethod
+    def _is_composite_key(key: str) -> bool:
+        """Detect whether a key uses the v2 composite format.
+
+        A composite key has the structure "src:tgt:key_id:text" where text may
+        itself contain colons. We use the known language-code prefix length to
+        distinguish the two formats:
+        - Legacy "src:tgt:text"         → 2 colons
+        - Composite "src:tgt:key:text"  → ≥ 3 colons
+        """
+        return key.count(":") >= 3
+
+    def get(
+        self,
+        source_lang: str,
+        target_lang: str,
+        text: str,
+        key_id: str | None = None,
+    ) -> str | None:
         """
         Retrieve a translation from the cache.
+
+        Lookup order:
+        1. Composite key (src:tgt:key_id:text) if key_id is provided.
+        2. Legacy key (src:tgt:text) as a fallback for entries written by v1.
 
         Returns:
             The translation if present (cache hit), None otherwise (cache miss).
         """
-        key = self._make_key(source_lang, target_lang, text)
         with self._lock:
-            if key in self._entries:
+            if key_id:
+                composite_key = self._make_key(source_lang, target_lang, text, key_id)
+                if composite_key in self._entries:
+                    self._hits += 1
+                    logger.debug("Cache HIT (composite): %s", composite_key[:80])
+                    return self._entries[composite_key]
+            legacy_key = self._make_key(source_lang, target_lang, text)
+            if legacy_key in self._entries:
                 self._hits += 1
-                logger.debug("Cache HIT: %s", key[:80])
-                return self._entries[key]
+                logger.debug("Cache HIT (legacy): %s", legacy_key[:80])
+                return self._entries[legacy_key]
             self._misses += 1
-            logger.debug("Cache MISS: %s", key[:80])
+            logger.debug("Cache MISS: %s", legacy_key[:80])
             return None
 
     def put(
-        self, source_lang: str, target_lang: str, text: str, translation: str
+        self,
+        source_lang: str,
+        target_lang: str,
+        text: str,
+        translation: str,
+        key_id: str | None = None,
     ) -> None:
-        """Add a translation to the cache."""
-        key = self._make_key(source_lang, target_lang, text)
+        """Add a translation to the cache.
+
+        If key_id is provided, the composite format is used. Otherwise the
+        legacy format is used for backward compatibility.
+        """
+        key = self._make_key(source_lang, target_lang, text, key_id)
         with self._lock:
             if key not in self._entries or self._entries[key] != translation:
                 self._entries[key] = translation

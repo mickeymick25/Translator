@@ -130,6 +130,47 @@ class TestTranslateTextSuccess:
         assert "%" in result
 
 
+class TestTranslateTextDryRun:
+    """Tests for translate_text dry-run behavior (no API, no cache)."""
+
+    @patch("core.translator.get_provider")
+    @patch("core.translator.get_config")
+    @patch("core.translator.get_cache")
+    def test_dry_run_returns_source_without_api_or_cache(
+        self, mock_get_cache, mock_get_config, mock_get_provider
+    ):
+        """In dry-run, source text is returned; provider and cache are untouched."""
+        mock_config = MagicMock()
+        mock_config.dry_run = True
+        mock_config.cache_enabled = True
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+
+        result = translate_text("Hello", "en", "fr")
+        assert result == "Hello"
+        mock_get_provider.assert_not_called()
+        mock_get_cache.assert_not_called()
+
+    @patch("core.translator.get_provider")
+    @patch("core.translator.get_config")
+    @patch("core.translator.get_cache")
+    def test_dry_run_does_not_put_to_cache(
+        self, mock_get_cache, mock_get_config, mock_get_provider
+    ):
+        """Dry-run never writes to the cache even with cache enabled."""
+        mock_config = MagicMock()
+        mock_config.dry_run = True
+        mock_config.cache_enabled = True
+        mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
+        mock_get_config.return_value = mock_config
+        mock_cache = MagicMock()
+        mock_get_cache.return_value = mock_cache
+
+        result = translate_text("Hello", "en", "fr")
+        assert result == "Hello"
+        mock_cache.put.assert_not_called()
+
+
 class TestTranslateTextRetry:
     """Tests for translate_text retry logic on errors."""
 
@@ -426,6 +467,7 @@ class TestTranslateTextWithCache:
     ):
         """When cache is enabled and has a hit, the cached result is returned without API call."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.cache_enabled = True
         mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
         mock_get_config.return_value = mock_config
@@ -436,7 +478,7 @@ class TestTranslateTextWithCache:
 
         result = translate_text("Hello", "en", "fr")
         assert result == "Bonjour"
-        mock_cache.get.assert_called_once_with("en", "fr", "Hello")
+        mock_cache.get.assert_called_once_with("en", "fr", "Hello", key_id=None)
         # API should NOT be called
         mock_get_provider.assert_not_called()
 
@@ -448,6 +490,7 @@ class TestTranslateTextWithCache:
     ):
         """When cache is enabled but misses, the API is called and result is cached."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.cache_enabled = True
         mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
         mock_get_config.return_value = mock_config
@@ -463,9 +506,11 @@ class TestTranslateTextWithCache:
         result = translate_text("Hello", "en", "fr")
         assert result == "Bonjour"
         # Cache miss was checked
-        mock_cache.get.assert_called_once_with("en", "fr", "Hello")
+        mock_cache.get.assert_called_once_with("en", "fr", "Hello", key_id=None)
         # Result was stored in cache
-        mock_cache.put.assert_called_once_with("en", "fr", "Hello", "Bonjour")
+        mock_cache.put.assert_called_once_with(
+            "en", "fr", "Hello", "Bonjour", key_id=None
+        )
 
     @patch("core.translator.get_provider")
     @patch("core.translator.get_config")
@@ -475,6 +520,7 @@ class TestTranslateTextWithCache:
     ):
         """When cache is disabled, no cache lookup or store is performed."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.cache_enabled = False
         mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
         mock_get_config.return_value = mock_config
@@ -496,6 +542,7 @@ class TestTranslateTextWithCache:
     ):
         """Cache lookups use the correct (source, target, text) key."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.cache_enabled = True
         mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
         mock_get_config.return_value = mock_config
@@ -506,7 +553,7 @@ class TestTranslateTextWithCache:
 
         result = translate_text("Button", "en", "de")
         assert result == "Taste"
-        mock_cache.get.assert_called_once_with("en", "de", "Button")
+        mock_cache.get.assert_called_once_with("en", "de", "Button", key_id=None)
 
     @patch("core.translator.get_provider")
     @patch("core.translator.get_config")
@@ -534,6 +581,7 @@ class TestTranslateTextWithCache:
     ):
         """When translation fails after retries, the result is NOT cached."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.cache_enabled = True
         mock_config.TRANSLATION_CACHE_PATH = "/tmp/test_cache.json"
         mock_get_config.return_value = mock_config
@@ -549,7 +597,7 @@ class TestTranslateTextWithCache:
         result = translate_text("Hello", "en", "fr", max_retries=1)
         assert result == "Hello"
         # Only get() was called (cache miss), but put() was never called
-        mock_cache.get.assert_called_once_with("en", "fr", "Hello")
+        mock_cache.get.assert_called_once_with("en", "fr", "Hello", key_id=None)
         mock_cache.put.assert_not_called()
 
 
@@ -790,6 +838,7 @@ class TestTranslateTextWithRateLimiter:
             patch("core.translator.get_cache") as mock_get_cache,
         ):
             mock_config = MagicMock()
+            mock_config.dry_run = False
             mock_config.cache_enabled = True
             mock_config.TRANSLATION_CACHE_PATH = "/tmp/test.json"
             mock_get_config.return_value = mock_config

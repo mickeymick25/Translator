@@ -278,6 +278,18 @@ def _translate_single_language(
     remaining = len(keys_to_translate)
     logger.info(f"Keys remaining to translate: {remaining}")
 
+    # Dry-run: simulate without API calls and without writing output files.
+    # We return after the resume diff so the caller gets a useful preview of
+    # what would be translated, but no provider call and no file write happen.
+    config = get_config()
+    if config.dry_run:
+        logger.info(
+            f"[{target_lang.upper()}] DRY RUN -- would translate {remaining} key(s) "
+            f"({len(existing_keys)} already translated, {total} total). "
+            "No API calls, no file written."
+        )
+        return target_lang, True, 0
+
     if remaining == 0:
         logger.info(
             f"[{target_lang.upper()}] All keys already translated. Nothing to do."
@@ -382,7 +394,10 @@ def run() -> None:
     date_str = datetime.now().strftime("%Y_%m_%d")
     session_folder = f"{date_str}_Export"
     output_dir = Path(config.OUTPUT_DIR) / session_folder
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # In dry-run, do not create the output folder (no filesystem side effects);
+    # _translate_single_language handles the simulation without writing.
+    if not config.dry_run:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("=" * 60)
     logger.info("MODE: translate-json")

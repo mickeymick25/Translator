@@ -670,6 +670,7 @@ class TestRun:
     ):
         """When OUTPUT_FORMAT is 'json', _generate_all_json is called."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.OUTPUT_DIR = "/tmp/output"
         mock_config.batch_langs_list = ["en", "fr"]
         mock_config.OUTPUT_FORMAT = "json"
@@ -693,6 +694,7 @@ class TestRun:
     ):
         """When OUTPUT_FORMAT is 'xlsx', _generate_all_xlsx is called."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.OUTPUT_DIR = "/tmp/output"
         mock_config.batch_langs_list = ["en", "fr"]
         mock_config.OUTPUT_FORMAT = "xlsx"
@@ -716,6 +718,7 @@ class TestRun:
     ):
         """When OUTPUT_FORMAT is 'auto' and source is xlsx, xlsx output is used (auto matches input)."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.OUTPUT_DIR = "/tmp/output"
         mock_config.batch_langs_list = ["en"]
         mock_config.OUTPUT_FORMAT = "auto"
@@ -779,6 +782,7 @@ class TestRun:
     ):
         """Output directory includes date-based subfolder."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.OUTPUT_DIR = str(temp_dir)
         mock_config.batch_langs_list = ["en"]
         mock_config.OUTPUT_FORMAT = "json"
@@ -804,6 +808,7 @@ class TestRun:
     ):
         """run() passes the loaded entries and source file name to _generate_all_json."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.OUTPUT_DIR = "/tmp/output"
         mock_config.batch_langs_list = ["en", "fr"]
         mock_config.OUTPUT_FORMAT = "json"
@@ -855,6 +860,7 @@ class TestRun:
     ):
         """When OUTPUT_FORMAT is 'auto' and source is json, json output is used."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.OUTPUT_DIR = "/tmp/output"
         mock_config.batch_langs_list = ["en"]
         mock_config.OUTPUT_FORMAT = "auto"
@@ -878,6 +884,7 @@ class TestRun:
     ):
         """When OUTPUT_FORMAT is 'auto' and source format is unknown, defaults to json."""
         mock_config = MagicMock()
+        mock_config.dry_run = False
         mock_config.OUTPUT_DIR = "/tmp/output"
         mock_config.batch_langs_list = ["en"]
         mock_config.OUTPUT_FORMAT = "auto"
@@ -891,6 +898,33 @@ class TestRun:
         run()
 
         mock_gen_json.assert_called_once()
+
+    @patch("modes.mode_translate_dropdowns._generate_all_json")
+    @patch("modes.mode_translate_dropdowns._load_source_data")
+    @patch("modes.mode_translate_dropdowns._get_source_file")
+    @patch("modes.mode_translate_dropdowns.get_config")
+    def test_dry_run_does_not_generate_or_create_output(
+        self, mock_get_config, mock_get_source, mock_load, mock_gen_json, tmp_path
+    ):
+        """In dry-run, no generator is called and no output folder is created."""
+        mock_config = MagicMock()
+        mock_config.dry_run = True
+        mock_config.OUTPUT_DIR = str(tmp_path)
+        mock_config.batch_langs_list = ["en", "fr", "de"]
+        mock_config.OUTPUT_FORMAT = "json"
+        mock_get_config.return_value = mock_config
+
+        mock_get_source.return_value = ("source.xlsx", "xlsx")
+        mock_load.return_value = [
+            {"origin": "Button", "french": "Bouton", "context": "btn"}
+        ]
+
+        run()
+
+        mock_gen_json.assert_not_called()
+        # No date-based output folder should be created in dry-run
+        subdirs = [d.name for d in tmp_path.iterdir() if d.is_dir()]
+        assert not any("_Dropdown" in name for name in subdirs)
 
 
 # ─── _translate_dropdown_entry (via _translate_dropdown_entries_batch path) ──

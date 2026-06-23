@@ -140,7 +140,7 @@ class OllamaProvider(TranslationProvider):
                     # Empty values: pass through without caching
                     cached_items[key] = text
                 else:
-                    cached_result = cache.get(source, target, text)
+                    cached_result = cache.get(source, target, text, key_id=key)
                     if cached_result is not None:
                         cached_items[key] = cached_result
                     else:
@@ -184,7 +184,7 @@ class OllamaProvider(TranslationProvider):
                         for k, v in chunk_result.items():
                             original_text = chunk.get(k, v)
                             if original_text and len(original_text.strip()) > 0:
-                                cache.put(source, target, original_text, v)
+                                cache.put(source, target, original_text, v, key_id=k)
                     error_context = None  # Reset on success
                     break
                 except OllamaValidationError as e:
@@ -216,7 +216,9 @@ class OllamaProvider(TranslationProvider):
                                     and len(original_text.strip()) > 0
                                     and v != original_text
                                 ):
-                                    cache.put(source, target, original_text, v)
+                                    cache.put(
+                                        source, target, original_text, v, key_id=k
+                                    )
                 except Exception as e:
                     # Non-validation errors (connection, timeout, etc.)
                     logger.warning(
@@ -246,7 +248,9 @@ class OllamaProvider(TranslationProvider):
                                     and len(original_text.strip()) > 0
                                     and v != original_text
                                 ):
-                                    cache.put(source, target, original_text, v)
+                                    cache.put(
+                                        source, target, original_text, v, key_id=k
+                                    )
 
         # Flush cache to disk after all chunks
         if cache:

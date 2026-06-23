@@ -70,6 +70,7 @@ def translate_text(
     source_lang: str,
     target_lang: str,
     max_retries: int = 3,
+    key_id: str | None = None,
 ) -> str:
     """
     Translate a single text with smart rate limiting and optional caching.
@@ -97,9 +98,17 @@ def translate_text(
 
     # Check cache if enabled
     config = get_config()
+
+    # Dry-run: simulate without API calls and without cache side effects.
+    # The source text is returned unchanged so callers can preview what would
+    # be translated without consuming quota or mutating the cache.
+    if config.dry_run:
+        logger.info("Dry run: skip translation for text: %s...", text[:50])
+        return text
+
     if config.cache_enabled:
         cache = get_cache(cache_path=config.TRANSLATION_CACHE_PATH)
-        cached = cache.get(source_lang, target_lang, text)
+        cached = cache.get(source_lang, target_lang, text, key_id=key_id)
         if cached is not None:
             return cached
     else:
@@ -114,7 +123,7 @@ def translate_text(
             if result:
                 rate_limiter.record_success()
                 if cache:
-                    cache.put(source_lang, target_lang, text, result)
+                    cache.put(source_lang, target_lang, text, result, key_id=key_id)
                 return result
             logger.warning(
                 "Translation returned empty result for text: %s...", text[:50]
