@@ -1,0 +1,46 @@
+{
+  "old_path": "translator/source/2026_06_12_Import/en 7.json",
+  "new_path": "translator/source/2026_06_23_Import/en8.json",
+  "counts": {
+    "old": 2531,
+    "new": 2541,
+    "unchanged": 2531,
+    "modified": 0,
+    "added": 10,
+    "removed": 0
+  },
+  "added": [
+    "BU_ST_ME_2168",
+    "BU_ST_ME_2169",
+    "BU_ST_ME_2170",
+    "BU_ST_ME_2171",
+    "BU_ST_ME_2172",
+    "BU_ST_ME_2173",
+    "LO_LO_CT_2167",
+    "LO_LO_DI_2168",
+    "LO_LO_DI_2169",
+    "PA_AU_SU_2166"
+  ],
+  "removed": [],
+  "modified": [],
+  "added_by_prefix": {
+    "BU": [
+      "BU_ST_ME_2168",
+      "BU_ST_ME_2169",
+      "BU_ST_ME_2170",
+      "BU_ST_ME_2171",
+      "BU_ST_ME_2172",
+      "BU_ST_ME_2173"
+    ],
+    "LO": [
+      "LO_LO_CT_2167",
+      "LO_LO_DI_2168",
+      "LO_LO_DI_2169"
+    ],
+    "PA": [
+      "PA_AU_SU_2166"
+    ]
+  },
+  "removed_by_prefix": {},
+  "placeholder_mismatch": []
+}
