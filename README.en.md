@@ -91,7 +91,6 @@ COP_translations/
 ### With Docker (recommended)
 
 ```bash
-git clone https://github.com/mickeymick25/Translator.git
 cd COP_translations
 
 # Build the image
