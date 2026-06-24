@@ -29,8 +29,9 @@ Traduction automatique de fichiers JSON et XLSX via Google Translate, DeepL ou *
 | Fonctionnalité | Description |
 |---------------|-------------|
 | **Multi-Provider** | Google Translate (gratuit), DeepL (API key), ou **Ollama** (LLM local/cloud) |
-| **Ollama + chunking** | Traduction par batchs de 50 entrées, validation structurelle, retry intelligent |
-| **Cache intelligent** | Traductions mises en cache sur disque, évitant les re-traductions |
+| **Ollama + chunking** | Traduction par batchs de 50 entrées, validation structurelle, retry intelligent, fallback Google Translate par clé sur échec |
+| **Cache intelligent** | Traductions mises en cache sur disque (clés composites v2 `src:tgt:key_id:text`), évitant re-traductions et collisions entre clés i18n partageant le même texte source |
+| **Dry-run** | Flag `--dry-run` : simule sans appel API, sans écriture de fichier/dossier, sans modifier le cache |
 | **Rate limiter adaptatif** | Backoff exponentiel avec persistance, sans double pénalité |
 | **Interface CLI** | `translate-json`, `translate-dropdowns`, `analyze` avec options complètes |
 | **CLI Provider** | Flags `--provider`, `--deepl-api-key`, `--ollama-model`, `--fallback` sur tous les subcommands |
@@ -71,6 +72,8 @@ COP_translations/
 │   └── pytest.ini
 ├── source/                           # Fichiers source
 ├── output/                           # Fichiers traduits
+├── compare_sources.py                # Comparaison de deux sources JSON (ajouts/suppressions/modifs)
+├── analyze_translation_gap.py         # Écart de traduction entre un export et une nouvelle source
 └── README.md
 ```
 
@@ -168,6 +171,9 @@ python translator/service.py translate-json --provider deepl --deepl-api-key YOU
 
 # Activer le fallback entre providers
 python translator/service.py translate-json --provider ollama --fallback --deepl-api-key YOUR_KEY
+
+# Simulation sans appel API ni écriture (dry-run)
+python translator/service.py translate-json --dry-run -s en --batch-langs fr,cz,sk,de,it,ar -i source.json
 ```
 
 La CLI résout les paramètres dans cet ordre : **arguments CLI > variables d'environnement > valeurs par défaut**.
@@ -284,7 +290,7 @@ Previous attempt failed with this error: Response completion too low: 40%
 Please fix the issue and return valid JSON following ALL the rules above.
 ```
 
-Après `max_retries` échecs, les valeurs originales sont conservées (fallback).
+Après `max_retries` échecs d'un chunk, un **fallback Google Translate par clé** (`_fallback_per_key`) traduit chaque entrée individuellement via Google. Les valeurs originales ne sont conservées que si Google échoue aussi (ou n'est pas disponible).
 
 ### Docker + Ollama
 
@@ -292,11 +298,12 @@ Le `docker-compose.yml` inclut `extra_hosts: host.docker.internal:host-gateway` 
 
 ## Cache intelligent
 
-Le cache de traductions persiste sur disque (`output/.translation_cache.json`). Chaque traduction est stockée avec la clé `{source}:{target}:{text}`, garantissant l'unicité par paire de langues.
+Le cache de traductions persiste sur disque (`output/.translation_cache.json`). Depuis la v2, chaque traduction est stockée avec la clé composite `{source}:{target}:{key_id}:{text}` (avec fallback sur le format legacy `{source}:{target}:{text}` pour la rétro-compatibilité). Le `key_id` (clé i18n d'origine) évite les collisions entre plusieurs clés partageant le même texte source (ex. « Action » utilisée par 37 clés distinctes).
 
 | Fonctionnalité | Détail |
 |---------------|--------|
 | **Activation** | `TRANSLATION_CACHE=true` (activé par défaut) |
+| **Format des clés** | v2 composite `src:tgt:key_id:text` (fallback legacy `src:tgt:text`) |
 | **Chemin du cache** | `output/.translation_cache.json` (Docker) ou `cwd/output/.translation_cache.json` (local) |
 | **Flush différé** | Écrit en fin de batch, pas à chaque `put()` |
 | **Statistiques** | Hits, misses, hit rate, total entries |
@@ -430,6 +437,8 @@ Le workflow `.github/workflows/ci.yml` se déclenche sur push `main`/`develop` e
 | [`doc/2026_05_06_*_Study.md`](doc/2026_05_06_COP_Translation_Service_Improvements_Study.md) | Étude d'améliorations |
 | [`doc/2026_05_08_*_Tracking.md`](doc/2026_05_08_Implementation_Tracking.md) | Suivi d'implémentation |
 | [`doc/2026_05_05_*_Study.md`](doc/2026_05_05_COP_Translation_Service_Study.md) | Étude fonctionnelle initiale |
+| [`doc/2026_06_17_Cache_Improvement_Plan.md`](doc/2026_06_17_Cache_Improvement_Plan.md) | Cache v2 : analyse de duplication et plan d'amélioration |
+| [`doc/2026_06_23_Source_Comparison_Study.md`](doc/2026_06_23_Source_Comparison_Study.md) | Comparaison des sources en7 -> en8 + analyse d'écart de traduction |
 
 ## Contribution
 
@@ -462,6 +471,7 @@ chore: description
 
 | Version | Date | Description |
 |---------|------|-------------|
+| v3.1.0 | 2026-06-23 | Cache v2 (clés composites `key_id`), fallback Google per-key Ollama, flag `--dry-run` fonctionnel, 765 tests |
 | v3.0.0 | 2026-05-27 | Provider Ollama (IMP3) : chunking, validation structurelle, retry intelligent, placeholders, checkpoint par chunk, 723 tests, 94% couverture |
 | v2.0.0 | 2026-05-11 | Cache intelligent, rate limiter adaptatif, CLI, multi-provider, CLI Provider flags, pre-commit hooks, chemins locaux, 620 tests, 96% couverture |
 | v1.0.0 | 2026-05-05 | Version initiale avec rate limiter intelligent |
