@@ -1,6 +1,8 @@
+🇫🇷 [Français](README.md)  |  🇬🇧 [English](README.en.md)
+
 # COP Translation Service
 
-**Service de traduction générique pour le projet COP — Version 3.0**
+**Service de traduction générique pour le projet COP — Version 3.1**
 
 Traduction automatique de fichiers JSON et XLSX via Google Translate, DeepL ou **Ollama** (LLM local), avec cache intelligent, rate limiting adaptatif, validation structurelle, et interface CLI complète.
 
