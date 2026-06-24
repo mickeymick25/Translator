@@ -116,8 +116,11 @@ def test_stats_tracking():
 
 def test_real_cache_file_v2():
     """Le cache reel v2 est charge et fonctionnel."""
-    base = Path("/Users/michaelboitin/Documents/02_Dev/COP_translations")
-    cache_path = base / "translator/output/.translation_cache.json"
+    cache_path = Path(__file__).parent / "output" / ".translation_cache.json"
+    if not cache_path.exists():
+        import pytest
+
+        pytest.skip(f"Cache file not found: {cache_path}")
     cache = TranslationCache(cache_path=cache_path)
 
     with cache_path.open(encoding="utf-8") as f:
