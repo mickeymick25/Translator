@@ -139,15 +139,18 @@ def _find_source_file_in_import(import_folder: str, source_lang: str) -> str | N
     """
     Find the source translation file inside an import folder.
 
-    Looks for a file named '{date_prefix}_translation_{source_lang}_{source_lang}.json'
-    inside the given import folder.
+    Lookup order:
+    1. Conventional name: '{date_prefix}_translation_{source_lang}_{source_lang}.json'
+       (backward compatible with earlier exports).
+    2. Relaxed fallback: any '*.json' whose stem contains the source language
+       code (e.g. 'en8.json', 'en 7.json'); the largest match wins.
 
     Args:
         import_folder: Full path to the import folder (e.g. '/app/source/2026_04_21_Import').
         source_lang: Source language code (e.g. 'en').
 
     Returns:
-        Full path to the source file, or None if not found.
+        Full path to the source file, or None if nothing relevant is found.
     """
     folder_path = Path(import_folder)
     if not folder_path.exists():
@@ -161,6 +164,20 @@ def _find_source_file_in_import(import_folder: str, source_lang: str) -> str | N
 
     if file_path.exists():
         return str(file_path)
+
+    # Relaxed fallback: any *.json whose stem contains the source language code
+    # (e.g. 'en8.json', 'en 7.json'). Among matches, prefer the largest file
+    # (likely the main source export). Conservative: if no file name mentions
+    # the source language, return None rather than grabbing an unrelated file;
+    # the caller can still pass SOURCE_FILE explicitly.
+    json_files = sorted(
+        folder_path.glob("*.json"),
+        key=lambda p: p.stat().st_size,
+        reverse=True,
+    )
+    lang_matches = [p for p in json_files if source_lang.lower() in p.stem.lower()]
+    if lang_matches:
+        return str(lang_matches[0])
 
     return None
 

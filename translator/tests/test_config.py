@@ -264,6 +264,39 @@ class TestFindSourceFileInImport:
         assert result is not None
         assert result.endswith("2026_04_21_translation_fr_fr.json")
 
+    def test_relaxed_fallback_finds_json_with_lang_in_name(self, temp_dir):
+        """When the conventional name is absent, falls back to any *.json whose
+        stem contains the source language (e.g. 'en8.json')."""
+        import_dir = temp_dir / "2026_06_23_Import"
+        import_dir.mkdir()
+        (import_dir / "en8.json").write_text('{"k": "v"}', encoding="utf-8")
+
+        result = _find_source_file_in_import(str(import_dir), "en")
+        assert result is not None
+        assert result.endswith("en8.json")
+
+    def test_relaxed_fallback_prefers_largest_lang_match(self, temp_dir):
+        """When several *.json mention the source language, the largest wins."""
+        import_dir = temp_dir / "2026_06_23_Import"
+        import_dir.mkdir()
+        (import_dir / "en_small.json").write_text('{"k": "v"}', encoding="utf-8")
+        (import_dir / "en_big.json").write_text(
+            '{"k": "' + "x" * 200 + '"}', encoding="utf-8"
+        )
+
+        result = _find_source_file_in_import(str(import_dir), "en")
+        assert result is not None
+        assert result.endswith("en_big.json")
+
+    def test_relaxed_fallback_none_when_no_lang_match(self, temp_dir):
+        """Returns None when no *.json mentions the source language (conservative)."""
+        import_dir = temp_dir / "2026_06_23_Import"
+        import_dir.mkdir()
+        (import_dir / "metadata.json").write_text("{}", encoding="utf-8")
+
+        result = _find_source_file_in_import(str(import_dir), "en")
+        assert result is None
+
 
 # ─── Config.get_source_path ────────────────────────────────────────
 
