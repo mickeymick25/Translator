@@ -333,6 +333,9 @@ The rate limiter automatically handles Google Translate API limits:
 | `de` | German | `de` | `origin` |
 | `it` | Italian | `it` | `origin` |
 | `ar` | Arabic | `ar` | `origin` |
+| `pt` | Portuguese | `pt` | `origin` |
+| `es` | Spanish | `es` | `origin` |
+| `hu` | Hungarian | `hu` | `origin` |
 
 ## Configuration
 
@@ -348,7 +351,7 @@ The rate limiter automatically handles Google Translate API limits:
 | `EXCEL_DIR` | *(auto)* | Excel files directory |
 | `DOC_DIR` | *(auto)* | Documentation directory |
 | `SOURCE_DIR` | *(auto)* | Source JSON files directory |
-| `BATCH_LANGS` | `en,fr,cz,sk,de,it,ar` | Languages to generate (`translate-dropdowns` mode) |
+| `BATCH_LANGS` | `en,fr,cz,sk,de,it,ar,pt,es,hu` | Languages to generate (`translate-dropdowns` mode) |
 | `OUTPUT_FORMAT` | `auto` | Output format: `json`, `xlsx` or `auto` |
 | `TRANSLATION_CACHE` | `true` | Enable the translation cache |
 | `TRANSLATION_CACHE_PATH` | *(auto)* | Cache file path |
@@ -474,6 +477,7 @@ chore: description
 
 | Version | Date | Description |
 |---------|------|-------------|
+| v3.2.0 | 2026-06-26 | Integration of 3 new languages (pt, es, hu); 9 target languages; Ollama minimax-m3:cloud for full runs; 768+ tests |
 | v3.1.0 | 2026-06-23 | Cache v2 (composite `key_id` keys), Ollama per-key Google fallback, working `--dry-run` flag, 768 tests |
 | v3.0.0 | 2026-05-27 | Ollama provider (IMP3): chunking, structural validation, intelligent retry, placeholders, per-chunk checkpoint, 723 tests, 94% coverage |
 | v2.0.0 | 2026-05-11 | Intelligent cache, adaptive rate limiter, CLI, multi-provider, CLI provider flags, pre-commit hooks, local paths, 620 tests, 96% coverage |

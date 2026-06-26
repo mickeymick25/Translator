@@ -1,0 +1,35 @@
+{
+  "old_path": "translator/source/2026_06_23_Import/en8.json",
+  "new_path": "translator/source/2026_06_25_Import/en 9.json",
+  "counts": {
+    "old": 2541,
+    "new": 2542,
+    "unchanged": 2539,
+    "modified": 2,
+    "added": 1,
+    "removed": 0
+  },
+  "added": [
+    "MS_SUCCESS_ERROR_272"
+  ],
+  "removed": [],
+  "modified": [
+    {
+      "key": "BU_ST_ME_2169",
+      "old": "Pairing Error",
+      "new": "Paring Error"
+    },
+    {
+      "key": "PA_AU_MO_1069",
+      "old": "In progress",
+      "new": "Inprogress"
+    }
+  ],
+  "added_by_prefix": {
+    "MS": [
+      "MS_SUCCESS_ERROR_272"
+    ]
+  },
+  "removed_by_prefix": {},
+  "placeholder_mismatch": []
+}

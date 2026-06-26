@@ -1,0 +1,115 @@
+{
+  "source": "translator/source/2026_06_25_Import/en 9.json",
+  "old_source": "translator/source/2026_06_23_Import/en8.json",
+  "export_dir": "translator/output/2026_06_23_Export",
+  "languages": [
+    {
+      "lang": "ar",
+      "file": "translator/output/2026_06_23_Export/translation_en_ar.json",
+      "count": 2541,
+      "to_add": [
+        "MS_SUCCESS_ERROR_272"
+      ],
+      "to_remove": [],
+      "to_modify": [
+        "BU_ST_ME_2169",
+        "PA_AU_MO_1069"
+      ],
+      "incomplete": [],
+      "over_filled": []
+    },
+    {
+      "lang": "cz",
+      "file": "translator/output/2026_06_23_Export/translation_en_cz.json",
+      "count": 2541,
+      "to_add": [
+        "MS_SUCCESS_ERROR_272"
+      ],
+      "to_remove": [],
+      "to_modify": [
+        "BU_ST_ME_2169",
+        "PA_AU_MO_1069"
+      ],
+      "incomplete": [],
+      "over_filled": []
+    },
+    {
+      "lang": "de",
+      "file": "translator/output/2026_06_23_Export/translation_en_de.json",
+      "count": 2541,
+      "to_add": [
+        "MS_SUCCESS_ERROR_272"
+      ],
+      "to_remove": [],
+      "to_modify": [
+        "BU_ST_ME_2169",
+        "PA_AU_MO_1069"
+      ],
+      "incomplete": [],
+      "over_filled": []
+    },
+    {
+      "lang": "fr",
+      "file": "translator/output/2026_06_23_Export/translation_en_fr.json",
+      "count": 2541,
+      "to_add": [
+        "MS_SUCCESS_ERROR_272"
+      ],
+      "to_remove": [],
+      "to_modify": [
+        "BU_ST_ME_2169",
+        "PA_AU_MO_1069"
+      ],
+      "incomplete": [],
+      "over_filled": [
+        "PA_CO_CR_823",
+        "PA_CO_ED_835",
+        "PA_CO_IN_811",
+        "PA_CO_VI_849",
+        "PA_CO_VI_859",
+        "PA_ID_CT_884",
+        "PA_ID_NE_878",
+        "PA_ID_TA_900",
+        "PA_ID_TA_908",
+        "PA_NE_CR_767",
+        "PA_NE_CR_772",
+        "PA_NE_CR_783",
+        "PA_NE_CR_790",
+        "PA_NE_ED_797",
+        "PA_NE_HI_743",
+        "PA_NE_NO_756",
+        "PA_NE_TA_729"
+      ]
+    },
+    {
+      "lang": "it",
+      "file": "translator/output/2026_06_23_Export/translation_en_it.json",
+      "count": 2541,
+      "to_add": [
+        "MS_SUCCESS_ERROR_272"
+      ],
+      "to_remove": [],
+      "to_modify": [
+        "BU_ST_ME_2169",
+        "PA_AU_MO_1069"
+      ],
+      "incomplete": [],
+      "over_filled": []
+    },
+    {
+      "lang": "sk",
+      "file": "translator/output/2026_06_23_Export/translation_en_sk.json",
+      "count": 2541,
+      "to_add": [
+        "MS_SUCCESS_ERROR_272"
+      ],
+      "to_remove": [],
+      "to_modify": [
+        "BU_ST_ME_2169",
+        "PA_AU_MO_1069"
+      ],
+      "incomplete": [],
+      "over_filled": []
+    }
+  ]
+}
