@@ -27,7 +27,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-DEFAULT_LANGUAGES = ["ar", "cz", "de", "fr", "it", "sk"]
+DEFAULT_LANGUAGES = ["ar", "cz", "de", "fr", "it", "sk", "pt", "es", "hu"]
 
 # Placeholders patterns that should be preserved in translations
 PLACEHOLDER_PATTERNS = [

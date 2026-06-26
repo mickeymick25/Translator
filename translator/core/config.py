@@ -22,6 +22,9 @@ LANGUAGES: Dict[str, Dict[str, str]] = {
     "de": {"name": "Allemand", "code": "DE", "target": "de", "source_col": "origin"},
     "it": {"name": "Italien", "code": "IT", "target": "it", "source_col": "origin"},
     "ar": {"name": "Arabe", "code": "AR", "target": "ar", "source_col": "origin"},
+    "pt": {"name": "Portugais", "code": "PT", "target": "pt", "source_col": "origin"},
+    "es": {"name": "Espagnol", "code": "ES", "target": "es", "source_col": "origin"},
+    "hu": {"name": "Hongrois", "code": "HU", "target": "hu", "source_col": "origin"},
 }
 
 
@@ -211,7 +214,9 @@ class Config:
 
     # Batch translation languages (comma-separated)
     BATCH_LANGS: str = field(
-        default_factory=lambda: os.environ.get("BATCH_LANGS", "en,fr,cz,sk,de,it,ar")
+        default_factory=lambda: os.environ.get(
+            "BATCH_LANGS", "en,fr,cz,sk,de,it,ar,pt,es,hu"
+        )
     )
 
     # Output format: json, xlsx, or auto

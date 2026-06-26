@@ -63,6 +63,9 @@ class OllamaProvider(TranslationProvider):
         "sk": "Slovak",
         "it": "Italian",
         "ar": "Arabic",
+        "pt": "Portuguese",
+        "es": "Spanish",
+        "hu": "Hungarian",
     }
 
     def __init__(

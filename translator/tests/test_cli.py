@@ -734,7 +734,7 @@ class TestBuildConfigFromArgsDefaults:
             config = build_config_from_args(args)
             assert config.SOURCE_LANG == "en"
             assert config.TARGET_LANG == "cs"
-            assert config.BATCH_LANGS == "en,fr,cz,sk,de,it,ar"
+            assert config.BATCH_LANGS == "en,fr,cz,sk,de,it,ar,pt,es,hu"
             assert config.OUTPUT_FORMAT == "auto"
             config_module._config = None
 

@@ -21,7 +21,7 @@ services:
       - EXCEL_DIR=${EXCEL_DIR:-/app/excel}
       - DOC_DIR=${DOC_DIR:-/app/doc}
       - SOURCE_DIR=${SOURCE_DIR:-/app/source}
-      - BATCH_LANGS=${BATCH_LANGS:-en,fr,cz,sk,de,it,ar}
+      - BATCH_LANGS=${BATCH_LANGS:-en,fr,cz,sk,de,it,ar,pt,es,hu}
       - OUTPUT_FORMAT=${OUTPUT_FORMAT:-auto}
       - TRANSLATION_PROVIDER=${TRANSLATION_PROVIDER:-google}
       - DEEPL_API_KEY=${DEEPL_API_KEY:-}

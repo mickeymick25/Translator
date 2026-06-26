@@ -377,6 +377,21 @@ class TestLanguagesConstant:
         """French uses 'french' as the source column."""
         assert LANGUAGES["fr"]["source_col"] == "french"
 
+    def test_portuguese_uses_pt_api_code(self):
+        """Portuguese ('pt') uses 'pt' as the API code and 'origin' source column."""
+        assert LANGUAGES["pt"]["target"] == "pt"
+        assert LANGUAGES["pt"]["source_col"] == "origin"
+
+    def test_spanish_uses_es_api_code(self):
+        """Spanish ('es') uses 'es' as the API code and 'origin' source column."""
+        assert LANGUAGES["es"]["target"] == "es"
+        assert LANGUAGES["es"]["source_col"] == "origin"
+
+    def test_hungarian_uses_hu_api_code(self):
+        """Hungarian ('hu') uses 'hu' as the API code and 'origin' source column."""
+        assert LANGUAGES["hu"]["target"] == "hu"
+        assert LANGUAGES["hu"]["source_col"] == "origin"
+
 
 # ─── Mode constants ────────────────────────────────────────────────
 
