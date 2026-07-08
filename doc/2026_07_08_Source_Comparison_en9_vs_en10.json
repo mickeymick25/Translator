@@ -1,0 +1,61 @@
+{
+  "old_path": "translator/source/2026_06_25_Import/en 9.json",
+  "new_path": "translator/source/2026_07_08_Import/en 10.json",
+  "counts": {
+    "old": 2542,
+    "new": 2545,
+    "unchanged": 2539,
+    "modified": 3,
+    "added": 3,
+    "removed": 0
+  },
+  "added": [
+    "LO_PR_CH_2174",
+    "MS_SUCCESS_ERROR_273",
+    "PA_AU_MO_2174"
+  ],
+  "removed": [],
+  "modified": [
+    {
+      "key": "BU_ST_ME_2169",
+      "old": "Pairing Error",
+      "new": "Paring Error"
+    },
+    {
+      "key": "LO_AF_CR_1285",
+      "old": "Parent company",
+      "new": "Current Profile"
+    },
+    {
+      "key": "MS_SUCCESS_ERROR_272",
+      "old": "Location links regeneration has been done",
+      "new": "The Location <strong>{{locationId}} - {{locationName}}</strong> links have been updated successfully."
+    }
+  ],
+  "added_by_prefix": {
+    "LO": [
+      "LO_PR_CH_2174"
+    ],
+    "MS": [
+      "MS_SUCCESS_ERROR_273"
+    ],
+    "PA": [
+      "PA_AU_MO_2174"
+    ]
+  },
+  "removed_by_prefix": {},
+  "placeholder_mismatch": [
+    {
+      "key": "MS_SUCCESS_ERROR_272",
+      "old": "Location links regeneration has been done",
+      "new": "The Location <strong>{{locationId}} - {{locationName}}</strong> links have been updated successfully.",
+      "old_ph": [],
+      "new_ph": [
+        "</strong>",
+        "<strong>",
+        "{{locationId}",
+        "{{locationName}"
+      ]
+    }
+  ]
+}
