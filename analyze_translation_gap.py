@@ -199,6 +199,52 @@ def short(v) -> str:
     return s
 
 
+def analyze_export(
+    source_path: Path,
+    old_source_path: Path,
+    export_dir: Path,
+    languages: list[str],
+) -> list[LangGap]:
+    """Analyse l'écart de traduction pour chaque langue d'un export.
+
+    Helper d'usage programmatique (depuis le pipeline) : charge la source +
+    l'ancienne source, puis appelle `analyze()` pour chaque langue.
+    """
+    src = load_json(source_path)
+    old_src = load_json(old_source_path)
+    return [
+        analyze(lg, export_dir / f"translation_en_{lg}.json", src, old_src)
+        for lg in languages
+    ]
+
+
+def gaps_to_dict(
+    gaps: list[LangGap],
+    source_path: Path,
+    old_source_path: Path,
+    export_dir: Path,
+) -> dict:
+    """Sérialise une liste de LangGap en dict (machine-readable)."""
+    return {
+        "source": str(source_path),
+        "old_source": str(old_source_path),
+        "export_dir": str(export_dir),
+        "languages": [
+            {
+                "lang": g.lang,
+                "file": str(g.file),
+                "count": g.count,
+                "to_add": g.to_add,
+                "to_remove": g.to_remove,
+                "to_modify": g.to_modify,
+                "incomplete": g.incomplete,
+                "over_filled": g.over_filled,
+            }
+            for g in gaps
+        ],
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Analyse translation gap vs a new EN source."
@@ -218,20 +264,17 @@ def main() -> None:
     )
     ap.add_argument(
         "--languages",
-        nargs="+",
+        type=str,
         required=True,
-        help="Language codes, e.g. ar cz de fr it sk",
+        help="Comma-separated language codes, e.g. ar,cz,de,fr,it,sk",
     )
     ap.add_argument("--report", type=Path, default=None)
     ap.add_argument("--json", type=Path, default=None)
     args = ap.parse_args()
 
     src = load_json(args.source)
-    old_src = load_json(args.old_source)
-    gaps = [
-        analyze(lg, args.export_dir / f"translation_en_{lg}.json", src, old_src)
-        for lg in args.languages
-    ]
+    languages = [lg.strip() for lg in args.languages.split(",") if lg.strip()]
+    gaps = analyze_export(args.source, args.old_source, args.export_dir, languages)
 
     md = render(src, gaps)
     if args.report:
@@ -241,24 +284,7 @@ def main() -> None:
         print(md)
 
     if args.json:
-        data = {
-            "source": str(args.source),
-            "old_source": str(args.old_source),
-            "export_dir": str(args.export_dir),
-            "languages": [
-                {
-                    "lang": g.lang,
-                    "file": str(g.file),
-                    "count": g.count,
-                    "to_add": g.to_add,
-                    "to_remove": g.to_remove,
-                    "to_modify": g.to_modify,
-                    "incomplete": g.incomplete,
-                    "over_filled": g.over_filled,
-                }
-                for g in gaps
-            ],
-        }
+        data = gaps_to_dict(gaps, args.source, args.old_source, args.export_dir)
         args.json.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )

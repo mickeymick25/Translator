@@ -1,0 +1,48 @@
+{
+  "_comment": "Dictionnaire des coquilles récurrentes dans les fichiers source EN. Le pipeline détecte ces coquilles et propose de corriger le fichier source avant traduction. Maintenable : ajouter des entrées au fil des cycles.",
+  "version": 1,
+  "typos": [
+    {
+      "typo": "Paring Error",
+      "correction": "Pairing Error",
+      "first_seen_key": "BU_ST_ME_2169",
+      "occurrences": 3,
+      "note": "Revenu 3 fois dans les cycles en7/en8/en9."
+    },
+    {
+      "typo": "Inprogress",
+      "correction": "In progress",
+      "first_seen_key": "PA_AU_MO_1069",
+      "occurrences": 2,
+      "note": ""
+    },
+    {
+      "typo": "Hiearchy",
+      "correction": "Hierarchy",
+      "first_seen_key": "LO_LI_HE_2006",
+      "occurrences": 1,
+      "note": ""
+    },
+    {
+      "typo": "TItle",
+      "correction": "Title",
+      "first_seen_key": "PA_ID_HE_880",
+      "occurrences": 1,
+      "note": ""
+    },
+    {
+      "typo": "Parners",
+      "correction": "Partners",
+      "first_seen_key": "DA_TA_LA_2110",
+      "occurrences": 1,
+      "note": ""
+    },
+    {
+      "typo": "Desactive",
+      "correction": "Deactivate",
+      "first_seen_key": "PA_US_TA_684",
+      "occurrences": 1,
+      "note": "Source en10."
+    }
+  ]
+}

@@ -18,6 +18,14 @@ Usage:
         --export-dir translator/output/2026_06_23_Export \
         --source-dir translator/source/2026_06_23_Import \
         --languages ar,cz,de,fr,it,sk
+
+    # Machine-readable JSON output
+    python validate_translations.py --json report.json
+
+Programmatic use:
+    from validate_translations import validate, render_report
+    report = validate(source_path, export_dir, languages)
+    print(render_report(report))
 """
 
 import argparse
@@ -25,6 +33,7 @@ import json
 import re
 import sys
 from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_LANGUAGES = ["ar", "cz", "de", "fr", "it", "sk", "pt", "es", "hu"]
@@ -76,6 +85,364 @@ def _pick_source_file(source_dir: Path) -> Path | None:
     return max(json_files, key=lambda p: p.stat().st_size)
 
 
+@dataclass
+class LangValidation:
+    """Résultat de validation pour une seule langue."""
+
+    lang: str
+    file: Path
+    count: int = 0
+    loaded: bool = False
+    load_error: str | None = None
+    missing: list[str] = field(default_factory=list)
+    extra: list[str] = field(default_factory=list)
+    empty: list[str] = field(default_factory=list)
+    untranslated: list[tuple[str, str]] = field(
+        default_factory=list
+    )  # (key, src_value)
+    placeholder_issues: list[tuple[str, list[str], list[str]]] = field(
+        default_factory=list
+    )
+    duplicates: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
+class ValidationReport:
+    """Rapport de validation consolidé sur toutes les langues."""
+
+    source_file: Path
+    source_keys: set[str]
+    source_count: int
+    languages: list[LangValidation]
+
+    @property
+    def total_missing(self) -> int:
+        return sum(len(lv.missing) for lv in self.languages)
+
+    @property
+    def total_extra(self) -> int:
+        return sum(len(lv.extra) for lv in self.languages)
+
+    @property
+    def total_empty(self) -> int:
+        return sum(len(lv.empty) for lv in self.languages)
+
+    @property
+    def total_untranslated(self) -> int:
+        return sum(len(lv.untranslated) for lv in self.languages)
+
+    @property
+    def total_placeholder_issues(self) -> int:
+        return sum(len(lv.placeholder_issues) for lv in self.languages)
+
+    @property
+    def all_ok(self) -> bool:
+        return (
+            self.total_missing == 0
+            and self.total_extra == 0
+            and self.total_empty == 0
+            and self.total_placeholder_issues == 0
+        )
+
+    def to_dict(self) -> dict:
+        """Sérialise en dict (machine-readable)."""
+        return {
+            "source_file": str(self.source_file),
+            "source_count": self.source_count,
+            "languages": [
+                {
+                    "lang": lv.lang,
+                    "file": str(lv.file),
+                    "count": lv.count,
+                    "loaded": lv.loaded,
+                    "load_error": lv.load_error,
+                    "missing": lv.missing,
+                    "extra": lv.extra,
+                    "empty": lv.empty,
+                    "untranslated": [
+                        {"key": k, "source": v} for k, v in lv.untranslated
+                    ],
+                    "placeholder_issues": [
+                        {"key": k, "source": s, "translation": t}
+                        for k, s, t in lv.placeholder_issues
+                    ],
+                    "duplicates": lv.duplicates,
+                }
+                for lv in self.languages
+            ],
+            "totals": {
+                "missing": self.total_missing,
+                "extra": self.total_extra,
+                "empty": self.total_empty,
+                "untranslated": self.total_untranslated,
+                "placeholder_issues": self.total_placeholder_issues,
+            },
+            "all_ok": self.all_ok,
+        }
+
+
+def _detect_duplicate_keys(filepath: Path) -> dict[str, int]:
+    """Parse le JSON brut et retourne les clés apparaissant plus d'une fois."""
+    if not filepath.exists():
+        return {}
+    with open(filepath, "r", encoding="utf-8") as f:
+        content = f.read()
+    key_counts: dict[str, int] = defaultdict(int)
+    for line in content.split("\n"):
+        line = line.strip()
+        if line.startswith('"') and '":' in line:
+            key = line.split('":')[0].strip('"')
+            key_counts[key] += 1
+    return {k: v for k, v in key_counts.items() if v > 1}
+
+
+def validate_lang(
+    lang: str,
+    translation_path: Path,
+    source_data: dict,
+    source_keys: set[str],
+) -> LangValidation:
+    """Exécute les 6 contrôles pour un fichier de langue contre la source."""
+    lv = LangValidation(lang=lang, file=translation_path)
+
+    try:
+        data = load_json(translation_path)
+        lv.loaded = True
+        lv.count = len(data)
+    except Exception as e:  # noqa: BLE001 — reporter toute erreur de load
+        lv.loaded = False
+        lv.load_error = str(e)
+        return lv
+
+    trans_keys = set(data.keys())
+
+    # 1. Missing keys
+    lv.missing = sorted(source_keys - trans_keys)
+
+    # 2. Extra keys
+    lv.extra = sorted(trans_keys - source_keys)
+
+    # 3. Empty/null translations
+    lv.empty = sorted(
+        key
+        for key, value in data.items()
+        if value is None or (isinstance(value, str) and value.strip() == "")
+    )
+
+    # 4. Potentially untranslated values (identical to source, len > 3)
+    lv.untranslated = []
+    for key in source_keys & trans_keys:
+        src_val = source_data.get(key, "")
+        trans_val = data.get(key, "")
+        if isinstance(src_val, str) and isinstance(trans_val, str):
+            if src_val == trans_val and len(src_val) > 3:
+                lv.untranslated.append((key, src_val))
+    lv.untranslated.sort(key=lambda kv: kv[0])
+
+    # 5. Placeholder preservation
+    lv.placeholder_issues = []
+    for key in source_keys & trans_keys:
+        src_val = source_data.get(key, "")
+        trans_val = data.get(key, "")
+        if not isinstance(src_val, str) or not isinstance(trans_val, str):
+            continue
+        src_ph = extract_placeholders(src_val)
+        trans_ph = extract_placeholders(trans_val)
+        if src_ph and sorted(src_ph) != sorted(trans_ph):
+            lv.placeholder_issues.append((key, src_ph, trans_ph))
+
+    # 6. Duplicate keys
+    lv.duplicates = _detect_duplicate_keys(translation_path)
+
+    return lv
+
+
+def validate(
+    source_path: Path,
+    export_dir: Path,
+    languages: list[str],
+) -> ValidationReport:
+    """Valide tous les fichiers `translation_en_<lang>.json` contre la source.
+
+    Args:
+        source_path: Chemin du fichier source JSON.
+        export_dir: Dossier contenant les `translation_en_<lang>.json`.
+        languages: Codes de langues cibles (ex : ['ar', 'cz', 'fr']).
+
+    Returns:
+        Un ValidationReport avec les résultats par langue.
+    """
+    source_data = load_json(source_path)
+    source_keys = set(source_data.keys())
+
+    results = [
+        validate_lang(
+            lang,
+            export_dir / f"translation_en_{lang}.json",
+            source_data,
+            source_keys,
+        )
+        for lang in languages
+    ]
+
+    return ValidationReport(
+        source_file=source_path,
+        source_keys=source_keys,
+        source_count=len(source_keys),
+        languages=results,
+    )
+
+
+def render_report(report: ValidationReport) -> str:
+    """Génère le rapport textuel (compatible avec la sortie CLI historique)."""
+    L: list[str] = []
+    L.append("=" * 70)
+    L.append(f"COP Translation Validation Report - {report.source_file.parent.name}")
+    L.append("=" * 70)
+    L.append(
+        f"\n📄 Source file: {report.source_file.name}  "
+        f"(in {report.source_file.parent.name})"
+    )
+    L.append(f"   Source keys: {report.source_count}")
+
+    for lv in report.languages:
+        if lv.loaded:
+            L.append(f"   {lv.lang.upper()}: {lv.count} keys")
+        else:
+            L.append(f"   {lv.lang.upper()}: ❌ Error loading: {lv.load_error}")
+
+    # ─── 1. Missing keys ───────────────────────────────────────────────
+    L.append("\n" + "─" * 70)
+    L.append("1️⃣  MISSING KEYS (present in source but not in translation)")
+    L.append("─" * 70)
+    if report.total_missing == 0:
+        L.append("\n   ✅ All translations have all source keys!")
+    else:
+        for lv in report.languages:
+            if lv.missing:
+                L.append(f"\n   {lv.lang.upper()}: {len(lv.missing)} missing keys")
+                for key in lv.missing[:20]:
+                    L.append(f"      - {key}")
+                if len(lv.missing) > 20:
+                    L.append(f"      ... and {len(lv.missing) - 20} more")
+            else:
+                L.append(f"\n   {lv.lang.upper()}: ✅ No missing keys")
+
+    # ─── 2. Extra keys ────────────────────────────────────────────────
+    L.append("\n" + "─" * 70)
+    L.append("2️⃣  EXTRA KEYS (present in translation but not in source)")
+    L.append("─" * 70)
+    if report.total_extra == 0:
+        L.append("\n   ✅ No extra keys in any translation!")
+    else:
+        for lv in report.languages:
+            if lv.extra:
+                L.append(f"\n   {lv.lang.upper()}: {len(lv.extra)} extra keys")
+                for key in lv.extra[:20]:
+                    L.append(f"      - {key}")
+                if len(lv.extra) > 20:
+                    L.append(f"      ... and {len(lv.extra) - 20} more")
+            else:
+                L.append(f"\n   {lv.lang.upper()}: ✅ No extra keys")
+
+    # ─── 3. Empty/null translations ───────────────────────────────────
+    L.append("\n" + "─" * 70)
+    L.append("3️⃣  EMPTY OR NULL TRANSLATIONS")
+    L.append("─" * 70)
+    if report.total_empty == 0:
+        L.append("\n   ✅ All translations have non-empty values!")
+    else:
+        for lv in report.languages:
+            if lv.empty:
+                L.append(f"\n   {lv.lang.upper()}: {len(lv.empty)} empty/null values")
+                for key in lv.empty[:20]:
+                    L.append(f"      - {key}")
+                if len(lv.empty) > 20:
+                    L.append(f"      ... and {len(lv.empty) - 20} more")
+            else:
+                L.append(f"\n   {lv.lang.upper()}: ✅ No empty translations")
+
+    # ─── 4. Untranslated values (same as English source) ──────────────
+    L.append("\n" + "─" * 70)
+    L.append("4️⃣  POTENTIALLY UNTRANSLATED VALUES (identical to English source)")
+    L.append("─" * 70)
+    if report.total_untranslated > 0:
+        L.append(
+            f"\n   ⚠️  Total potentially untranslated values: {report.total_untranslated}"
+        )
+    for lv in report.languages:
+        if lv.untranslated:
+            L.append(
+                f"\n   {lv.lang.upper()}: {len(lv.untranslated)} values identical to source (len > 3)"
+            )
+            for key, src_val in lv.untranslated[:30]:
+                src_preview = src_val[:80]
+                ellipsis = "..." if len(src_val) > 80 else ""
+                L.append(f'      - {key}: "{src_preview}{ellipsis}"')
+            if len(lv.untranslated) > 30:
+                L.append(f"      ... and {len(lv.untranslated) - 30} more")
+        else:
+            L.append(f"\n   {lv.lang.upper()}: ✅ No untranslated values detected")
+
+    # ─── 5. Placeholder preservation ──────────────────────────────────
+    L.append("\n" + "─" * 70)
+    L.append("5️⃣  PLACEHOLDER PRESERVATION (%s, {name}, <b>, ICU)")
+    L.append("─" * 70)
+    if report.total_placeholder_issues == 0:
+        L.append("\n   ✅ All placeholders correctly preserved!")
+    else:
+        for lv in report.languages:
+            if lv.placeholder_issues:
+                L.append(
+                    f"\n   {lv.lang.upper()}: {len(lv.placeholder_issues)} keys with placeholder mismatches"
+                )
+                for key, src_ph, trans_ph in lv.placeholder_issues[:20]:
+                    L.append(f"      - {key}: source={src_ph}, translation={trans_ph}")
+                if len(lv.placeholder_issues) > 20:
+                    L.append(f"      ... and {len(lv.placeholder_issues) - 20} more")
+            else:
+                L.append(f"\n   {lv.lang.upper()}: ✅ All placeholders preserved")
+
+    # ─── 6. Duplicate keys ──────────────────────────────────────────
+    L.append("\n" + "─" * 70)
+    L.append("6️⃣  DUPLICATE KEYS")
+    L.append("─" * 70)
+    for lv in report.languages:
+        if lv.duplicates:
+            L.append(f"\n   {lv.lang.upper()}: {len(lv.duplicates)} duplicate keys")
+            for key, count in sorted(lv.duplicates.items())[:10]:
+                L.append(f'      - "{key}" appears {count} times')
+        else:
+            L.append(f"\n   {lv.lang.upper()}: ✅ No duplicate keys")
+
+    # ─── Summary ──────────────────────────────────────────────────────
+    L.append("\n" + "=" * 70)
+    L.append("📊 SUMMARY")
+    L.append("=" * 70)
+    L.append(f"   Source:               {report.source_file.name}")
+    L.append(f"   Source keys:          {report.source_count}")
+    for lv in report.languages:
+        if lv.loaded:
+            L.append(
+                f"   {lv.lang.upper():<6}                 {lv.count} keys "
+                f"({len(lv.missing)} missing, {len(lv.extra)} extra, {len(lv.empty)} empty)"
+            )
+
+    if report.all_ok:
+        L.append("\n   ✅ All translations look good!")
+    else:
+        L.append(
+            f"\n   ⚠️  Issues found: {report.total_missing} missing, {report.total_extra} extra, "
+            f"{report.total_empty} empty, {report.total_placeholder_issues} placeholder issues"
+        )
+        if report.total_untranslated > 0:
+            L.append(
+                f"   ⚠️  {report.total_untranslated} values may be untranslated (identical to source)"
+            )
+    L.append("=" * 70)
+    return "\n".join(L)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -95,6 +462,11 @@ def main():
         default=",".join(DEFAULT_LANGUAGES),
         help="Comma-separated target language codes (default: ar,cz,de,fr,it,sk).",
     )
+    parser.add_argument(
+        "--json",
+        default=None,
+        help="Optional machine-readable JSON output path.",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent  # translator/
@@ -110,12 +482,6 @@ def main():
     )
     languages = [lang.strip() for lang in args.languages.split(",") if lang.strip()]
 
-    print("=" * 70)
-    print(
-        f"COP Translation Validation Report - {export_dir.name if export_dir else '?'}"
-    )
-    print("=" * 70)
-
     if not export_dir or not export_dir.exists():
         print(f"\n❌ Export dir not found: {export_dir}")
         sys.exit(1)
@@ -123,237 +489,27 @@ def main():
         print(f"\n❌ Source dir not found: {source_dir}")
         sys.exit(1)
 
-    # Find source file (largest *.json in the import folder)
     source_file = _pick_source_file(source_dir)
     if not source_file:
         print(f"\n❌ No source JSON files found in {source_dir}")
         sys.exit(1)
 
-    print(f"\n📄 Source file: {source_file.name}  (in {source_dir.name})")
-
     try:
-        source_data = load_json(source_file)
+        load_json(source_file)
     except Exception as e:
         print(f"❌ Error loading source: {e}")
         sys.exit(1)
 
-    source_keys = set(source_data.keys())
-    print(f"   Source keys: {len(source_keys)}")
+    # Run the structured validation and render the full report
+    report = validate(source_file, export_dir, languages)
+    print(render_report(report))
 
-    # Load all translation files
-    translations = {}
-    all_translation_keys = {}
-    for lang in languages:
-        filepath = export_dir / f"translation_en_{lang}.json"
-        try:
-            data = load_json(filepath)
-            translations[lang] = data
-            all_translation_keys[lang] = set(data.keys())
-            print(f"   {lang.upper()}: {len(data)} keys")
-        except Exception as e:
-            print(f"   {lang.upper()}: ❌ Error loading: {e}")
-            translations[lang] = {}
-            all_translation_keys[lang] = set()
-
-    # ─── 1. Missing keys ───────────────────────────────────────────────
-    print("\n" + "─" * 70)
-    print("1️⃣  MISSING KEYS (present in source but not in translation)")
-    print("─" * 70)
-
-    total_missing = 0
-    for lang in languages:
-        missing = source_keys - all_translation_keys[lang]
-        if missing:
-            total_missing += len(missing)
-            print(f"\n   {lang.upper()}: {len(missing)} missing keys")
-            for key in sorted(missing)[:20]:
-                print(f"      - {key}")
-            if len(missing) > 20:
-                print(f"      ... and {len(missing) - 20} more")
-        else:
-            print(f"\n   {lang.upper()}: ✅ No missing keys")
-
-    if total_missing == 0:
-        print("\n   ✅ All translations have all source keys!")
-
-    # ─── 2. Extra keys ────────────────────────────────────────────────
-    print("\n" + "─" * 70)
-    print("2️⃣  EXTRA KEYS (present in translation but not in source)")
-    print("─" * 70)
-
-    total_extra = 0
-    for lang in languages:
-        extra = all_translation_keys[lang] - source_keys
-        if extra:
-            total_extra += len(extra)
-            print(f"\n   {lang.upper()}: {len(extra)} extra keys")
-            for key in sorted(extra)[:20]:
-                print(f"      - {key}")
-            if len(extra) > 20:
-                print(f"      ... and {len(extra) - 20} more")
-        else:
-            print(f"\n   {lang.upper()}: ✅ No extra keys")
-
-    if total_extra == 0:
-        print("\n   ✅ No extra keys in any translation!")
-
-    # ─── 3. Empty/null translations ───────────────────────────────────
-    print("\n" + "─" * 70)
-    print("3️⃣  EMPTY OR NULL TRANSLATIONS")
-    print("─" * 70)
-
-    total_empty = 0
-    for lang in languages:
-        empty_keys = [
-            key
-            for key, value in translations[lang].items()
-            if value is None or (isinstance(value, str) and value.strip() == "")
-        ]
-        if empty_keys:
-            total_empty += len(empty_keys)
-            print(f"\n   {lang.upper()}: {len(empty_keys)} empty/null values")
-            for key in sorted(empty_keys)[:20]:
-                print(f"      - {key}")
-            if len(empty_keys) > 20:
-                print(f"      ... and {len(empty_keys) - 20} more")
-        else:
-            print(f"\n   {lang.upper()}: ✅ No empty translations")
-
-    if total_empty == 0:
-        print("\n   ✅ All translations have non-empty values!")
-
-    # ─── 4. Untranslated values (same as English source) ──────────────
-    print("\n" + "─" * 70)
-    print("4️⃣  POTENTIALLY UNTRANSLATED VALUES (identical to English source)")
-    print("─" * 70)
-
-    total_untranslated = 0
-    for lang in languages:
-        untranslated = []
-        for key in source_keys & all_translation_keys[lang]:
-            src_val = source_data.get(key, "")
-            trans_val = translations[lang].get(key, "")
-            # Skip short values (buttons, labels that might be same across languages)
-            if isinstance(src_val, str) and isinstance(trans_val, str):
-                if src_val == trans_val and len(src_val) > 3:
-                    untranslated.append(key)
-        if untranslated:
-            total_untranslated += len(untranslated)
-            print(
-                f"\n   {lang.upper()}: {len(untranslated)} values identical to source (len > 3)"
-            )
-            for key in sorted(untranslated)[:30]:
-                src_val = source_data[key][:80]
-                print(
-                    f'      - {key}: "{src_val}{"..." if len(source_data[key]) > 80 else ""}"'
-                )
-            if len(untranslated) > 30:
-                print(f"      ... and {len(untranslated) - 30} more")
-        else:
-            print(f"\n   {lang.upper()}: ✅ No untranslated values detected")
-
-    if total_untranslated > 0:
-        print(f"\n   ⚠️  Total potentially untranslated values: {total_untranslated}")
-
-    # ─── 5. Placeholder preservation ──────────────────────────────────
-    print("\n" + "─" * 70)
-    print("5️⃣  PLACEHOLDER PRESERVATION (%s, {name}, <b>, ICU)")
-    print("─" * 70)
-
-    total_placeholder_issues = 0
-    for lang in languages:
-        placeholder_issues = []
-        for key in source_keys & all_translation_keys[lang]:
-            src_val = source_data.get(key, "")
-            trans_val = translations[lang].get(key, "")
-            if not isinstance(src_val, str) or not isinstance(trans_val, str):
-                continue
-            src_ph = extract_placeholders(src_val)
-            trans_ph = extract_placeholders(trans_val)
-            if src_ph and sorted(src_ph) != sorted(trans_ph):
-                placeholder_issues.append((key, src_ph, trans_ph))
-        if placeholder_issues:
-            total_placeholder_issues += len(placeholder_issues)
-            print(
-                f"\n   {lang.upper()}: {len(placeholder_issues)} keys with placeholder mismatches"
-            )
-            for key, src_ph, trans_ph in placeholder_issues[:20]:
-                print(f"      - {key}: source={src_ph}, translation={trans_ph}")
-            if len(placeholder_issues) > 20:
-                print(f"      ... and {len(placeholder_issues) - 20} more")
-        else:
-            print(f"\n   {lang.upper()}: ✅ All placeholders preserved")
-
-    if total_placeholder_issues == 0:
-        print("\n   ✅ All placeholders correctly preserved!")
-
-    # ─── 6. Duplicate keys ──────────────────────────────────────────
-    print("\n" + "─" * 70)
-    print("6️⃣  DUPLICATE KEYS")
-    print("─" * 70)
-
-    for lang in languages:
-        filepath = export_dir / f"translation_en_{lang}.json"
-        if not filepath.exists():
-            continue
-        with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read()
-        # Count occurrences of each key in raw JSON
-        key_counts = defaultdict(int)
-        for line in content.split("\n"):
-            line = line.strip()
-            if line.startswith('"') and '":' in line:
-                key = line.split('":')[0].strip('"')
-                key_counts[key] += 1
-        duplicates = {k: v for k, v in key_counts.items() if v > 1}
-        if duplicates:
-            print(f"\n   {lang.upper()}: {len(duplicates)} duplicate keys")
-            for key, count in sorted(duplicates.items())[:10]:
-                print(f'      - "{key}" appears {count} times')
-        else:
-            print(f"\n   {lang.upper()}: ✅ No duplicate keys")
-
-    # ─── Summary ──────────────────────────────────────────────────────
-    print("\n" + "=" * 70)
-    print("📊 SUMMARY")
-    print("=" * 70)
-
-    all_ok = (
-        total_missing == 0
-        and total_extra == 0
-        and total_empty == 0
-        and total_placeholder_issues == 0
-    )
-
-    print(f"   Source:               {source_file.name}")
-    print(f"   Source keys:          {len(source_keys)}")
-    for lang in languages:
-        data = translations[lang]
-        missing = len(source_keys - all_translation_keys[lang])
-        extra = len(all_translation_keys[lang] - source_keys)
-        empty_count = sum(
-            1
-            for v in data.values()
-            if v is None or (isinstance(v, str) and v.strip() == "")
+    if args.json:
+        Path(args.json).write_text(
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
-        print(
-            f"   {lang.upper():<6}                 {len(data)} keys "
-            f"({missing} missing, {extra} extra, {empty_count} empty)"
-        )
-
-    if all_ok:
-        print("\n   ✅ All translations look good!")
-    else:
-        print(
-            f"\n   ⚠️  Issues found: {total_missing} missing, {total_extra} extra, "
-            f"{total_empty} empty, {total_placeholder_issues} placeholder issues"
-        )
-        if total_untranslated > 0:
-            print(
-                f"   ⚠️  {total_untranslated} values may be untranslated (identical to source)"
-            )
-
-    print("=" * 70)
+        print(f"JSON written to {args.json}")
 
 
 if __name__ == "__main__":

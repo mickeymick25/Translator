@@ -234,6 +234,41 @@ def short(v) -> str:
     return s
 
 
+def compare(old_path: Path, new_path: Path) -> Comparison:
+    """Charge deux fichiers JSON et retourne un Comparison calculé.
+
+    Helper d'usage programmatique (depuis le pipeline). Ne modifie aucun fichier.
+    """
+    return Comparison(
+        old_path, new_path, load_json(old_path), load_json(new_path)
+    ).compute()
+
+
+def comparison_to_dict(c: Comparison) -> dict:
+    """Sérialise un Comparison en dict (machine-readable)."""
+    return {
+        "old_path": str(c.old_path),
+        "new_path": str(c.new_path),
+        "counts": {
+            "old": len(c.old),
+            "new": len(c.new),
+            "unchanged": len(c.unchanged),
+            "modified": len(c.modified),
+            "added": len(c.added),
+            "removed": len(c.removed),
+        },
+        "added": c.added,
+        "removed": c.removed,
+        "modified": [{"key": k, "old": ov, "new": nv} for k, ov, nv in c.modified],
+        "added_by_prefix": {p: ks for p, ks in c.added_by_prefix.items()},
+        "removed_by_prefix": {p: ks for p, ks in c.removed_by_prefix.items()},
+        "placeholder_mismatch": [
+            {"key": k, "old": ov, "new": nv, "old_ph": o_ph, "new_ph": n_ph}
+            for k, ov, nv, o_ph, n_ph in c.modified_placeholder_mismatch()
+        ],
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Compare two COP source JSON exports.")
     ap.add_argument("old", type=Path)
@@ -246,9 +281,7 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    c = Comparison(
-        args.old, args.new, load_json(args.old), load_json(args.new)
-    ).compute()
+    c = compare(args.old, args.new)
 
     md = render(c)
     if args.report:
@@ -258,27 +291,7 @@ def main() -> None:
         print(md)
 
     if args.json:
-        data = {
-            "old_path": str(args.old),
-            "new_path": str(args.new),
-            "counts": {
-                "old": len(c.old),
-                "new": len(c.new),
-                "unchanged": len(c.unchanged),
-                "modified": len(c.modified),
-                "added": len(c.added),
-                "removed": len(c.removed),
-            },
-            "added": c.added,
-            "removed": c.removed,
-            "modified": [{"key": k, "old": ov, "new": nv} for k, ov, nv in c.modified],
-            "added_by_prefix": {p: ks for p, ks in c.added_by_prefix.items()},
-            "removed_by_prefix": {p: ks for p, ks in c.removed_by_prefix.items()},
-            "placeholder_mismatch": [
-                {"key": k, "old": ov, "new": nv, "old_ph": o_ph, "new_ph": n_ph}
-                for k, ov, nv, o_ph, n_ph in c.modified_placeholder_mismatch()
-            ],
-        }
+        data = comparison_to_dict(c)
         args.json.write_text(
             json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
         )

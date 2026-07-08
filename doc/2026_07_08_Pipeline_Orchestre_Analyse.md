@@ -175,15 +175,15 @@ Les scripts `compare_sources.py`, `analyze_translation_gap.py`, `validate_transl
 
 | # | Tâche | Statut | Dépendance |
 |---|---|---|---|
-| 1 | Refactoring : rendre `compare_sources.py` importable (fonctions séparées du `main()`) | ⬜ | — |
-| 2 | Refactoring : rendre `analyze_translation_gap.py` importable | ⬜ | — |
-| 3 | Refactoring : rendre `validate_translations.py` importable | ⬜ | — |
-| 4 | Créer `translator/source_typos.json` (dictionnaire de coquilles) | ⬜ | — |
-| 5 | Étape 1 : détection source + précédente | ⬜ | config.py (existant) |
-| 6 | Étape 2 : comparaison sources (intégration) | ⬜ | Tâche 1 |
-| 7 | Étape 3 : détection coquilles source | ⬜ | Tâche 4 |
-| 8 | Étape 4 : analyse écart de traduction | ⬜ | Tâche 2 |
-| 9 | Étape 5 : rapport + confirmation interactive | ⬜ | Tâches 5-8 |
+| 1 | Refactoring : rendre `compare_sources.py` importable (fonctions séparées du `main()`) | ✅ | — |
+| 2 | Refactoring : rendre `analyze_translation_gap.py` importable | ✅ | — |
+| 3 | Refactoring : rendre `validate_translations.py` importable | ✅ | — |
+| 4 | Créer `translator/source_typos.json` (dictionnaire de coquilles) | ✅ | — |
+| 5 | Étape 1 : détection source + précédente | ✅ | config.py (existant) |
+| 6 | Étape 2 : comparaison sources (intégration) | ✅ | Tâche 1 |
+| 7 | Étape 3 : détection coquilles source | ✅ | Tâche 4 |
+| 8 | Étape 4 : analyse écart de traduction | ✅ | Tâche 2 |
+| 9 | Étape 5 : rapport + confirmation interactive | ✅ | Tâches 5-8 |
 | 10 | Étape 6 : pré-peuplement + gestion clés modifiées | ⬜ | Tâche 9 |
 | 11 | Étape 7 : appel à `service.py translate-json` | ⬜ | Tâche 10 |
 | 12 | Étape 8 : réordonnancement auto | ⬜ | Tâche 11 |
@@ -191,9 +191,18 @@ Les scripts `compare_sources.py`, `analyze_translation_gap.py`, `validate_transl
 | 14 | Étape 10 : détection mésalignements | ⬜ | Tâche 12 |
 | 15 | Étape 11 : rapport consolidé markdown | ⬜ | Tâches 13-14 |
 | 16 | Tests unitaires du pipeline | ⬜ | Tâches 5-15 |
-| 17 | Mode dry-run | ⬜ | Tâches 5-15 |
+| 17 | Mode dry-run | 🟡 | Tâches 5-15 |
 | 18 | Documentation README (FR + EN) | ⬜ | Tâche 15 |
 | 19 | Test end-to-end avec la source en10 | ⬜ | Tâche 15 |
+
+### Légende
+
+- ✅ terminé — ⬜ à faire — 🟡 partiel
+
+### Notes de progression
+
+- **2026-07-08 — Phase 1 terminée (tâches 1-9)** : refactoring des 3 scripts (fonctions importables + helpers `compare()`, `analyze_export()`, `validate()` / `render_report()`), dictionnaire `source_typos.json` (6 coquilles), pipeline `translator/pipeline.py` (étapes 1-5 : détection, comparaison, coquilles, écart, rapport + confirmation). Validation : 771 tests existants OK, ruff propre, dry-run sur en10 fonctionnel.
+- **Tâche 17 (dry-run)** : implémenté pour les étapes 1-5 (rapport d'analyse sans exécution). Le dry-run complet (couvrant aussi étapes 6-11) sera finalisé après Phase 2/3.
 
 ## Décisions tranchées (2026-07-08)
 
