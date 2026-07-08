@@ -74,6 +74,6 @@ translator/output/**/*.csv
 **/.rate_limiter_state.json
 
 # ─── Backups — Ne pas committer ─────────────────────────
-*.bak
+*.bak*
 *.legacy_backup
 translator/output/**/backup/
