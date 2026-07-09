@@ -55,6 +55,10 @@ from analyze_translation_gap import LangGap, analyze_export  # noqa: E402
 from analyze_translation_gap import render as render_gap  # noqa: E402
 from compare_sources import Comparison, compare  # noqa: E402
 from compare_sources import render as render_comparison  # noqa: E402
+from validate_translations import (  # noqa: E402
+    ValidationReport,
+    validate,
+)
 
 # Langues cibles par défaut (toutes configurées sauf 'en' = source)
 DEFAULT_TARGET_LANGS = [code for code in LANGUAGES if code != "en"]
@@ -799,6 +803,331 @@ def step8_reorder(ctx: PipelineContext, export_dir: Path) -> None:
         print(f"  {lang.upper()}: réordonné selon la source ({len(source_keys)} clés).")
 
 
+# ─── Étape 9 : Validation structurelle ────────────────────────────────
+
+
+def step9_validate(ctx: PipelineContext, export_dir: Path) -> ValidationReport | None:
+    """Valide les fichiers traduits via validate_translations.validate().
+
+    Retourne un ValidationReport (ou None en dry-run).
+    """
+    step_banner(9, "Validation structurelle")
+
+    if ctx.dry_run:
+        print("  [dry-run] Validation non exécutée.")
+        return None
+
+    report = validate(ctx.new_source, export_dir, ctx.languages)
+    print(f"  Source : {report.source_count} clés")
+    for lv in report.languages:
+        status = "✅" if not (lv.missing or lv.extra or lv.empty) else "⚠️"
+        print(
+            f"  {lv.lang.upper()}: {lv.count} clés "
+            f"({len(lv.missing)} manquantes, {len(lv.extra)} excédantes, "
+            f"{len(lv.empty)} vides) {status}"
+        )
+    if report.all_ok:
+        print("\n  ✅ Toutes les traductions sont valides.")
+    else:
+        print(
+            f"\n  ⚠️  {report.total_missing} manquantes, {report.total_extra} excédantes, "
+            f"{report.total_empty} vides, {report.total_placeholder_issues} placeholders."
+        )
+    return report
+
+
+# ─── Étape 10 : Détection mésalignements intra-langue ─────────────────
+
+
+def _tokenize(text: str) -> set[str]:
+    """Tokenise une chaîne pour la comparaison (lowercase, alphanumérique)."""
+    import unicodedata
+
+    # Normaliser (enlever les accents pour la comparaison approximative)
+    normalized = unicodedata.normalize("NFKD", text.lower())
+    tokens = []
+    current = []
+    for ch in normalized:
+        if ch.isalnum():
+            current.append(ch)
+        elif current:
+            tokens.append("".join(current))
+            current = []
+    if current:
+        tokens.append("".join(current))
+    return set(tokens) if tokens else {text.lower()}
+
+
+def detect_misalignments(
+    source: dict, translation: dict, lang: str
+) -> list[dict]:
+    """Détecte les mésalignements intra-langue (heuristique token overlap).
+
+    Pour chaque texte source partagé par plusieurs clés, vérifie que les
+    traductions sont cohérentes (au moins un mot en commun). Signale les
+    écarts. Heuristique conservatrice : ne signale que les divergences sans
+    aucun mot commun (Jaccard = 0).
+
+    Args:
+        source: Dict source EN (key → texte).
+        translation: Dict traduit (key → texte traduit).
+        lang: Code langue (pour le rapport).
+
+    Returns:
+        Liste de {source_text, keys, translations} pour chaque mésalignement.
+    """
+    # Grouper les clés par texte source
+    groups: dict[str, list[str]] = {}
+    for key, text in source.items():
+        if isinstance(text, str) and text:
+            groups.setdefault(text, []).append(key)
+
+    misalignments: list[dict] = []
+    for source_text, keys in groups.items():
+        if len(keys) < 2:
+            continue
+        # Récupérer les traductions non vides
+        trans = {
+            k: translation.get(k, "")
+            for k in keys
+            if isinstance(translation.get(k, ""), str) and translation.get(k, "").strip()
+        }
+        if len(trans) < 2:
+            continue
+        # Comparer les jeux de tokens par paires
+        token_sets = {k: _tokenize(v) for k, v in trans.items()}
+        keys_list = list(token_sets.keys())
+        has_divergence = False
+        for i in range(len(keys_list)):
+            for j in range(i + 1, len(keys_list)):
+                if not token_sets[keys_list[i]] & token_sets[keys_list[j]]:
+                    has_divergence = True
+                    break
+            if has_divergence:
+                break
+        if has_divergence:
+            misalignments.append(
+                {
+                    "source_text": source_text,
+                    "keys": sorted(trans.keys()),
+                    "translations": {k: trans[k] for k in sorted(trans.keys())},
+                }
+            )
+    return misalignments
+
+
+def step10_detect_misalignments(
+    ctx: PipelineContext, export_dir: Path
+) -> dict[str, list[dict]]:
+    """Détecte les mésalignements pour toutes les langues.
+
+    Retourne un dict {lang: [mésalignement, ...]}. Signale, ne corrige pas.
+    """
+    step_banner(10, "Détection mésalignements intra-langue")
+
+    if ctx.dry_run:
+        print("  [dry-run] Mésalignements non détectés.")
+        return {}
+
+    source = json_load(ctx.new_source)
+    result: dict[str, list[dict]] = {}
+    for lang in ctx.languages:
+        path = export_dir / f"translation_en_{lang}.json"
+        if not path.exists():
+            continue
+        translation = json_load(path)
+        mism = detect_misalignments(source, translation, lang)
+        result[lang] = mism
+        if mism:
+            print(f"  {lang.upper()}: {len(mism)} mésalignement(s) potentiel(s).")
+            for m in mism[:5]:
+                print(f"    « {short_repr(m['source_text'])} » → {', '.join(m['keys'])}")
+        else:
+            print(f"  {lang.upper()}: ✅ aucun mésalignement.")
+    total = sum(len(v) for v in result.values())
+    if total:
+        print(f"\n  ⚠️  {total} mésalignement(s) au total (à vérifier manuellement).")
+    return result
+
+
+# ─── Étape 11 : Rapport consolidé final ────────────────────────────────
+
+
+def build_final_report(
+    ctx: PipelineContext,
+    export_dir: Path,
+    validation_report: ValidationReport | None,
+    misalignments: dict[str, list[dict]],
+) -> str:
+    """Construit le rapport markdown final consolidé (9 sections)."""
+    L: list[str] = []
+    L.append("# Rapport final du pipeline de traduction COP\n")
+    date_str = (
+        ctx.new_import_folder.name.replace("_Import", "")
+        if ctx.new_import_folder
+        else "?"
+    )
+    L.append(f"- Date : {date_str}")
+    L.append(f"- Source : `{ctx.new_source}`\n")
+
+    # Section 1 — Source
+    L.append("## 1. Source\n")
+    if ctx.new_source:
+        with ctx.new_source.open(encoding="utf-8") as fh:
+            nkeys = len(json.load(fh))
+        L.append(f"- Fichier : `{ctx.new_source.name}`")
+        L.append(f"- Clés : {nkeys}")
+    if ctx.prev_source:
+        L.append(f"- Source précédente : `{ctx.prev_source.name}`")
+    L.append("")
+
+    # Section 2 — Comparaison
+    L.append("## 2. Comparaison des sources\n")
+    if ctx.comparison:
+        c = ctx.comparison
+        L.append(f"- Ajoutées : {len(c.added)}")
+        L.append(f"- Supprimées : {len(c.removed)}")
+        L.append(f"- Modifiées : {len(c.modified)}")
+    else:
+        L.append("_Pas de comparaison (pas de source précédente)._")
+    L.append("")
+
+    # Section 3 — Coquilles source
+    L.append("## 3. Coquilles source\n")
+    if ctx.typos_found:
+        L.append("| Coquille | Correction | Clés |")
+        L.append("|---|---|---|")
+        for entry in ctx.typos_found:
+            L.append(
+                f"| `{entry['typo']}` | `{entry['correction']}` | "
+                f"{', '.join(entry['keys'][:5])} |"
+            )
+    else:
+        L.append("_Aucune coquille connue détectée._")
+    L.append(f"\nCorrections appliquées : {'oui ✅' if ctx.typos_corrected else 'non'}\n")
+
+    # Section 4 — Écart de traduction
+    L.append("## 4. Écart de traduction\n")
+    if ctx.gaps:
+        L.append("| Langue | Présentes | À ajouter | À supprimer | À modifier | Incomplètes | Sur-remplies |")
+        L.append("|---|---:|---:|---:|---:|---:|---:|")
+        for g in ctx.gaps:
+            L.append(
+                f"| {g.lang} | {g.count} | {len(g.to_add)} | {len(g.to_remove)} | "
+                f"{len(g.to_modify)} | {len(g.incomplete)} | {len(g.over_filled)} |"
+            )
+    else:
+        L.append("_Écart non calculé._")
+    L.append("")
+
+    # Section 5 — Plan d'action
+    L.append("## 5. Plan d'action\n")
+    L.append(f"- Provider utilisé : **{ctx.provider}**")
+    L.append(f"- Langues traitées : {', '.join(ctx.languages)}")
+    L.append("")
+
+    # Section 6 — Traduction
+    L.append("## 6. Traduction\n")
+    L.append(f"- Dossier d'export : `{export_dir.name if export_dir else 'N/A'}`")
+    if export_dir and export_dir.exists():
+        files = list(export_dir.glob("translation_en_*.json"))
+        L.append(f"- Fichiers produits : {len(files)}")
+        for f in sorted(files):
+            count = len(json.loads(f.read_text(encoding="utf-8")))
+            L.append(f"  - `{f.name}` : {count} clés")
+    L.append("")
+
+    # Section 7 — Validation
+    L.append("## 7. Validation\n")
+    if validation_report:
+        L.append("| Langue | Clés | Manquantes | Excédantes | Vides | Placeholders |")
+        L.append("|---|---:|---:|---:|---:|---:|")
+        for lv in validation_report.languages:
+            L.append(
+                f"| {lv.lang} | {lv.count} | {len(lv.missing)} | {len(lv.extra)} | "
+                f"{len(lv.empty)} | {len(lv.placeholder_issues)} |"
+            )
+        L.append(
+            f"\n**Total** : {validation_report.total_missing} manquantes, "
+            f"{validation_report.total_extra} excédantes, "
+            f"{validation_report.total_empty} vides, "
+            f"{validation_report.total_placeholder_issues} placeholders."
+        )
+    else:
+        L.append("_Validation non exécutée._")
+    L.append("")
+
+    # Section 8 — Mésalignements
+    L.append("## 8. Mésalignements\n")
+    total_misalign = sum(len(v) for v in misalignments.values()) if misalignments else 0
+    L.append(f"**{total_misalign} mésalignement(s) potentiel(s)** détecté(s) (heuristique, à vérifier manuellement).\n")
+    if misalignments:
+        for lang, mism_list in misalignments.items():
+            if mism_list:
+                L.append(f"### {lang.upper()} ({len(mism_list)})\n")
+                L.append("| Texte source | Clés | Traductions |")
+                L.append("|---|---|---|")
+                for m in mism_list[:20]:
+                    keys = ", ".join(m["keys"])
+                    trans = " / ".join(
+                        f"{k}={short_repr(v)}"
+                        for k, v in m.get("translations", {}).items()
+                    )
+                    L.append(f"| {short_repr(m['source_text'])} | {keys} | {trans} |")
+    L.append("")
+
+    # Section 9 — Ordre
+    L.append("## 9. Ordre\n")
+    if export_dir and export_dir.exists() and ctx.new_source:
+        source_keys = list(json_load(ctx.new_source).keys())
+        all_aligned = True
+        for lang in ctx.languages:
+            path = export_dir / f"translation_en_{lang}.json"
+            if not path.exists():
+                continue
+            trans_keys = list(json_load(path).keys())
+            # Vérifier que les clés source sont dans l'ordre
+            source_in_trans = [k for k in source_keys if k in trans_keys]
+            aligned = source_in_trans == [k for k in trans_keys if k in source_keys]
+            status = "✅" if aligned else "❌"
+            L.append(f"- {lang.upper()}: {status}")
+            if not aligned:
+                all_aligned = False
+        aligned_msg = (
+            "Tous les fichiers sont alignés sur l'ordre source ✅"
+            if all_aligned
+            else "Des fichiers ne sont pas alignés ❌"
+        )
+        L.append(f"\n**{aligned_msg}**")
+    else:
+        L.append("_Vérification de l'ordre non disponible._")
+    L.append("")
+    return "\n".join(L)
+
+
+def step11_final_report(
+    ctx: PipelineContext,
+    export_dir: Path,
+    validation_report: ValidationReport | None,
+    misalignments: dict[str, list[dict]],
+) -> Path | None:
+    """Génère le rapport consolidé final et l'écrit dans doc/."""
+    step_banner(11, "Rapport consolidé final")
+
+    if ctx.dry_run:
+        print("  [dry-run] Rapport final non écrit.")
+        return None
+
+    report_md = build_final_report(ctx, export_dir, validation_report, misalignments)
+    date_str = datetime.now().strftime("%Y_%m_%d")
+    doc_dir = REPO_ROOT / "doc"
+    doc_dir.mkdir(exist_ok=True)
+    path = doc_dir / f"{date_str}_Pipeline_Report.md"
+    path.write_text(report_md, encoding="utf-8")
+    print(f"  Rapport final écrit : {path}")
+    return path
+
+
 # ─── CLI ─────────────────────────────────────────────────────────────
 
 
@@ -852,7 +1181,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_pipeline(args: argparse.Namespace) -> int:
-    """Point d'entrée : exécute les étapes 1-8 (Phases 1-2)."""
+    """Point d'entrée : exécute les étapes 1-11 (Phases 1-3)."""
     ctx = PipelineContext(
         dry_run=args.dry_run,
         provider=args.provider,
@@ -866,7 +1195,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
     if args.languages:
         ctx.languages = [lg.strip() for lg in args.languages.split(",") if lg.strip()]
 
-    print("🚀 Pipeline de traduction COP — Phases 1-2 (analyse + exécution)")
+    print("🚀 Pipeline de traduction COP — Phases 1-3 (analyse + exécution + validation)")
     print(f"   Provider : {ctx.provider} | Langues : {', '.join(ctx.languages)}")
     if ctx.dry_run:
         print("   Mode : dry-run (analyse seule, pas d'exécution)")
@@ -902,7 +1231,12 @@ def run_pipeline(args: argparse.Namespace) -> int:
         print(f"\n❌ Erreur durant la traduction : {e}", file=sys.stderr)
         return 3
 
-    print("\n✅ Pipeline terminé (Phases 1-2). Phase 3 (validation) à implémenter.")
+    # Phase 3 — Validation + mésalignements + rapport final
+    validation_report = step9_validate(ctx, export_dir)
+    misalignments = step10_detect_misalignments(ctx, export_dir)
+    step11_final_report(ctx, export_dir, validation_report, misalignments)
+
+    print("\n✅ Pipeline terminé (Phases 1-3).")
     return 0
 
 

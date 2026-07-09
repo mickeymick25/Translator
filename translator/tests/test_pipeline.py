@@ -42,6 +42,8 @@ from pipeline import (  # noqa: E402
     load_typos,
     manage_modified_keys,
     prepopulate_output,
+    build_final_report,
+    detect_misalignments,
     reorder_translation_file,
     run_pipeline,
     step1_detect_sources,
@@ -52,6 +54,9 @@ from pipeline import (  # noqa: E402
     step6_prepopulate_and_manage,
     step7_translate,
     step8_reorder,
+    step9_validate,
+    step10_detect_misalignments,
+    step11_final_report,
     step_banner,
 )
 
@@ -853,8 +858,10 @@ class TestRunPipeline:
         rc = run_pipeline(args)
         assert rc == 0
 
-    def test_yes_returns_zero(self, patched_translator_dir, monkeypatch):
-        """--yes (non-interactif) → étapes 6-8 avec traduction mockée → rc 0."""
+    def test_yes_returns_zero(self, patched_translator_dir, monkeypatch, tmp_path):
+        """--yes (non-interactif) → étapes 6-11 avec traduction mockée → rc 0."""
+        monkeypatch.setattr(pipeline, "REPO_ROOT", tmp_path)
+        (tmp_path / "doc").mkdir()
         monkeypatch.setattr(
             "modes.mode_translate_json._translate_single_language",
             lambda *a, **kw: None,
@@ -864,10 +871,13 @@ class TestRunPipeline:
         assert rc == 0
 
     def test_full_pipeline_creates_and_reorders(
-        self, patched_translator_dir, monkeypatch
+        self, patched_translator_dir, monkeypatch, tmp_path
     ):
         """--yes : pré-peuplement + traduction mockée + réordonnancement → rc 0."""
         from pathlib import Path
+
+        monkeypatch.setattr(pipeline, "REPO_ROOT", tmp_path)
+        (tmp_path / "doc").mkdir()
 
         def fake_translate(src_file, src_data, src_lang, tgt_lang, out_dir):
             # Écrit un fichier désordonné pour vérifier le réordonnancement
@@ -1373,3 +1383,237 @@ class TestStep8Reorder:
         out = capsys.readouterr().out
         assert "FR" in out
         assert "IT" in out
+
+
+# ═══ Phase 3 — Étape 9 : Validation structurelle (TDD) ═══
+
+
+class TestStep9Validate:
+    """Tests de step9_validate() — validation structurelle des fichiers traduits."""
+
+    def test_validates_all_languages(self, patched_translator_dir, capsys):
+        """step9 appelle validate() sur le dossier export et retourne un rapport."""
+        ctx = PipelineContext(languages=["fr", "de"])
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        report = step9_validate(ctx, export)
+        assert report is not None
+        assert len(report.languages) == 2
+        out = capsys.readouterr().out
+        assert "Validation" in out or "validation" in out.lower()
+
+    def test_dry_run_skips(self, patched_translator_dir, capsys):
+        ctx = PipelineContext(languages=["fr"], dry_run=True)
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        report = step9_validate(ctx, export)
+        assert report is None
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()
+
+    def test_detects_missing_keys(self, patched_translator_dir, capsys):
+        """Une clé présente dans la source mais absente de la trad est signalée."""
+        ctx = PipelineContext(languages=["fr"])
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        # Supprime K1 du fichier FR pour créer une clé manquante
+        fr = json.loads((export / "translation_en_fr.json").read_text(encoding="utf-8"))
+        del fr["K1"]
+        (export / "translation_en_fr.json").write_text(
+            json.dumps(fr, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        report = step9_validate(ctx, export)
+        fr_result = next(lv for lv in report.languages if lv.lang == "fr")
+        assert "K1" in fr_result.missing
+
+    def test_detects_extra_keys(self, patched_translator_dir):
+        """Une clé présente dans la trad mais absente de la source est signalée."""
+        ctx = PipelineContext(languages=["de"])
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        de = json.loads((export / "translation_en_de.json").read_text(encoding="utf-8"))
+        de["EXTRA_KEY"] = "extra"
+        (export / "translation_en_de.json").write_text(
+            json.dumps(de, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        report = step9_validate(ctx, export)
+        de_result = next(lv for lv in report.languages if lv.lang == "de")
+        assert "EXTRA_KEY" in de_result.extra
+
+
+# ═══ Phase 3 — Étape 10 : Détection mésalignements (TDD) ═══
+
+
+class TestDetectMisalignments:
+    """Tests de detect_misalignments() — heuristique token overlap intra-langue."""
+
+    def test_no_misalignment_when_identical_translations(self):
+        """Deux clés, même source, traductions identiques → pas de mésalignement."""
+        source = {"K1": "Hello", "K2": "Hello"}
+        translation = {"K1": "Bonjour", "K2": "Bonjour"}
+        result = detect_misalignments(source, translation, "fr")
+        assert result == []
+
+    def test_misalignment_when_divergent_translations(self):
+        """Deux clés, même source, traductions sans mot commun → mésalignement."""
+        source = {"K1": "Hello", "K2": "Hello"}
+        translation = {"K1": "Bonjour", "K2": "Salut là"}
+        result = detect_misalignments(source, translation, "fr")
+        assert len(result) == 1
+        assert result[0]["source_text"] == "Hello"
+        assert {"K1", "K2"} == set(result[0]["keys"])
+
+    def test_no_misalignment_with_shared_tokens(self):
+        """Traductions différentes mais partageant des mots → pas de mésalignement."""
+        source = {"K1": "Hello world", "K2": "Hello world"}
+        translation = {"K1": "Bonjour monde", "K2": "Bonjour le monde"}
+        result = detect_misalignments(source, translation, "fr")
+        assert result == []
+
+    def test_no_grouping_when_unique_source(self):
+        """Chaque clé a un texte source unique → pas de groupe → pas de mésalignement."""
+        source = {"K1": "Hello", "K2": "World"}
+        translation = {"K1": "Bonjour", "K2": "Monde"}
+        assert detect_misalignments(source, translation, "fr") == []
+
+    def test_ignores_empty_translations(self):
+        """Les traductions vides ne sont pas comparées."""
+        source = {"K1": "Hello", "K2": "Hello"}
+        translation = {"K1": "Bonjour", "K2": ""}
+        result = detect_misalignments(source, translation, "fr")
+        assert result == []
+
+    def test_multiple_source_groups(self):
+        """Plusieurs groupes source divergents signalés séparément."""
+        source = {"K1": "Yes", "K2": "Yes", "K3": "No", "K4": "No"}
+        translation = {
+            "K1": "Oui",
+            "K2": "Affirmatif",
+            "K3": "Non",
+            "K4": "Négatif",
+        }
+        result = detect_misalignments(source, translation, "fr")
+        assert len(result) == 2
+        source_texts = {r["source_text"] for r in result}
+        assert source_texts == {"Yes", "No"}
+
+    def test_three_keys_same_source(self):
+        """Trois clés, même source, une traduction divergente → signalée."""
+        source = {"K1": "Save", "K2": "Save", "K3": "Save"}
+        translation = {"K1": "Enregistrer", "K2": "Enregistrer", "K3": "Sauvegarder"}
+        result = detect_misalignments(source, translation, "fr")
+        assert len(result) == 1
+        assert len(result[0]["keys"]) == 3
+
+
+class TestStep10DetectMisalignments:
+    """Tests de step10_detect_misalignments() — orchestration multi-langues."""
+
+    def test_returns_dict_per_lang(self, patched_translator_dir, capsys):
+        ctx = PipelineContext(languages=["fr", "de"])
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        result = step10_detect_misalignments(ctx, export)
+        assert "fr" in result
+        assert "de" in result
+
+    def test_dry_run_skips(self, patched_translator_dir, capsys):
+        ctx = PipelineContext(languages=["fr"], dry_run=True)
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        result = step10_detect_misalignments(ctx, export)
+        assert result == {}
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()
+
+    def test_detects_divergence_in_export(self, patched_translator_dir):
+        """Prépare une divergence intra-langue et vérifie la détection."""
+        ctx = PipelineContext(languages=["fr"])
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        # Deux clés avec même source mais traductions divergentes
+        (export / "translation_en_fr.json").write_text(
+            json.dumps({"K1": "Bonjour", "K2": "Bonjour", "K_dup": "Salut là"}),
+            encoding="utf-8",
+        )
+        # Adapter la source pour que K1 et K_dup partagent le même texte
+        src = json.loads(ctx.new_source.read_text(encoding="utf-8"))
+        src["K_dup"] = src["K1"]  # même texte que K1
+        ctx.new_source.write_text(json.dumps(src), encoding="utf-8")
+        result = step10_detect_misalignments(ctx, export)
+        assert len(result["fr"]) >= 1
+
+
+# ═══ Phase 3 — Étape 11 : Rapport consolidé final (TDD) ═══
+
+
+class TestBuildFinalReport:
+    """Tests de build_final_report() — génération du rapport markdown final."""
+
+    def test_has_all_nine_sections(self, patched_translator_dir, tmp_path):
+        ctx = PipelineContext(languages=["fr", "de"])
+        step1_detect_sources(ctx)
+        step2_compare_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        validation_report = step9_validate(ctx, export)
+        misalignments = step10_detect_misalignments(ctx, export)
+        report = build_final_report(ctx, export, validation_report, misalignments)
+        assert "## 1. Source" in report
+        assert "## 2. Comparaison" in report
+        assert "## 3. Coquilles" in report
+        assert "## 4. Écart" in report
+        assert "## 5. Plan d'action" in report
+        assert "## 6. Traduction" in report
+        assert "## 7. Validation" in report
+        assert "## 8. Mésalignements" in report
+        assert "## 9. Ordre" in report
+
+    def test_includes_validation_summary(self, patched_translator_dir):
+        ctx = PipelineContext(languages=["fr"])
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        validation_report = step9_validate(ctx, export)
+        report = build_final_report(ctx, export, validation_report, {})
+        assert "validation" in report.lower()
+        assert "fr" in report.lower()
+
+    def test_includes_misalignment_count(self, patched_translator_dir):
+        ctx = PipelineContext(languages=["fr"])
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        misalignments = {"fr": [{"source_text": "X", "keys": ["A", "B"]}]}
+        report = build_final_report(ctx, export, None, misalignments)
+        assert "Mésalignements" in report
+        assert "1" in report  # 1 mésalignement
+
+
+class TestStep11FinalReport:
+    """Tests de step11_final_report() — écrit le rapport dans doc/."""
+
+    def test_writes_report_to_doc(self, patched_translator_dir, monkeypatch, tmp_path):
+        """Le rapport final est écrit dans doc/{date}_Pipeline_Report.md."""
+        # Rediriger le dossier doc vers tmp_path pour ne pas écrire dans le vrai doc/
+        monkeypatch.setattr(pipeline, "REPO_ROOT", tmp_path)
+        doc_dir = tmp_path / "doc"
+        doc_dir.mkdir()
+        ctx = PipelineContext(languages=["fr", "de"])
+        step1_detect_sources(ctx)
+        step2_compare_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        validation_report = step9_validate(ctx, export)
+        misalignments = step10_detect_misalignments(ctx, export)
+        path = step11_final_report(ctx, export, validation_report, misalignments)
+        assert path is not None
+        assert path.exists()
+        assert "Pipeline_Report" in path.name
+        content = path.read_text(encoding="utf-8")
+        assert "Rapport" in content
+
+    def test_dry_run_skips(self, patched_translator_dir, monkeypatch, tmp_path, capsys):
+        ctx = PipelineContext(languages=["fr"], dry_run=True)
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        path = step11_final_report(ctx, export, None, {})
+        assert path is None
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()
