@@ -190,7 +190,7 @@ Les scripts `compare_sources.py`, `analyze_translation_gap.py`, `validate_transl
 | 13 | Étape 9 : validation structurelle | ⬜ | Tâches 3, 12 |
 | 14 | Étape 10 : détection mésalignements | ⬜ | Tâche 12 |
 | 15 | Étape 11 : rapport consolidé markdown | ⬜ | Tâches 13-14 |
-| 16 | Tests unitaires du pipeline | ⬜ | Tâches 5-15 |
+| 16 | Tests unitaires du pipeline | 🟡 | Tâches 5-15 |
 | 17 | Mode dry-run | 🟡 | Tâches 5-15 |
 | 18 | Documentation README (FR + EN) | ⬜ | Tâche 15 |
 | 19 | Test end-to-end avec la source en10 | ⬜ | Tâche 15 |
@@ -202,7 +202,9 @@ Les scripts `compare_sources.py`, `analyze_translation_gap.py`, `validate_transl
 ### Notes de progression
 
 - **2026-07-08 — Phase 1 terminée (tâches 1-9)** : refactoring des 3 scripts (fonctions importables + helpers `compare()`, `analyze_export()`, `validate()` / `render_report()`), dictionnaire `source_typos.json` (6 coquilles), pipeline `translator/pipeline.py` (étapes 1-5 : détection, comparaison, coquilles, écart, rapport + confirmation). Validation : 771 tests existants OK, ruff propre, dry-run sur en10 fonctionnel.
+- **2026-07-08 — Rattrapage TDD Phase 1 (tâche 16 partielle)** : `translator/tests/test_pipeline.py` — 89 characterization tests couvrant les étapes 1-5 (classes `TestXxx` par fonction, fixtures fs de test via `tmp_path`, mocks `input`/`load_typos`, `@parametrize` sur `confirm()`). Couverture `pipeline.py` : **98%** (cible ≥ 90% atteinte). Suite complète : 860 tests OK (771 + 89), régression = 0.
 - **Tâche 17 (dry-run)** : implémenté pour les étapes 1-5 (rapport d'analyse sans exécution). Le dry-run complet (couvrant aussi étapes 6-11) sera finalisé après Phase 2/3.
+- **Tâche 16 (tests)** : Phase 1 couverte (🟡). Tests Phase 2/3 à écrire en TDD strict au fil des étapes.
 
 ## Décisions tranchées (2026-07-08)
 
