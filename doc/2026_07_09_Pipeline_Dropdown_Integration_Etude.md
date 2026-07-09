@@ -3,7 +3,7 @@
 - **Date** : 2026-07-09
 - **Auteur** : Michael Boitan
 - **Objet** : Étendre `translator/pipeline.py` (11 étapes, `translate-json`) pour couvrir aussi `translate-dropdowns` (XLSX multi-feuilles), afin que les devs soient autonomes sur les deux types de sources.
-- **Statut** : Étude (non implémenté). Décisions à trancher en fin de document.
+- **Statut** : Étude mise à jour — décisions tranchées (2026-07-09), prêt pour implémentation TDD.
 
 ## 1. Contexte
 
@@ -259,83 +259,38 @@ Affiché dans le rapport d'analyse (étape 5) et le rapport final (étape 11).
    - *Pour* : orchestration commune (la valeur réelle) + logique par mode isolée et testable ; évite la duplication ; nouveau mode = nouvelle stratégie sans toucher l'orchestrateur.
    - *Contre* : refactoring initial pour extraire l'orchestration commune.
 
-### 8.2 Recommandation : option 3 (Strategy)
+### 8.2 Décision : option 2 (2 pipelines séparés, DDD)
 
-Justification :
-- L'analyse §4 montre que l'**orchestration** (enchaînement, dry-run, confirmations, rapports) est **commune**, tandis que la **logique de données** par étape est **spécifique**. C'est précisément le cas d'usage du pattern Strategy.
-- Le pipeline JSON actuel (`pipeline.py`, ~1268 lignes) reste inchangé en comportement : on délègue ses fonctions existantes dans une stratégie `JsonStrategy` sans réécrire la logique.
-- Ajouter `DropdownStrategy` n'impacte pas le chemin JSON (zéro régression sur les 917 tests existants).
+**Décision tranchée (2026-07-09)** : architecture DDD avec **2 pipelines séparés**.
+
+Justification (approche Domain-Driven) :
+- Le JSON i18n et le dropdown sont deux **bounded contexts** distincts : clé i18n stable vs Origin+contexte, JSON plat vs XLSX multi-feuilles, comparaison par clé vs comparaison par Origin, validation structurelle vs cohérence de feuilles.
+- Chaque pipeline garde sa logique propre, **lisible et spécialisée**, sans branches conditionnelles.
+- `pipeline.py` (JSON) reste **intact** → zéro régression sur les 917 tests existants.
+- Le partage (provider, cache, rate limiter, helpers d'orchestration) se fait via un **shared kernel** : `pipeline_common.py` (helpers : `confirm`, `step_banner`, sauvegarde, rapport) + `core/` existant.
 
 ### 8.3 Structure proposée
 
 ```mermaid
 flowchart TD
-    A["pipeline.py<br/>run_pipeline(args)"] --> B{"detect_source_kind()"}
-    B -->|".json plat"| J["strategies/json_strategy.py<br/>JsonStrategy"]
-    B -->|".xlsx / json structuré"| D["strategies/dropdown_strategy.py<br/>DropdownStrategy"]
-    J --> O["Orchestrateur commun<br/>run_steps(strategy, ctx)"]
-    D --> O
-    O --> S1["step1 detect_sources"]
-    O --> S2["step2 compare_sources"]
-    O --> S3["step3 detect_typos"]
-    O --> S4["step4 analyze_gap"]
-    O --> S5["step5 report_and_confirm"]
-    O --> S6["step6 prepopulate_and_manage"]
-    O --> S7["step7 translate"]
-    O --> S8["step8 reorder"]
-    O --> S9["step9 validate"]
-    O --> S10["step10 detect_misalignments"]
-    O --> S11["step11 final_report"]
-    S1 -.délègue.-> J
-    S1 -.délègue.-> D
+    A["pipeline.py — dispatcher léger"] --> B{"detect_source_kind()"}
+    B -->|".json plat"| J["pipeline_json.py<br/>run_pipeline_json() — inchangé"]
+    B -->|".xlsx"| D["pipeline_dropdown.py<br/>run_pipeline_dropdown() — nouveau"]
+    J --> C["pipeline_common.py<br/>confirm, step_banner, backup, rapport"]
+    D --> C
+    C --> K["core/ (shared kernel)<br/>translator, cache, rate_limiter, config"]
 ```
 
-#### Protocol de stratégie (pseudo-code)
-
-```python
-# translator/strategies/base.py
-from typing import Protocol
-
-class PipelineStrategy(Protocol):
-    name: str  # "json" | "dropdown"
-
-    def detect_sources(self, ctx: PipelineContext) -> None: ...
-    def compare_sources(self, ctx: PipelineContext) -> None: ...
-    def detect_typos(self, ctx: PipelineContext) -> None: ...
-    def analyze_gap(self, ctx: PipelineContext) -> None: ...
-    def build_analysis_report(self, ctx: PipelineContext) -> str: ...
-    def prepopulate_and_manage(self, ctx: PipelineContext) -> Path | None: ...
-    def translate(self, ctx: PipelineContext, export_dir: Path) -> None: ...
-    def reorder(self, ctx: PipelineContext, export_dir: Path) -> None: ...
-    def validate(self, ctx: PipelineContext, export_dir: Path) -> ValidationReport | None: ...
-    def detect_misalignments(self, ctx, export_dir) -> dict: ...
-    def build_final_report(self, ctx, export_dir, validation, misalignments) -> str: ...
-```
-
-L'orchestrateur `run_pipeline` devient :
-
-```python
-strategy = select_strategy(args)   # JsonStrategy ou DropdownStrategy
-ctx = build_context(args, strategy)
-strategy.detect_sources(ctx)
-strategy.compare_sources(ctx)
-strategy.detect_typos(ctx)
-strategy.analyze_gap(ctx)
-if not strategy.report_and_confirm(ctx): return
-export_dir = strategy.prepopulate_and_manage(ctx)
-if not export_dir: return
-strategy.translate(ctx, export_dir)
-strategy.reorder(ctx, export_dir)
-validation = strategy.validate(ctx, export_dir)
-misalignments = strategy.detect_misalignments(ctx, export_dir)
-strategy.final_report(ctx, export_dir, validation, misalignments)
-```
+- `pipeline.py` devient un **dispatcher léger** : détecte le type de source (extension/contenu), délègue à `pipeline_json.py` ou `pipeline_dropdown.py`.
+- `pipeline_json.py` reprend l'orchestration JSON existante (étapes 1-11) sans changement de comportement.
+- `pipeline_dropdown.py` implémente l'orchestration dropdown (étapes 1-11 adaptées).
+- `pipeline_common.py` factorise les helpers partagés : `confirm()`, `step_banner()`, `backup_translation_file()`, `build_analysis_report_common()`, etc.
 
 #### Migration incrémentale (sans casser l'existant)
 
-1. **Étape A** : extraire l'orchestration de `pipeline.py` vers `run_pipeline(strategy, ctx)` ; `JsonStrategy` ne fait que déléguer aux fonctions libres existantes (`step1_detect_sources`, etc.). Comportement JSON strictement identique.
-2. **Étape B** : ajouter `DropdownStrategy` implémentant les 11 méthodes (réutilisant `mode_translate_dropdowns` + nouvelles fonctions I/O §5).
-3. **Étape C** : `pipeline.py` expose un `--mode` optionnel + auto-détection (§3).
+1. **Étape A** : extraire les helpers partagés de `pipeline.py` vers `pipeline_common.py` ; `pipeline.py` les réimporte (comportement JSON strictement identique).
+2. **Étape B** : créer `pipeline_dropdown.py` avec les étapes 1-11 adaptées au format XLSX.
+3. **Étape C** : `pipeline.py` expose un `--mode` optionnel + auto-détection (extension) → dispatcher.
 
 Ainsi, le chemin JSON garde ses 917 tests verts sans toucher à la logique des étapes.
 
@@ -343,15 +298,14 @@ Ainsi, le chemin JSON garde ses 917 tests verts sans toucher à la logique des �
 
 ```
 translator/
-├── pipeline.py                      # CLI + orchestrateur (run_pipeline, select_strategy)
-├── strategies/
-│   ├── base.py                      # Protocol PipelineStrategy + PipelineContext
-│   ├── json_strategy.py             # délègue aux fonctions existantes (pipeline legacy)
-│   └── dropdown_strategy.py         # nouvelle stratégie dropdown
+├── pipeline.py                      # dispatcher léger (detect_source_kind + delegation)
+├── pipeline_common.py               # shared kernel : confirm, step_banner, backup, rapport
+├── pipeline_json.py                 # orchestration JSON (étapes 1-11, ex-pipeline.py)
+├── pipeline_dropdown.py             # orchestration dropdown (nouveau)
 ├── core/
 │   ├── io_xlsx.py                   # + load_dropdown_xlsx_all_sheets, detect_missing_languages
-│   └── ...
-└── modes/                           # inchangé (utilisé par les stratégies)
+│   └── ...                          # translator, cache, rate_limiter, config (shared kernel)
+└── modes/                           # inchangé (utilisé par les pipelines)
 ```
 
 ## 9. Impact sur le code existant
@@ -360,10 +314,13 @@ translator/
 
 | Fichier | Modification | Risque |
 |---|---|---|
-| `translator/pipeline.py` | Extraire l'orchestration vers `run_pipeline(strategy, ctx)` ; ajouter `--mode` + `detect_source_kind()` ; `JsonStrategy` délègue aux fonctions existantes. | Faible si migration incrémentale (délégation = comportement identique). |
+| `translator/pipeline.py` | Devient un **dispatcher léger** : `detect_source_kind()` (extension/contenu) + `--mode` optionnel → délègue à `pipeline_json.py` ou `pipeline_dropdown.py`. L'orchestration JSON existante migre vers `pipeline_json.py`. | Faible si migration incrémentale (extraction des helpers vers `pipeline_common.py`, comportement JSON identique). |
+| `translator/pipeline_common.py` | **Nouveau** : helpers partagés (`confirm`, `step_banner`, `backup_translation_file`, `PipelineContext` de base, `short_repr`, `json_load`/`json_write`). | Nul (nouveau fichier). |
+| `translator/pipeline_json.py` | **Nouveau** : reprend l'orchestration JSON (étapes 1-11, ex-`pipeline.py`) en réimportant les helpers de `pipeline_common.py`. | Faible (comportement identique, tests existants rejoués). |
+| `translator/pipeline_dropdown.py` | **Nouveau** : orchestration dropdown (étapes 1-11 adaptées). | Nul (nouveau fichier). |
 | `translator/core/io_xlsx.py` | Ajouter `load_dropdown_xlsx_all_sheets()` + `detect_missing_languages()`. | Nul (ajout pur, `load_dropdown_xlsx` inchangé). |
 | `translator/modes/mode_translate_dropdowns.py` | Permettre d'injecter `existing_translations` dans `_translate_dropdown_entries_batch` (déjà le cas via le paramètre — juste appeler avec les feuilles source). | Faible. |
-| `compare_sources.py` / `analyze_translation_gap.py` / `validate_translations.py` | Aucune modification pour JSON. Pour dropdown : soit nouveaux adaptateurs dans `dropdown_strategy.py`, soit extensions optionnelles. | Nul pour JSON. |
+| `compare_sources.py` / `analyze_translation_gap.py` / `validate_translations.py` | **Aucune modification** pour JSON. Pour dropdown : adaptateurs dans `pipeline_dropdown.py` (pas de modification des scripts originaux). | Nul pour JSON. |
 
 ### 9.2 Fonctions du pipeline à généraliser
 
@@ -441,24 +398,26 @@ Conformément à la pratique du projet (TDD strict Red→Green→Refactor, cf. `
 
 ## 12. Découpage en tâches + estimation
 
+Architecture retenue : 2 pipelines séparés (DDD) + `pipeline_common.py` (shared kernel).
+
 | # | Tâche | Estimation | Dépendance |
 |---|---|---|---|
-| D1 | Refactoring : extraire orchestration `run_pipeline(strategy, ctx)` + `JsonStrategy` déléguant aux fonctions existantes | ~2h | — |
-| D2 | `strategies/base.py` : Protocol `PipelineStrategy` + `PipelineContext` étendu (`mode`, `entries`, `existing_translations`) | ~30min | D1 |
+| D1 | Refactoring : extraire `pipeline_common.py` (helpers partagés : `confirm`, `step_banner`, `backup_translation_file`, `PipelineContext` de base) ; `pipeline.py` les réimporte (comportement JSON strictement identique) | ~2h | — |
+| D2 | `pipeline.py` → dispatcher léger : `detect_source_kind()` (extension/contenu) + `--mode` optionnel ; délégation à `pipeline_json.py` (ex-`run_pipeline`) ou `pipeline_dropdown.py` | ~1h | D1 |
 | D3 | `io_xlsx.load_dropdown_xlsx_all_sheets` + `detect_missing_languages` (TDD) | ~1.5h | — |
-| D4 | `detect_source_kind` + `select_strategy` + CLI `--mode` (TDD) | ~1h | D2 |
-| D5 | `DropdownStrategy` étapes 1-2 (détection XLSX + comparaison par Origin) (TDD) | ~2h | D3, D4 |
-| D6 | `DropdownStrategy` étape 3 (coquilles sur Origins — noyau factorisé) (TDD) | ~1h | D5 |
-| D7 | `DropdownStrategy` étape 4 (écart dropdown par langue) (TDD) | ~1.5h | D5 |
-| D8 | `DropdownStrategy` étape 5 (rapport + confirmation) (TDD) | ~1h | D6, D7 |
-| D9 | `DropdownStrategy` étape 6 (pré-peuplement XLSX + gestion Origins modifiées) (TDD) | ~2h | D8 |
-| D10 | `DropdownStrategy` étape 7 (traduction avec réutilisation feuilles existantes) (TDD) | ~1.5h | D3, D9 |
-| D11 | `DropdownStrategy` étape 8 (réordonnancement par Origin) (TDD) | ~45min | D10 |
+| D4 | `pipeline_dropdown.py` : `PipelineDropdownContext` + `build_parser_dropdown()` + flags `--retranslate-all` / `--retranslate` / `--no-cache` (TDD) | ~1h | D1, D2 |
+| D5 | `pipeline_dropdown.py` étapes 1-2 (détection XLSX + comparaison par Origin, skip si pas de précédent) (TDD) | ~2h | D3, D4 |
+| D6 | `pipeline_dropdown.py` étape 3 (coquilles sur Origins — `source_typos.json` avec `scope`) (TDD) | ~1h | D5 |
+| D7 | `pipeline_dropdown.py` étape 4 (écart dropdown par langue — langues manquantes) (TDD) | ~1.5h | D5 |
+| D8 | `pipeline_dropdown.py` étape 5 (rapport + confirmation) (TDD) | ~1h | D6, D7 |
+| D9 | `pipeline_dropdown.py` étape 6 (pré-peuplement XLSX + gestion Origins modifiées) (TDD) | ~2h | D8 |
+| D10 | `pipeline_dropdown.py` étape 7 (traduction avec réutilisation colonne B des feuilles existantes) (TDD) | ~1.5h | D3, D9 |
+| D11 | `pipeline_dropdown.py` étape 8 (réordonnancement par Origin) (TDD) | ~45min | D10 |
 | D12 | `validate_dropdown` + étape 9 (TDD) | ~1.5h | D10 |
-| D13 | `DropdownStrategy` étape 10 (mésalignements par Origin partagé) (TDD) | ~1h | D10 |
-| D14 | `DropdownStrategy` étape 11 (rapport final adapté) (TDD) | ~1h | D12, D13 |
-| D15 | Tests d'intégration e2e (dry-run + `--yes` mocké) | ~1.5h | D14 |
-| D16 | Documentation (README FR/EN + section pipeline dropdown) | ~1h | D14 |
+| D13 | `pipeline_dropdown.py` étape 10 (mésalignements par Origin partagé dans un même contexte) (TDD) | ~1h | D10 |
+| D14 | `pipeline_dropdown.py` étape 11 (rapport final adapté) (TDD) | ~1h | D12, D13 |
+| D15 | Tests d'intégration e2e (dry-run + `--yes` mocké sur le XLSX en10) | ~1.5h | D14 |
+| D16 | Documentation (README FR/EN + section pipeline dropdown) + `--no-cache` ajouté au pipeline JSON | ~1h | D14 |
 | D17 | Non-régression : suite complète (917 tests + nouveaux) | ~30min | D14 |
 | **Total** | | **~21h** (~3 jours dev) | |
 
@@ -470,18 +429,40 @@ Découpage de phase possible, calqué sur le JSON :
 - **Phase D4** (validation + rapport : étapes 9-11) : D12-D14 — ~3.5h.
 - **Phase D5** (intégration + doc) : D15-D17 — ~3h.
 
-## 13. Décisions à trancher par le user
+## 13. Décisions tranchées (2026-07-09)
 
-1. **Détection du type de source** : confirmer l'approche **hybride** (auto-détection par extension/contenu + flag `--mode` optionnel) ? Ou imposer un flag explicite `--mode dropdown` obligatoire ?
-2. **Source de la colonne `french`** : utiliser la **feuille FR dédiée** du XLSX quand elle existe (recommandation §5.2.4-b), ou conserver la colonne B de la feuille active (comportement actuel) ?
-3. **Format de sortie par défaut** : `auto` (≡ format d'entrée) ? `xlsx` ? Les deux ? Confirmer l'option C (§6.2).
-4. **Comparaison de sources dropdown (étape 2)** : souhaite-t-on réellement comparer deux XLSX dropdowns successifs (nécessite de conserver un historique `*_Dropdown`), ou cette étape est-elle **skippée** pour le dropdown (pas de source précédente pertinente) ? Le mode dropdown actuel n'a pas de notion d'« export précédent ».
-5. **Coquilles source (étape 3)** : le dictionnaire `source_typos.json` actuel cible des clés i18n JSON. Faut-il un dictionnaire de coquills **dropdown** séparé (sur les Origins), ou étendre l'existant avec un champ `scope: json|dropdown|both` ?
-6. **Validation dropdown (étape 9)** : quels contrôles obligent un échec (bloquant) vs un avertissement ? Proposition : bloquant si Origins manquantes ou Traduction vide ; avertissement si contextes incohérents entre langues.
-7. **Architecture** : valider l'option 3 (Strategy) avec migration incrémentale (délégation `JsonStrategy`), ou préférer l'option 2 (deux pipelines séparés) pour limiter le refactoring de `pipeline.py` ?
-8. **Dossier de sortie** : conserver `{YYYY_MM_DD}_Dropdown/` distinct de `{YYYY_MM_DD}_Export/` (recommandé) ou unifier ?
-9. **Réutilisation des feuilles existantes** : confirmer qu'on **ne traduit jamais** les langues déjà présentes dans le XLSX source (réutilisation stricte) ? Ou offrir une option `--retranslate-existing` pour forcer la retraduction de certaines langues ?
-10. **Mésalignements dropdown (étape 10)** : un même Origin peut apparaître sous plusieurs contextes avec des traductions légitimement différentes. L'heuristique Jaccard=0 produira-t-elle trop de faux positifs pour le dropdown ? Faut-il la restreindre au sein d'un même contexte uniquement ?
+1. **Détection du type de source** : **hybride** — auto-détection par extension/contenu (`.xlsx` → dropdown, `.json` plat → JSON) + flag `--mode` optionnel pour forcer.
+2. **Source de la colonne `french`** : **réutiliser les feuilles par langue existantes** comme cache. Nouvelle fonction `load_dropdown_xlsx_all_sheets()` lit toutes les feuilles ; la colonne B de chaque feuille = cache de traduction déjà validé. On ne re-traduit que les langues manquantes.
+3. **Format de sortie par défaut** : `auto` (≡ format d'entrée) ; `--format json|xlsx` pour forcer. Dossier `{YYYY_MM_DD}_Dropdown/` distinct de `*_Export/`.
+4. **Comparaison de sources dropdown (étape 2)** : **implémentée mais skippée** si pas de XLSX précédent (comme le JSON quand il n'y a qu'un seul `*_Import`). Prête pour le futur — s'activera dès qu'il y aura deux versions de XLSX dropdown.
+5. **Coquilles source (étape 3)** : dictionnaire `source_typos.json` existant étendu avec un champ `scope: json|dropdown|both` (défaut `both`). Les coquilles dropdown ciblent les Origins (texte EN).
+6. **Validation dropdown (étape 9)** : **bloquant** si Origins manquantes ou Traduction vide ; **avertissement** si contextes incohérents entre langues ou traductions identiques à l'Origin (noms propres légitimes → avertissement, pas échec).
+7. **Architecture** : **2 pipelines séparés (DDD)** — `pipeline_json.py` + `pipeline_dropdown.py` + `pipeline_common.py` (shared kernel) + dispatcher léger dans `pipeline.py`. Décision motivée par la séparation des bounded contexts (clé i18n vs Origin+contexte).
+8. **Dossier de sortie** : `{YYYY_MM_DD}_Dropdown/` **distinct** de `{YYYY_MM_DD}_Export/` (recommandé).
+9. **Réutilisation des feuilles existantes** : **réutilisation stricte** par défaut (jamais de retraduction des langues déjà présentes). Flags de retraduction optionnels (voir §14).
+10. **Mésalignements dropdown (étape 10)** : heuristique **restreinte au sein d'un même contexte** (un même Origin peut avoir des traductions légitimement différentes selon le contexte → on ne compare que les Origins partagés dans le même contexte).
+
+## 14. Options de retraduction et cache
+
+Deux caches distincts et orthogonaux :
+
+| Cache | Rôle | Contrôle |
+|---|---|---|
+| **Cache colonne B** (feuilles du XLSX source) | Réutilise les traductions déjà présentes dans les feuilles FR/CZ/SK/... | `--retranslate-all` / `--retranslate` (flags pipeline) |
+| **Cache du service** (`.translation_cache.json`) | Évite de re-traduire un texte déjà traduit via l'API (lookup par `src:tgt:key_id:text`) | `--no-cache` (flag pipeline, propage `TRANSLATION_CACHE=false`) |
+
+### Flags CLI du pipeline dropdown
+
+| Flag | Comportement |
+|---|---|
+| *(défaut)* | Col B réutilisée pour les langues existantes + cache service activé. Ne traduit que les nouveautés (Origins ajoutés) + les langues manquantes. |
+| `--retranslate-all` | Ignore le cache colonne B → re-traduit toutes les langues depuis l'Origin. |
+| `--retranslate fr,de` | Retraduit les langues listées, garde le cache colonne B pour les autres. |
+| `--no-cache` | Désactive le cache du service → chaque appel API fait une vraie traduction (pas de lookup `.translation_cache.json`). |
+
+Combinaisons possibles : `--retranslate-all --no-cache` = tout retraduire à frais, sans aucun cache.
+
+> **Note** : `--no-cache` sera aussi ajouté au pipeline JSON existant (cohérence, faible effort — propager `TRANSLATION_CACHE=false` dans le `Config`).
 
 ---
 
