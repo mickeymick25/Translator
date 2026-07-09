@@ -1756,3 +1756,47 @@ class TestPipelineEndToEndEn10:
         out = capsys.readouterr().out
         assert "2545" in out  # nombre de clés de en10
         assert "dry-run" in out.lower()
+
+
+class TestPipelineDryRunUnified:
+    """Tests du dry-run unifié (tâche 17) : les 11 étapes sont simulées."""
+
+    def test_dry_run_shows_all_11_steps(
+        self, patched_translator_dir, monkeypatch, capsys
+    ):
+        """En dry-run, les 11 étapes sont affichées (simulation), pas seulement 1-5."""
+        monkeypatch.setattr(pipeline, "REPO_ROOT", patched_translator_dir)
+        args = build_parser().parse_args(["--dry-run", "--languages", "fr,de"])
+        rc = run_pipeline(args)
+        assert rc == 0
+        out = capsys.readouterr().out
+        for step in range(1, 12):
+            assert f"ÉTAPE {step}" in out, f"Étape {step} manquante en dry-run"
+
+    def test_dry_run_no_files_written(self, patched_translator_dir, monkeypatch):
+        """En dry-run, aucun fichier n'est créé (pas de nouveau dossier export)."""
+        monkeypatch.setattr(pipeline, "REPO_ROOT", patched_translator_dir)
+        out_base = patched_translator_dir / "output"
+        before = {d.name for d in out_base.iterdir() if d.is_dir()}
+        args = build_parser().parse_args(["--dry-run", "--languages", "fr"])
+        run_pipeline(args)
+        after = {d.name for d in out_base.iterdir() if d.is_dir()}
+        assert before == after, "dry-run a créé des dossiers"
+
+    def test_dry_run_no_backup_files(self, patched_translator_dir, monkeypatch):
+        """En dry-run, aucun fichier .bak_pre_pipeline n'est créé."""
+        monkeypatch.setattr(pipeline, "REPO_ROOT", patched_translator_dir)
+        args = build_parser().parse_args(["--dry-run", "--languages", "fr"])
+        run_pipeline(args)
+        baks = list(patched_translator_dir.rglob("*.bak_pre_pipeline"))
+        assert baks == [], f"dry-run a créé des backups : {baks}"
+
+    def test_dry_run_no_report_in_doc(self, patched_translator_dir, monkeypatch):
+        """En dry-run, aucun rapport final n'est écrit dans doc/."""
+        monkeypatch.setattr(pipeline, "REPO_ROOT", patched_translator_dir)
+        (patched_translator_dir / "doc").mkdir(exist_ok=True)
+        before = set((patched_translator_dir / "doc").iterdir())
+        args = build_parser().parse_args(["--dry-run", "--languages", "fr"])
+        run_pipeline(args)
+        after = set((patched_translator_dir / "doc").iterdir())
+        assert before == after, "dry-run a écrit un rapport dans doc/"

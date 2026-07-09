@@ -191,7 +191,7 @@ Les scripts `compare_sources.py`, `analyze_translation_gap.py`, `validate_transl
 | 14 | Étape 10 : détection mésalignements | ✅ | Tâche 12 |
 | 15 | Étape 11 : rapport consolidé markdown | ✅ | Tâches 13-14 |
 | 16 | Tests unitaires du pipeline | ✅ | Tâches 5-15 |
-| 17 | Mode dry-run | 🟡 | Tâches 5-15 |
+| 17 | Mode dry-run | ✅ | Tâches 5-15 |
 | 18 | Documentation README (FR + EN) | ✅ | Tâche 15 |
 | 19 | Test end-to-end avec la source en10 | ✅ | Tâche 15 |
 
@@ -206,6 +206,7 @@ Les scripts `compare_sources.py`, `analyze_translation_gap.py`, `validate_transl
 - **2026-07-09 — Phase 2 terminée (tâches 10-12)** : étapes 6-8 développées en **TDD strict** (Red → Green → Refactor). Étape 6 : `backup_translation_file()`, `prepopulate_output()`, `manage_modified_keys()` (actions 1/2/3 interactives), `step6_prepopulate_and_manage()` (confirmation [ÉTAPE CLÉ]). Étape 7 : `step7_translate()` pilote `_translate_single_language` directement (évite le sous-dossier daté de `run()`), provider propagé via singleton Config. Étape 8 : `reorder_translation_file()` + `step8_reorder()`. `run_pipeline()` enchaîne les étapes 6-8 après confirmation. 34 nouveaux tests TDD (121 total sur pipeline), couverture 94%. Suite complète : 892 tests OK.
 - **2026-07-09 — Phase 3 terminée (tâches 13-15)** : étapes 9-11 développées en **TDD strict**. Étape 9 : `step9_validate()` réutilise `validate_translations.validate()` (6 contrôles : manquantes, excédantes, vides, placeholders, doublons, non traduits). Étape 10 : `detect_misalignments()` heuristique token overlap intra-langue (Jaccard=0 → mésalignement signalé, ne corrige pas), `step10_detect_misalignments()` multi-langues. Étape 11 : `build_final_report()` 9 sections markdown, `step11_final_report()` écrit dans `doc/{date}_Pipeline_Report.md`. `run_pipeline()` enchaîne les étapes 9-11 après la traduction. 19 nouveaux tests TDD (140 total sur pipeline), couverture 95%. Suite complète : 911 tests OK.
 - **2026-07-09 — Tâches 18-19 (doc + e2e)** : documentation README FR + EN (section « Pipeline orchestré » avec les 11 étapes, options CLI, gestion clés modifiées). Test e2e sur la vraie source en10 (2545 clés) : parcours complet `--yes` avec traduction mockée (pré-peuplement + réordonnancement + validation + rapport final) + dry-run. 2 nouveaux tests (142 total sur pipeline), couverture 95%. Suite complète : 913 tests OK.
+- **2026-07-09 — Tâche 17 (dry-run unifié)** : le dry-run couvre désormais les **11 étapes** (pas seulement 1-5). `run_pipeline()` en dry-run simule les étapes 6-11 via les gardes `dry_run` existantes de chaque étape, sans créer de dossier/backup/rapport. 4 tests de non-régression (toutes étapes affichées, aucun fichier créé, aucun backup, aucun rapport dans doc/). 4 nouveaux tests (146 total sur pipeline), couverture 95%. Suite complète : 917 tests OK.
 - **Tâche 16 (tests)** : ✅ terminé — 140 tests couvrant les 11 étapes du pipeline (89 characterization Phase 1 + 51 TDD Phases 2-3).
 - **Tâche 17 (dry-run)** : 🟡 couvre les étapes 1-5 (rapport d'analyse sans exécution). Le dry-run complet (couvrant aussi étapes 6-11) nécessiterait un mode mock. Les étapes 6-11 ont chacune leur propre garde `if ctx.dry_run` qui skippe proprement.
 

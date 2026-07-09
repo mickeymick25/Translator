@@ -858,9 +858,7 @@ def _tokenize(text: str) -> set[str]:
     return set(tokens) if tokens else {text.lower()}
 
 
-def detect_misalignments(
-    source: dict, translation: dict, lang: str
-) -> list[dict]:
+def detect_misalignments(source: dict, translation: dict, lang: str) -> list[dict]:
     """Détecte les mésalignements intra-langue (heuristique token overlap).
 
     Pour chaque texte source partagé par plusieurs clés, vérifie que les
@@ -890,7 +888,8 @@ def detect_misalignments(
         trans = {
             k: translation.get(k, "")
             for k in keys
-            if isinstance(translation.get(k, ""), str) and translation.get(k, "").strip()
+            if isinstance(translation.get(k, ""), str)
+            and translation.get(k, "").strip()
         }
         if len(trans) < 2:
             continue
@@ -941,7 +940,9 @@ def step10_detect_misalignments(
         if mism:
             print(f"  {lang.upper()}: {len(mism)} mésalignement(s) potentiel(s).")
             for m in mism[:5]:
-                print(f"    « {short_repr(m['source_text'])} » → {', '.join(m['keys'])}")
+                print(
+                    f"    « {short_repr(m['source_text'])} » → {', '.join(m['keys'])}"
+                )
         else:
             print(f"  {lang.upper()}: ✅ aucun mésalignement.")
     total = sum(len(v) for v in result.values())
@@ -1004,12 +1005,16 @@ def build_final_report(
             )
     else:
         L.append("_Aucune coquille connue détectée._")
-    L.append(f"\nCorrections appliquées : {'oui ✅' if ctx.typos_corrected else 'non'}\n")
+    L.append(
+        f"\nCorrections appliquées : {'oui ✅' if ctx.typos_corrected else 'non'}\n"
+    )
 
     # Section 4 — Écart de traduction
     L.append("## 4. Écart de traduction\n")
     if ctx.gaps:
-        L.append("| Langue | Présentes | À ajouter | À supprimer | À modifier | Incomplètes | Sur-remplies |")
+        L.append(
+            "| Langue | Présentes | À ajouter | À supprimer | À modifier | Incomplètes | Sur-remplies |"
+        )
         L.append("|---|---:|---:|---:|---:|---:|---:|")
         for g in ctx.gaps:
             L.append(
@@ -1060,7 +1065,9 @@ def build_final_report(
     # Section 8 — Mésalignements
     L.append("## 8. Mésalignements\n")
     total_misalign = sum(len(v) for v in misalignments.values()) if misalignments else 0
-    L.append(f"**{total_misalign} mésalignement(s) potentiel(s)** détecté(s) (heuristique, à vérifier manuellement).\n")
+    L.append(
+        f"**{total_misalign} mésalignement(s) potentiel(s)** détecté(s) (heuristique, à vérifier manuellement).\n"
+    )
     if misalignments:
         for lang, mism_list in misalignments.items():
             if mism_list:
@@ -1195,7 +1202,9 @@ def run_pipeline(args: argparse.Namespace) -> int:
     if args.languages:
         ctx.languages = [lg.strip() for lg in args.languages.split(",") if lg.strip()]
 
-    print("🚀 Pipeline de traduction COP — Phases 1-3 (analyse + exécution + validation)")
+    print(
+        "🚀 Pipeline de traduction COP — Phases 1-3 (analyse + exécution + validation)"
+    )
     print(f"   Provider : {ctx.provider} | Langues : {', '.join(ctx.languages)}")
     if ctx.dry_run:
         print("   Mode : dry-run (analyse seule, pas d'exécution)")
@@ -1210,8 +1219,22 @@ def run_pipeline(args: argparse.Namespace) -> int:
         print(f"\n❌ {e}", file=sys.stderr)
         return 2
 
+    if ctx.dry_run:
+        # Dry-run unifié : simuler les étapes 6-11 sans rien exécuter.
+        # Chaque étape a sa propre garde `dry_run` qui affiche un message et
+        # skippe. On utilise le dernier export existant comme dossier factice.
+        simulated_export = ctx.export_dir or Path("/dev/null")
+        step6_prepopulate_and_manage(ctx)  # skippé (retourne None)
+        step7_translate(ctx, simulated_export)  # skippé
+        step8_reorder(ctx, simulated_export)  # skippé
+        step9_validate(ctx, simulated_export)  # skippé
+        step10_detect_misalignments(ctx, simulated_export)  # skippé
+        step11_final_report(ctx, simulated_export, None, {})  # skippé
+        print("\n⏹  [dry-run] Simulation complète — aucune exécution.")
+        return 0
+
     if not confirmed:
-        print("\n⏹  Parcours arrêté (confirmation refusée ou dry-run).")
+        print("\n⏹  Parcours arrêté (confirmation refusée).")
         return 0
 
     try:
