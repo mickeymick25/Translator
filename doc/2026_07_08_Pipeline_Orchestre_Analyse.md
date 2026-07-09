@@ -184,9 +184,9 @@ Les scripts `compare_sources.py`, `analyze_translation_gap.py`, `validate_transl
 | 7 | Étape 3 : détection coquilles source | ✅ | Tâche 4 |
 | 8 | Étape 4 : analyse écart de traduction | ✅ | Tâche 2 |
 | 9 | Étape 5 : rapport + confirmation interactive | ✅ | Tâches 5-8 |
-| 10 | Étape 6 : pré-peuplement + gestion clés modifiées | ⬜ | Tâche 9 |
-| 11 | Étape 7 : appel à `service.py translate-json` | ⬜ | Tâche 10 |
-| 12 | Étape 8 : réordonnancement auto | ⬜ | Tâche 11 |
+| 10 | Étape 6 : pré-peuplement + gestion clés modifiées | ✅ | Tâche 9 |
+| 11 | Étape 7 : appel à `service.py translate-json` | ✅ | Tâche 10 |
+| 12 | Étape 8 : réordonnancement auto | ✅ | Tâche 11 |
 | 13 | Étape 9 : validation structurelle | ⬜ | Tâches 3, 12 |
 | 14 | Étape 10 : détection mésalignements | ⬜ | Tâche 12 |
 | 15 | Étape 11 : rapport consolidé markdown | ⬜ | Tâches 13-14 |
@@ -203,6 +203,7 @@ Les scripts `compare_sources.py`, `analyze_translation_gap.py`, `validate_transl
 
 - **2026-07-08 — Phase 1 terminée (tâches 1-9)** : refactoring des 3 scripts (fonctions importables + helpers `compare()`, `analyze_export()`, `validate()` / `render_report()`), dictionnaire `source_typos.json` (6 coquilles), pipeline `translator/pipeline.py` (étapes 1-5 : détection, comparaison, coquilles, écart, rapport + confirmation). Validation : 771 tests existants OK, ruff propre, dry-run sur en10 fonctionnel.
 - **2026-07-08 — Rattrapage TDD Phase 1 (tâche 16 partielle)** : `translator/tests/test_pipeline.py` — 89 characterization tests couvrant les étapes 1-5 (classes `TestXxx` par fonction, fixtures fs de test via `tmp_path`, mocks `input`/`load_typos`, `@parametrize` sur `confirm()`). Couverture `pipeline.py` : **98%** (cible ≥ 90% atteinte). Suite complète : 860 tests OK (771 + 89), régression = 0.
+- **2026-07-09 — Phase 2 terminée (tâches 10-12)** : étapes 6-8 développées en **TDD strict** (Red → Green → Refactor). Étape 6 : `backup_translation_file()`, `prepopulate_output()`, `manage_modified_keys()` (actions 1/2/3 interactives), `step6_prepopulate_and_manage()` (confirmation [ÉTAPE CLÉ]). Étape 7 : `step7_translate()` pilote `_translate_single_language` directement (évite le sous-dossier daté de `run()`), provider propagé via singleton Config. Étape 8 : `reorder_translation_file()` + `step8_reorder()`. `run_pipeline()` enchaîne les étapes 6-8 après confirmation. 34 nouveaux tests TDD (121 total sur pipeline), couverture 94%. Suite complète : 892 tests OK.
 - **Tâche 17 (dry-run)** : implémenté pour les étapes 1-5 (rapport d'analyse sans exécution). Le dry-run complet (couvrant aussi étapes 6-11) sera finalisé après Phase 2/3.
 - **Tâche 16 (tests)** : Phase 1 couverte (🟡). Tests Phase 2/3 à écrire en TDD strict au fil des étapes.
 

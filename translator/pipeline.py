@@ -32,8 +32,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 # ─── sys.path setup ──────────────────────────────────────────────────
@@ -495,6 +497,308 @@ def step5_report_and_confirm(ctx: PipelineContext) -> bool:
     return confirm(ctx, "  Poursuivre ?", default=False)
 
 
+# ─── Étape 6 : Pré-peuplement + gestion clés modifiées ────────────────
+
+
+def backup_translation_file(path: Path) -> Path:
+    """Copie un fichier de traduction en `<name>.bak_pre_pipeline`.
+
+    Écrase un backup existant (cas d'un re-run du pipeline).
+    Retourne le chemin du backup.
+    """
+    backup = path.with_suffix(path.suffix + ".bak_pre_pipeline")
+    shutil.copy2(path, backup)
+    return backup
+
+
+def prepopulate_output(
+    last_export_dir: Path,
+    languages: list[str],
+    base_output_dir: Path,
+) -> Path:
+    """Crée un nouveau dossier daté et y copie les fichiers du dernier export.
+
+    Args:
+        last_export_dir: Dossier *_Export source (copie de référence).
+        languages: Langues à copier (fichiers translation_en_<lang>.json).
+        base_output_dir: Dossier parent des *_Export.
+
+    Returns:
+        Le chemin du nouveau dossier daté.
+    """
+    date_str = datetime.now().strftime("%Y_%m_%d")
+    new_dir = base_output_dir / f"{date_str}_Export"
+    new_dir.mkdir(parents=True, exist_ok=True)
+    for lang in languages:
+        src_file = last_export_dir / f"translation_en_{lang}.json"
+        if src_file.exists():
+            shutil.copy2(src_file, new_dir / src_file.name)
+    return new_dir
+
+
+def manage_modified_keys(
+    modified: list[tuple[str, str, str]],
+    export_dir: Path,
+    languages: list[str],
+    interactive: bool = True,
+) -> None:
+    """Pour chaque clé modifiée, demande l'action (retraduire/garder/saisie).
+
+    Args:
+        modified: Liste de (key, old_value, new_value) issues de la comparaison.
+        export_dir: Dossier contenant les translation_en_<lang>.json.
+        languages: Langues cibles.
+        interactive: Si False, conserve toutes les traductions (défaut sûr).
+    """
+    if not modified:
+        return
+    for key, old_val, new_val in modified:
+        if not interactive:
+            continue  # défaut sûr : garder l'existant
+        # Afficher le contexte
+        print(f"\n  Clé modifiée: {key}")
+        print(f"    ancien source: {short_repr(old_val)}")
+        print(f"    nouveau source: {short_repr(new_val)}")
+        fr_file = export_dir / f"translation_en_{languages[0]}.json"
+        current = ""
+        if fr_file.exists():
+            data = json_load(fr_file)
+            current = data.get(key, "")
+        print(
+            f"    traduction actuelle ({languages[0].upper()}): {short_repr(current)}"
+        )
+        action = _prompt_action(key)
+        if action == "1":
+            _remove_key_from_all(export_dir, languages, key)
+            print(f"    → Clé '{key}' supprimée (sera retraduite).")
+        elif action == "3":
+            _manual_input_for_all(export_dir, languages, key)
+        # action "2" ou annulation : ne rien faire (garder)
+
+
+def _prompt_action(key: str) -> str:
+    """Demande l'action pour une clé modifiée. Retourne '1', '2' ou '3'."""
+    while True:
+        try:
+            answer = input(
+                "  Action: [1] Retraduire  [2] Garder l'existant  "
+                "[3] Saisir manuellement  "
+            ).strip()
+        except EOFError:
+            return "2"  # défaut sûr : garder
+        if answer in ("1", "2", "3"):
+            return answer
+        print("    Réponse invalide. Tapez 1, 2 ou 3.")
+
+
+def _remove_key_from_all(export_dir: Path, languages: list[str], key: str) -> None:
+    """Supprime une clé de tous les fichiers de traduction."""
+    for lang in languages:
+        path = export_dir / f"translation_en_{lang}.json"
+        if path.exists():
+            data = json_load(path)
+            data.pop(key, None)
+            json_write(path, data)
+
+
+def _manual_input_for_all(export_dir: Path, languages: list[str], key: str) -> None:
+    """Demande une traduction manuelle pour chaque langue et l'écrit."""
+    for lang in languages:
+        path = export_dir / f"translation_en_{lang}.json"
+        try:
+            value = input(f"    Traduction {lang.upper()} pour '{key}': ").strip()
+        except EOFError:
+            continue
+        if path.exists():
+            data = json_load(path)
+        else:
+            data = {}
+        data[key] = value
+        json_write(path, data)
+        print(f"    → {lang.upper()}: '{value}' enregistré.")
+
+
+def short_repr(v) -> str:
+    """Représentation courte d'une valeur pour l'affichage interactif."""
+    s = str(v).replace("\n", " ")
+    return s[:80] + "..." if len(s) > 80 else s
+
+
+def json_load(path: Path) -> dict:
+    with path.open(encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def json_write(path: Path, data: dict) -> None:
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=2)
+
+
+def step6_prepopulate_and_manage(ctx: PipelineContext) -> Path | None:
+    """Pré-peuple le dossier output, gère les clés modifiées, demande confirmation.
+
+    ÉTAPE CLÉ : confirmation après gestion des clés modifiées.
+    Retourne le chemin du nouveau dossier d'export, ou None si annulé/dry-run.
+    """
+    step_banner(6, "Pré-peuplement + gestion clés modifiées")
+
+    if ctx.dry_run:
+        print("  [dry-run] Pré-peuplement et gestion clés ignorés.")
+        return None
+
+    if not ctx.export_dir:
+        print("  ⚠️  Aucun export précédent — dossier vide créé.")
+        # Créer un dossier vide pour la traduction
+        base = TRANSLATOR_DIR / "output"
+        new_dir = prepopulate_output(Path("/dev/null"), ctx.languages, base)
+        return new_dir
+
+    # 1. Backup des fichiers du dernier export
+    print("  Sauvegarde des fichiers existants...")
+    for lang in ctx.languages:
+        src_file = ctx.export_dir / f"translation_en_{lang}.json"
+        if src_file.exists():
+            backup_translation_file(src_file)
+
+    # 2. Pré-peuplement : copie vers un nouveau dossier daté
+    base = TRANSLATOR_DIR / "output"
+    new_dir = prepopulate_output(ctx.export_dir, ctx.languages, base)
+    print(f"  Nouveau dossier d'export : {new_dir.name}")
+    copied = sum(
+        1
+        for lang in ctx.languages
+        if (new_dir / f"translation_en_{lang}.json").exists()
+    )
+    print(f"  {copied} fichier(s) copié(s).")
+
+    # 3. Gestion des clés modifiées
+    if ctx.comparison and ctx.comparison.modified:
+        modified = ctx.comparison.modified  # list of (key, old, new)
+        print(f"\n  {len(modified)} clé(s) modifiée(s) à examiner :")
+        manage_modified_keys(
+            modified, new_dir, ctx.languages, interactive=ctx.interactive
+        )
+    else:
+        print("  Aucune clé modifiée à examiner.")
+
+    # 4. Confirmation [ÉTAPE CLÉ]
+    print("\n" + "─" * 70)
+    print("  ÉTAPE CLÉ — Confirmer avant de lancer la traduction (étapes 7-8).")
+    print("─" * 70)
+    if confirm(ctx, "  Lancer la traduction ?", default=True):
+        print("  ✅ Confirmé.")
+        return new_dir
+    print("  ⛔ Traduction annulée.")
+    return None
+
+
+# ─── Étape 7 : Traduction ───────────────────────────────────────────
+
+
+def step7_translate(ctx: PipelineContext, export_dir: Path) -> None:
+    """Lance la traduction pour chaque langue cible vers `export_dir`.
+
+    Pilote directement `_translate_single_language` du mode translate-json
+    (évite le sous-dossier daté créé par `run()`). Le resume est automatique :
+    les clés déjà présentes sont gardées, seules les manquantes sont traduites.
+    """
+    step_banner(7, "Traduction")
+
+    if ctx.dry_run:
+        print("  [dry-run] Traduction non lancée.")
+        return
+
+    if not ctx.languages:
+        print("  Aucune langue à traduire.")
+        return
+
+    # Configurer le singleton Config pour que get_provider() retourne le bon provider
+    import core.config as config_module
+    from core.config import Config
+
+    provider = ctx.provider if ctx.provider != "hybride" else "google"
+    config = Config(
+        SOURCE_LANG="en",
+        SOURCE_FILE=str(ctx.new_source),
+        OUTPUT_DIR=str(export_dir),
+        TRANSLATION_PROVIDER=provider,
+        dry_run=False,
+    )
+    config_module._config = config
+
+    # Charger la source
+    with ctx.new_source.open(encoding="utf-8") as fh:
+        source_data = json.load(fh)
+    source_keys = list(source_data.keys())
+
+    # Import différé : mode_translate_json doit être importé après le sys.path setup
+    from modes.mode_translate_json import _translate_single_language  # noqa: E402
+
+    print(f"  Provider : {provider}")
+    print(f"  Langues  : {', '.join(ctx.languages)}")
+    print(f"  Source   : {ctx.new_source.name} ({len(source_keys)} clés)")
+
+    for lang in ctx.languages:
+        print(f"\n  → {lang.upper()}...")
+        _translate_single_language(ctx.new_source, source_data, "en", lang, export_dir)
+        out_file = export_dir / f"translation_en_{lang}.json"
+        if out_file.exists():
+            count = len(json.loads(out_file.read_text(encoding="utf-8")))
+            print(f"    {count} clés traduites.")
+
+    # Restaurer le singleton Config (propreté)
+    config_module._config = None
+
+
+# ─── Étape 8 : Réordonnancement auto ─────────────────────────────────
+
+
+def reorder_translation_file(path: Path, source_keys: list[str]) -> None:
+    """Réécrit un fichier JSON de traduction dans l'ordre des clés source.
+
+    Les clés présentes dans la trad mais absentes de la source sont conservées
+    et placées à la fin (pas de perte de données). Les clés source absentes
+    de la trad ne sont pas ajoutées.
+    """
+    data = json_load(path)
+    if not data:
+        return
+    reordered: dict = {}
+    for key in source_keys:
+        if key in data:
+            reordered[key] = data[key]
+    # Clés extras (présentes dans la trad, pas dans la source) → à la fin
+    for key in data:
+        if key not in reordered:
+            reordered[key] = data[key]
+    json_write(path, reordered)
+
+
+def step8_reorder(ctx: PipelineContext, export_dir: Path) -> None:
+    """Réordonne tous les fichiers de traduction selon l'ordre de la source."""
+    step_banner(8, "Réordonnancement auto")
+
+    if ctx.dry_run:
+        print("  [dry-run] Réordonnancement non appliqué.")
+        return
+
+    if not ctx.new_source:
+        print("  ⚠️  Pas de source — étape ignorée.")
+        return
+
+    with ctx.new_source.open(encoding="utf-8") as fh:
+        source_data = json.load(fh)
+    source_keys = list(source_data.keys())
+
+    for lang in ctx.languages:
+        path = export_dir / f"translation_en_{lang}.json"
+        if not path.exists():
+            print(f"  {lang.upper()}: fichier absent — ignoré.")
+            continue
+        reorder_translation_file(path, source_keys)
+        print(f"  {lang.upper()}: réordonné selon la source ({len(source_keys)} clés).")
+
+
 # ─── CLI ─────────────────────────────────────────────────────────────
 
 
@@ -548,7 +852,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_pipeline(args: argparse.Namespace) -> int:
-    """Point d'entrée : exécute les étapes 1-5 de la Phase 1."""
+    """Point d'entrée : exécute les étapes 1-8 (Phases 1-2)."""
     ctx = PipelineContext(
         dry_run=args.dry_run,
         provider=args.provider,
@@ -562,7 +866,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
     if args.languages:
         ctx.languages = [lg.strip() for lg in args.languages.split(",") if lg.strip()]
 
-    print("🚀 Pipeline de traduction COP — Phase 1 (analyse)")
+    print("🚀 Pipeline de traduction COP — Phases 1-2 (analyse + exécution)")
     print(f"   Provider : {ctx.provider} | Langues : {', '.join(ctx.languages)}")
     if ctx.dry_run:
         print("   Mode : dry-run (analyse seule, pas d'exécution)")
@@ -577,10 +881,28 @@ def run_pipeline(args: argparse.Namespace) -> int:
         print(f"\n❌ {e}", file=sys.stderr)
         return 2
 
-    if confirmed:
-        print("\n✅ Rapport d'analyse validé. Phase 2 (exécution) à implémenter.")
-    else:
+    if not confirmed:
         print("\n⏹  Parcours arrêté (confirmation refusée ou dry-run).")
+        return 0
+
+    try:
+        export_dir = step6_prepopulate_and_manage(ctx)
+    except FileNotFoundError as e:
+        print(f"\n❌ {e}", file=sys.stderr)
+        return 2
+
+    if not export_dir:
+        print("\n⏹  Traduction annulée à l'étape 6.")
+        return 0
+
+    try:
+        step7_translate(ctx, export_dir)
+        step8_reorder(ctx, export_dir)
+    except Exception as e:  # noqa: BLE001
+        print(f"\n❌ Erreur durant la traduction : {e}", file=sys.stderr)
+        return 3
+
+    print("\n✅ Pipeline terminé (Phases 1-2). Phase 3 (validation) à implémenter.")
     return 0
 
 

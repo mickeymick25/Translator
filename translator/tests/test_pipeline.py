@@ -34,17 +34,24 @@ from pipeline import (  # noqa: E402
     _list_import_folders,
     _pick_source_in_import,
     apply_typo_corrections,
+    backup_translation_file,
     build_analysis_report,
     build_parser,
     confirm,
     detect_typos_in_source,
     load_typos,
+    manage_modified_keys,
+    prepopulate_output,
+    reorder_translation_file,
     run_pipeline,
     step1_detect_sources,
     step2_compare_sources,
     step3_detect_typos,
     step4_analyze_gap,
     step5_report_and_confirm,
+    step6_prepopulate_and_manage,
+    step7_translate,
+    step8_reorder,
     step_banner,
 )
 
@@ -847,10 +854,53 @@ class TestRunPipeline:
         assert rc == 0
 
     def test_yes_returns_zero(self, patched_translator_dir, monkeypatch):
-        """--yes (non-interactif) → confirmation automatique → rc 0."""
+        """--yes (non-interactif) → étapes 6-8 avec traduction mockée → rc 0."""
+        monkeypatch.setattr(
+            "modes.mode_translate_json._translate_single_language",
+            lambda *a, **kw: None,
+        )
         args = build_parser().parse_args(["--yes", "--languages", "fr"])
         rc = run_pipeline(args)
         assert rc == 0
+
+    def test_full_pipeline_creates_and_reorders(
+        self, patched_translator_dir, monkeypatch
+    ):
+        """--yes : pré-peuplement + traduction mockée + réordonnancement → rc 0."""
+        from pathlib import Path
+
+        def fake_translate(src_file, src_data, src_lang, tgt_lang, out_dir):
+            # Écrit un fichier désordonné pour vérifier le réordonnancement
+            path = Path(out_dir) / f"translation_en_{tgt_lang}.json"
+            path.write_text(
+                json.dumps({"K4": "new", "K1": "hi", "K2": "bye"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+        monkeypatch.setattr(
+            "modes.mode_translate_json._translate_single_language",
+            fake_translate,
+        )
+        args = build_parser().parse_args(["--yes", "--languages", "fr"])
+        rc = run_pipeline(args)
+        assert rc == 0
+        # Vérifier qu'un nouveau dossier daté a été créé
+        out_base = patched_translator_dir / "output"
+        dated = [d for d in out_base.iterdir() if d.is_dir() and "_Export" in d.name]
+        # Au moins le nouvel export daté du jour
+        today_exports = [
+            d
+            for d in dated
+            if d.name.startswith(
+                __import__("datetime").date.today().strftime("%Y_%m_%d")
+            )
+        ]
+        assert today_exports, f"Aucun dossier daté du jour dans {out_base}"
+        fr_file = today_exports[0] / "translation_en_fr.json"
+        assert fr_file.exists()
+        data = json.loads(fr_file.read_text(encoding="utf-8"))
+        # Le réordonnancement a dû mettre K1 avant K4
+        assert list(data.keys())[0] == "K1"
 
     def test_missing_source_returns_2(self, tmp_path, monkeypatch):
         """--source vers un fichier absent → rc 2 (FileNotFoundError géré)."""
@@ -882,3 +932,444 @@ class TestRunPipeline:
         rc = run_pipeline(args)
         assert rc == 0
         assert report_file.exists()
+
+
+# ═══ Phase 2 — Étape 6 : Pré-peuplement + gestion clés modifiées (TDD) ═══
+
+
+class TestBackupTranslationFile:
+    """Tests de backup_translation_file() — copie .bak_pre_pipeline."""
+
+    def test_creates_backup_with_correct_suffix(self, tmp_path):
+        src = tmp_path / "translation_en_fr.json"
+        src.write_text('{"K": "v"}', encoding="utf-8")
+        backup = backup_translation_file(src)
+        assert backup.exists()
+        assert backup.name == "translation_en_fr.json.bak_pre_pipeline"
+        assert backup.read_text(encoding="utf-8") == '{"K": "v"}'
+
+    def test_original_preserved(self, tmp_path):
+        src = tmp_path / "translation_en_de.json"
+        src.write_text('{"A": "a"}', encoding="utf-8")
+        backup_translation_file(src)
+        assert src.read_text(encoding="utf-8") == '{"A": "a"}'
+
+    def test_backup_overwrites_existing(self, tmp_path):
+        """Un backup existant est écrasé (re-run du pipeline)."""
+        src = tmp_path / "f.json"
+        src.write_text('{"new": 1}', encoding="utf-8")
+        existing_bak = tmp_path / "f.json.bak_pre_pipeline"
+        existing_bak.write_text('{"old": 0}', encoding="utf-8")
+        backup_translation_file(src)
+        assert existing_bak.read_text(encoding="utf-8") == '{"new": 1}'
+
+
+class TestPrepopulateOutput:
+    """Tests de prepopulate_output() — copie du dernier export vers nouveau dossier."""
+
+    def test_creates_new_dated_folder(self, fake_translator_dir):
+        last_export = fake_translator_dir / "output" / "2026_07_08_Export"
+        base = fake_translator_dir / "output"
+        new_dir = prepopulate_output(last_export, ["fr", "de"], base)
+        assert new_dir.exists()
+        assert new_dir.parent == base
+        # le nom suit le pattern YYYY_MM_DD_Export
+        import re
+
+        assert re.match(r"^\d{4}_\d{2}_\d{2}_Export$", new_dir.name)
+
+    def test_copies_translation_files(self, fake_translator_dir):
+        last_export = fake_translator_dir / "output" / "2026_07_08_Export"
+        base = fake_translator_dir / "output"
+        new_dir = prepopulate_output(last_export, ["fr", "de"], base)
+        assert (new_dir / "translation_en_fr.json").exists()
+        assert (new_dir / "translation_en_de.json").exists()
+        fr = json.loads(
+            (new_dir / "translation_en_fr.json").read_text(encoding="utf-8")
+        )
+        assert fr == {"K1": "Bonjour", "K2": "Monde", "K3": "Appairage"}
+
+    def test_skips_missing_language_file(self, fake_translator_dir):
+        """Si un fichier de langue n'existe pas dans l'export source, il est ignoré."""
+        last_export = fake_translator_dir / "output" / "2026_07_08_Export"
+        base = fake_translator_dir / "output"
+        new_dir = prepopulate_output(last_export, ["fr", "de", "it"], base)
+        assert (new_dir / "translation_en_fr.json").exists()
+        assert not (new_dir / "translation_en_it.json").exists()
+
+    def test_empty_last_export_creates_empty_folder(self, tmp_path):
+        last_export = tmp_path / "old_export"
+        last_export.mkdir()
+        base = tmp_path / "output"
+        base.mkdir()
+        new_dir = prepopulate_output(last_export, ["fr"], base)
+        assert new_dir.exists()
+        assert list(new_dir.iterdir()) == []
+
+
+class TestManageModifiedKeys:
+    """Tests de manage_modified_keys() — actions 1/2/3 sur clés modifiées."""
+
+    @pytest.fixture
+    def export_with_modified(self, tmp_path):
+        """Dossier d'export avec 2 langues et une clé K2 modifiée."""
+        exp = tmp_path / "export"
+        exp.mkdir()
+        (exp / "translation_en_fr.json").write_text(
+            json.dumps({"K1": "Bonjour", "K2": "Monde", "K3": "Appairage"}),
+            encoding="utf-8",
+        )
+        (exp / "translation_en_de.json").write_text(
+            json.dumps({"K1": "Hallo", "K2": "Welt", "K3": "Kopplung"}),
+            encoding="utf-8",
+        )
+        return exp
+
+    def test_option1_retraduire_removes_key(self, export_with_modified):
+        """Option 1 : la clé est supprimée de tous les fichiers (reprise la retraduit)."""
+        modified = [("K2", "World", "Goodbye")]
+        inputs = iter(["1"])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            manage_modified_keys(
+                modified, export_with_modified, ["fr", "de"], interactive=True
+            )
+        fr = json.loads(
+            (export_with_modified / "translation_en_fr.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        de = json.loads(
+            (export_with_modified / "translation_en_de.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert "K2" not in fr
+        assert "K2" not in de
+        assert "K1" in fr and "K3" in fr
+
+    def test_option2_keep_preserves_key(self, export_with_modified):
+        """Option 2 : la traduction actuelle est conservée."""
+        modified = [("K2", "World", "Goodbye")]
+        with patch("builtins.input", return_value="2"):
+            manage_modified_keys(
+                modified, export_with_modified, ["fr", "de"], interactive=True
+            )
+        fr = json.loads(
+            (export_with_modified / "translation_en_fr.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert fr["K2"] == "Monde"
+
+    def test_option3_manual_input_sets_value(self, export_with_modified):
+        """Option 3 : saisie manuelle d'une nouvelle traduction par langue."""
+        modified = [("K2", "World", "Goodbye")]
+        # 1 pour l'action, puis saisie fr, puis saisie de
+        inputs = iter(["3", "Au revoir", "Tschüss"])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            manage_modified_keys(
+                modified, export_with_modified, ["fr", "de"], interactive=True
+            )
+        fr = json.loads(
+            (export_with_modified / "translation_en_fr.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        de = json.loads(
+            (export_with_modified / "translation_en_de.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert fr["K2"] == "Au revoir"
+        assert de["K2"] == "Tschüss"
+
+    def test_non_interactive_keeps_all(self, export_with_modified):
+        """Mode non-interactif : toutes les clés modifiées sont conservées (défaut sûr)."""
+        modified = [("K2", "World", "Goodbye")]
+        manage_modified_keys(
+            modified, export_with_modified, ["fr", "de"], interactive=False
+        )
+        fr = json.loads(
+            (export_with_modified / "translation_en_fr.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert fr["K2"] == "Monde"
+
+    def test_multiple_modified_keys(self, export_with_modified):
+        """Deux clés modifiées, actions différentes (1 puis 2)."""
+        (export_with_modified / "translation_en_fr.json").write_text(
+            json.dumps({"K1": "Bonjour", "K2": "Monde", "K4": "Quatre"}),
+            encoding="utf-8",
+        )
+        (export_with_modified / "translation_en_de.json").write_text(
+            json.dumps({"K1": "Hallo", "K2": "Welt", "K4": "Vier"}), encoding="utf-8"
+        )
+        modified = [("K2", "World", "Goodbye"), ("K4", "Four", "Quatre")]
+        inputs = iter(["1", "2"])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            manage_modified_keys(
+                modified, export_with_modified, ["fr", "de"], interactive=True
+            )
+        fr = json.loads(
+            (export_with_modified / "translation_en_fr.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert "K2" not in fr  # retraduire
+        assert fr["K4"] == "Quatre"  # gardé
+
+    def test_empty_modified_list(self, export_with_modified):
+        """Aucune clé modifiée → aucun changement, aucun prompt."""
+        original = (export_with_modified / "translation_en_fr.json").read_text(
+            encoding="utf-8"
+        )
+        with patch("builtins.input") as mock_input:
+            manage_modified_keys(
+                [], export_with_modified, ["fr", "de"], interactive=True
+            )
+        mock_input.assert_not_called()
+        assert (export_with_modified / "translation_en_fr.json").read_text(
+            encoding="utf-8"
+        ) == original
+
+
+class TestStep6PrepopulateAndManage:
+    """Tests de step6_prepopulate_and_manage() — orchestration + confirmation."""
+
+    def test_returns_new_export_dir(self, patched_translator_dir, monkeypatch):
+        ctx = PipelineContext(languages=["fr", "de"])
+        step1_detect_sources(ctx)
+        step2_compare_sources(ctx)
+        ctx.interactive = False
+        result = step6_prepopulate_and_manage(ctx)
+        assert result is not None
+        assert result.exists()
+        assert (result / "translation_en_fr.json").exists()
+
+    def test_backs_up_before_modification(self, patched_translator_dir, monkeypatch):
+        ctx = PipelineContext(languages=["fr", "de"])
+        step1_detect_sources(ctx)
+        step2_compare_sources(ctx)
+        ctx.interactive = False
+        step6_prepopulate_and_manage(ctx)
+        # les backups sont dans le dernier export (source de la copie)
+        assert (ctx.export_dir / "translation_en_fr.json.bak_pre_pipeline").exists()
+
+    def test_dry_run_skips_actions(self, patched_translator_dir, monkeypatch, capsys):
+        ctx = PipelineContext(languages=["fr", "de"], dry_run=True)
+        step1_detect_sources(ctx)
+        step2_compare_sources(ctx)
+        result = step6_prepopulate_and_manage(ctx)
+        assert result is None
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()
+
+    def test_interactive_confirmation_yes(self, patched_translator_dir, monkeypatch):
+        ctx = PipelineContext(languages=["fr", "de"], interactive=True)
+        step1_detect_sources(ctx)
+        step2_compare_sources(ctx)
+        # manage_modified_keys : K2 modifiée → option 2 (garder) ; puis confirmation finale → y
+        inputs = iter(["2", "y"])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            result = step6_prepopulate_and_manage(ctx)
+        assert result is not None
+        assert result.exists()
+
+    def test_interactive_confirmation_no_aborts(
+        self, patched_translator_dir, monkeypatch, capsys
+    ):
+        ctx = PipelineContext(languages=["fr", "de"], interactive=True)
+        step1_detect_sources(ctx)
+        step2_compare_sources(ctx)
+        inputs = iter(["2", "n"])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            result = step6_prepopulate_and_manage(ctx)
+        assert result is None
+
+
+# ═══ Phase 2 — Étape 7 : Traduction (TDD) ═══
+
+
+class TestStep7Translate:
+    """Tests de step7_translate() — appel au moteur de traduction (mocké)."""
+
+    def test_translates_all_languages(self, patched_translator_dir, monkeypatch):
+        """step7 appelle la traduction pour chaque langue demandée."""
+        ctx = PipelineContext(languages=["fr", "de"], provider="google")
+        step1_detect_sources(ctx)
+        new_dir = patched_translator_dir / "output" / "2026_07_08_Export"
+        calls = []
+
+        def fake_translate_single(src_file, src_data, src_lang, tgt_lang, out_dir):
+            calls.append((tgt_lang, str(out_dir)))
+            # simule l'écriture d'un fichier traduit
+            (out_dir / f"translation_en_{tgt_lang}.json").write_text(
+                json.dumps({"K1": f"[{tgt_lang}]"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+        monkeypatch.setattr(
+            "modes.mode_translate_json._translate_single_language",
+            fake_translate_single,
+        )
+        step7_translate(ctx, new_dir)
+        assert len(calls) == 2
+        langs_called = [c[0] for c in calls]
+        assert "fr" in langs_called and "de" in langs_called
+
+    def test_dry_run_skips_translation(
+        self, patched_translator_dir, monkeypatch, capsys
+    ):
+        ctx = PipelineContext(languages=["fr"], provider="google", dry_run=True)
+        step1_detect_sources(ctx)
+        new_dir = patched_translator_dir / "output" / "2026_07_08_Export"
+        monkeypatch.setattr(
+            "modes.mode_translate_json._translate_single_language",
+            lambda *a, **kw: None,
+        )
+        step7_translate(ctx, new_dir)
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()
+
+    def test_ollama_provider_sets_config(self, patched_translator_dir, monkeypatch):
+        """Le provider ollama est propagé au singleton Config."""
+        import core.config as config_module
+
+        ctx = PipelineContext(languages=["fr"], provider="ollama")
+        step1_detect_sources(ctx)
+        new_dir = patched_translator_dir / "output" / "2026_07_08_Export"
+        seen_provider = {}
+
+        def fake_translate_single(src_file, src_data, src_lang, tgt_lang, out_dir):
+            seen_provider["value"] = config_module.get_config().TRANSLATION_PROVIDER
+
+        monkeypatch.setattr(
+            "modes.mode_translate_json._translate_single_language",
+            fake_translate_single,
+        )
+        step7_translate(ctx, new_dir)
+        assert seen_provider.get("value") == "ollama"
+
+    def test_no_languages_skips(self, patched_translator_dir, monkeypatch, capsys):
+        ctx = PipelineContext(languages=[], provider="google")
+        step1_detect_sources(ctx)
+        new_dir = patched_translator_dir / "output" / "2026_07_08_Export"
+        called = []
+        monkeypatch.setattr(
+            "modes.mode_translate_json._translate_single_language",
+            lambda *a, **kw: called.append(1),
+        )
+        step7_translate(ctx, new_dir)
+        assert called == []
+
+
+# ═══ Phase 2 — Étape 8 : Réordonnancement auto (TDD) ═══
+
+
+class TestReorderTranslationFile:
+    """Tests de reorder_translation_file() — réordonnancement selon la source."""
+
+    def test_reorders_to_source_order(self, tmp_path):
+        """Fichier désordonné → réordonné selon l'ordre des clés source."""
+        path = tmp_path / "translation_en_fr.json"
+        path.write_text(
+            json.dumps({"C": "c", "A": "a", "B": "b"}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        reorder_translation_file(path, ["A", "B", "C"])
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert list(data.keys()) == ["A", "B", "C"]
+
+    def test_preserves_values(self, tmp_path):
+        path = tmp_path / "f.json"
+        path.write_text(
+            json.dumps({"B": "deux", "A": "un"}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        reorder_translation_file(path, ["A", "B"])
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert data == {"A": "un", "B": "deux"}
+
+    def test_keys_not_in_source_appended_at_end(self, tmp_path):
+        """Les clés présentes dans la trad mais absentes de la source sont à la fin."""
+        path = tmp_path / "f.json"
+        path.write_text(
+            json.dumps({"X": "x", "A": "a", "Y": "y"}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        reorder_translation_file(path, ["A", "B"])
+        data = json.loads(path.read_text(encoding="utf-8"))
+        keys = list(data.keys())
+        assert keys[0] == "A"
+        assert "X" in keys and "Y" in keys
+        # les clés source d'abord, puis les extras
+        assert keys.index("A") < keys.index("X")
+
+    def test_missing_source_keys_omitted(self, tmp_path):
+        """Les clés source absentes de la trad ne sont pas ajoutées (réordonne, n'ajoute pas)."""
+        path = tmp_path / "f.json"
+        path.write_text(
+            json.dumps({"A": "a"}, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        reorder_translation_file(path, ["A", "B", "C"])
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert list(data.keys()) == ["A"]
+
+    def test_already_ordered_unchanged_content(self, tmp_path):
+        path = tmp_path / "f.json"
+        original = json.dumps({"A": "a", "B": "b"}, ensure_ascii=False, indent=2)
+        path.write_text(original, encoding="utf-8")
+        reorder_translation_file(path, ["A", "B"])
+        assert path.read_text(encoding="utf-8") == original
+
+    def test_empty_file_unchanged(self, tmp_path):
+        path = tmp_path / "f.json"
+        path.write_text("{}", encoding="utf-8")
+        reorder_translation_file(path, ["A", "B"])
+        assert path.read_text(encoding="utf-8") == "{}"
+
+
+class TestStep8Reorder:
+    """Tests de step8_reorder() — réordonne tous les fichiers d'un export."""
+
+    def test_reorders_all_languages(self, patched_translator_dir, capsys):
+        ctx = PipelineContext(languages=["fr", "de"])
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        # Désordonne les fichiers volontairement
+        (export / "translation_en_fr.json").write_text(
+            json.dumps({"K3": "Appairage", "K1": "Bonjour", "K2": "Monde"}),
+            encoding="utf-8",
+        )
+        (export / "translation_en_de.json").write_text(
+            json.dumps({"K3": "Kopplung", "K1": "Hallo", "K2": "Welt"}),
+            encoding="utf-8",
+        )
+        step8_reorder(ctx, export)
+        fr = json.loads((export / "translation_en_fr.json").read_text(encoding="utf-8"))
+        de = json.loads((export / "translation_en_de.json").read_text(encoding="utf-8"))
+        assert list(fr.keys()) == ["K1", "K2", "K3"]
+        assert list(de.keys()) == ["K1", "K2", "K3"]
+
+    def test_dry_run_skips(self, patched_translator_dir, capsys):
+        ctx = PipelineContext(languages=["fr"], dry_run=True)
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        original = (export / "translation_en_fr.json").read_text(encoding="utf-8")
+        step8_reorder(ctx, export)
+        assert (export / "translation_en_fr.json").read_text(
+            encoding="utf-8"
+        ) == original
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()
+
+    def test_missing_file_skipped(self, patched_translator_dir, capsys):
+        """Si un fichier de langue n'existe pas, il est ignoré (pas d'erreur)."""
+        ctx = PipelineContext(languages=["fr", "it"])
+        step1_detect_sources(ctx)
+        export = patched_translator_dir / "output" / "2026_07_08_Export"
+        step8_reorder(ctx, export)  # 'it' n'existe pas → pas d'erreur
+        out = capsys.readouterr().out
+        assert "FR" in out
+        assert "IT" in out
