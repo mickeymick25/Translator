@@ -1617,3 +1617,142 @@ class TestStep11FinalReport:
         assert path is None
         out = capsys.readouterr().out
         assert "dry-run" in out.lower()
+
+
+# ═══ Tâche 19 — Test end-to-end avec la vraie source en10 ═══
+
+
+class TestPipelineEndToEndEn10:
+    """Test e2e : parcours complet sur la vraie source en10 (tâche 19).
+
+    Copie la vraie source + le dernier export vers tmp_path (pour ne pas
+    modifier les originaux), mocke la traduction, et vérifie que le pipeline
+    produit un nouveau dossier export + un rapport final.
+    Skippé si la source en10 n'est pas disponible (Docker).
+    """
+
+    @pytest.fixture
+    def real_translator_dir(self):
+        """Retourne le vrai translator/ (non mocké). Skip si absent."""
+        real = _REPO_ROOT / "translator"
+        src = real / "source" / "2026_07_08_Import" / "en 10.json"
+        if not src.exists():
+            pytest.skip("Source en10 non disponible (Docker ou contexte différent)")
+        return real
+
+    @pytest.fixture
+    def e2e_env(self, real_translator_dir, tmp_path):
+        """Copie la vraie source en10 + le dernier export vers tmp_path."""
+        import shutil
+
+        # Dossiers
+        src_dir = tmp_path / "source"
+        out_dir = tmp_path / "output"
+        doc_dir = tmp_path / "doc"
+        src_dir.mkdir()
+        out_dir.mkdir()
+        doc_dir.mkdir()
+
+        # Copier la source en10 et en9
+        imp10 = src_dir / "2026_07_08_Import"
+        imp10.mkdir()
+        shutil.copy2(
+            real_translator_dir / "source" / "2026_07_08_Import" / "en 10.json",
+            imp10 / "en 10.json",
+        )
+        imp9 = src_dir / "2026_06_25_Import"
+        imp9.mkdir()
+        shutil.copy2(
+            real_translator_dir / "source" / "2026_06_25_Import" / "en 9.json",
+            imp9 / "en 9.json",
+        )
+
+        # Copier le dernier export
+        real_export = real_translator_dir / "output" / "2026_07_08_Export"
+        exp = out_dir / "2026_07_08_Export"
+        exp.mkdir()
+        for f in real_export.glob("translation_en_*.json"):
+            shutil.copy2(f, exp / f.name)
+
+        return tmp_path
+
+    def test_full_pipeline_en10(self, e2e_env, monkeypatch):
+        """Parcours complet --yes sur en10 : pré-peuplement + trad mockée +
+        réordonnancement + validation + rapport final → rc 0."""
+        monkeypatch.setattr(pipeline, "TRANSLATOR_DIR", e2e_env)
+        monkeypatch.setattr(pipeline, "REPO_ROOT", e2e_env)
+
+        def fake_translate(src_file, src_data, src_lang, tgt_lang, out_dir):
+            # Simule une traduction : préserve les clés, ajoute un préfixe [lang]
+            from pathlib import Path
+
+            path = Path(out_dir) / f"translation_en_{tgt_lang}.json"
+            existing = (
+                json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+            )
+            for key, val in src_data.items():
+                if key not in existing:
+                    existing[key] = f"[{tgt_lang}] {val}"
+            path.write_text(
+                json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+
+        monkeypatch.setattr(
+            "modes.mode_translate_json._translate_single_language",
+            fake_translate,
+        )
+        args = build_parser().parse_args(
+            ["--yes", "--languages", "fr,de", "--provider", "google"]
+        )
+        rc = run_pipeline(args)
+        assert rc == 0
+
+        # Vérifier qu'un nouveau dossier export daté du jour a été créé
+        import datetime
+
+        today = datetime.date.today().strftime("%Y_%m_%d")
+        new_exports = [
+            d
+            for d in (e2e_env / "output").iterdir()
+            if d.is_dir() and d.name.startswith(today) and "_Export" in d.name
+        ]
+        assert new_exports, f"Aucun dossier export daté du jour ({today})"
+        new_export = new_exports[0]
+
+        # Les fichiers de traduction existent pour fr et de
+        assert (new_export / "translation_en_fr.json").exists()
+        assert (new_export / "translation_en_de.json").exists()
+
+        # Le réordonnancement a préservé l'ordre source
+        source = json.loads(
+            (e2e_env / "source" / "2026_07_08_Import" / "en 10.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        source_keys = list(source.keys())
+        fr = json.loads(
+            (new_export / "translation_en_fr.json").read_text(encoding="utf-8")
+        )
+        fr_keys = list(fr.keys())
+        # Les clés source doivent apparaître dans l'ordre source au début
+        common = [k for k in source_keys if k in fr_keys]
+        assert common == [k for k in fr_keys if k in source_keys]
+
+        # Le rapport final a été écrit dans doc/
+        reports = list((e2e_env / "doc").glob("*_Pipeline_Report.md"))
+        assert reports, "Aucun rapport final généré"
+        report_content = reports[0].read_text(encoding="utf-8")
+        assert "## 1. Source" in report_content
+        assert "## 7. Validation" in report_content
+        assert "## 9. Ordre" in report_content
+
+    def test_dry_run_en10(self, e2e_env, monkeypatch, capsys):
+        """Dry-run sur en10 : rapport d'analyse sans exécution → rc 0."""
+        monkeypatch.setattr(pipeline, "TRANSLATOR_DIR", e2e_env)
+        monkeypatch.setattr(pipeline, "REPO_ROOT", e2e_env)
+        args = build_parser().parse_args(["--dry-run", "--languages", "fr,de"])
+        rc = run_pipeline(args)
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "2545" in out  # nombre de clés de en10
+        assert "dry-run" in out.lower()

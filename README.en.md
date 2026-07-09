@@ -14,6 +14,7 @@ Automatic translation of JSON and XLSX files via Google Translate, DeepL or **Ol
 - [Installation](#installation)
 - [Usage](#usage)
 - [Operation modes](#operation-modes)
+- [Orchestrated pipeline](#orchestrated-pipeline)
 - [Multi-provider and fallback](#multi-provider-and-fallback)
 - [Ollama provider (IMP3)](#ollama-provider-imp3)
 - [Intelligent cache](#intelligent-cache)
@@ -186,6 +187,65 @@ The CLI resolves parameters in this order: **CLI arguments > environment variabl
 | `translate-json` | `translate-json` | Translates a flat JSON file to a target language |
 | `translate-dropdowns` | `translate-dropdowns` | Generates multi-language translations from an XLSX |
 | `analyze` | `analyze` | Analyzes the structure of an XLSX file |
+
+## Orchestrated pipeline
+
+The pipeline (`translator/pipeline.py`) chains in **a single command** the full workflow of producing translated files from a new EN source: detection, analysis, pre-population, translation, validation and final report.
+
+```bash
+# Full interactive run (with confirmations at key steps)
+python translator/pipeline.py
+
+# Dry-run (analysis report without execution)
+python translator/pipeline.py --dry-run
+
+# Specific languages + forced provider
+python translator/pipeline.py --languages fr,de --provider ollama
+```
+
+### The 11 steps
+
+| Step | Description | Confirmation |
+|---:|---|:---:|
+| 1 | Auto-detection of the source (latest `*_Import`) + previous one | |
+| 2 | Comparison of both sources (additions/deletions/modifications) | |
+| 3 | Detection of known source typos + interactive correction | |
+| 4 | Gap analysis between the last export and the new source | |
+| 5 | Consolidated report + confirmation | ✅ |
+| 6 | Output folder pre-population + modified keys handling (1/2/3) | ✅ |
+| 7 | Translation (chosen provider: Google / Ollama / hybrid) | |
+| 8 | Auto reordering according to source key order | |
+| 9 | Structural validation (6 checks × N languages) | |
+| 10 | Intra-language misalignment detection (token overlap heuristic) | |
+| 11 | Final consolidated report → `doc/{date}_Pipeline_Report.md` | |
+
+### CLI options
+
+| Option | Description | Default |
+|---|---|---|
+| `--dry-run` | Analysis report without execution | `false` |
+| `--languages fr,de` | Target languages (comma-separated) | all (except `en`) |
+| `--provider` | `google` / `ollama` / `hybride` | `hybride` |
+| `--source PATH` | Override new source detection | auto |
+| `--prev-source PATH` | Override previous source detection | auto |
+| `--report PATH` | Analysis report markdown path | stdout |
+| `--yes` / `-y` | Non-interactive mode (validates all key steps) | `false` |
+
+### Modified keys handling (step 6, interactive)
+
+For each modified source key, the pipeline offers 3 actions:
+
+- `[1] Re-translate`: removes the key from the output file → resume re-translates it
+- `[2] Keep existing`: keeps the current translation
+- `[3] Manual input`: enters a translation per language
+
+### Automatic backup
+
+Before each run, backup of existing files: `translation_en_{lang}.json.bak_pre_pipeline`.
+
+### Technical details
+
+See `doc/2026_07_08_Pipeline_Orchestre_Analyse.md` for the full architecture and `doc/2026_07_08_TDD_Methode_Etude.md` for the development methodology (TDD).
 
 ## Multi-provider and fallback
 
