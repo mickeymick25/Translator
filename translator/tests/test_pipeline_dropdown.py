@@ -483,3 +483,109 @@ class TestStep3DetectTypos:
         origins = [e["origin"] for e in corrected_entries]
         assert "Hierarchy menu" in origins
         assert "Hiearchy menu" not in origins
+
+
+# ═══ D7 : Étape 4 — Écart dropdown par langue (TDD) ═══
+
+
+class TestStep4AnalyzeGap:
+    """Tests de step4_analyze_gap() — écart par langue (Origins manquants)."""
+
+    def test_detects_missing_origins_for_existing_lang(self, xlsx_3_langs, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step4_analyze_gap
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["fr", "pt"])
+        ctx.entries = [{"origin": "Hello"}, {"origin": "World"}, {"origin": "New"}]
+        ctx.existing_translations = {
+            "FR": {"Hello": "Bonjour", "World": "Monde"},
+            "CZ": {"Hello": "Ahoj"},
+        }
+        ctx.missing_languages = ["pt"]
+        step4_analyze_gap(ctx)
+        assert "fr" in ctx.gap_by_lang
+        assert "New" in ctx.gap_by_lang["fr"]["to_translate"]
+        assert ctx.gap_by_lang["fr"]["missing_count"] == 1
+
+    def test_missing_lang_all_entries_to_translate(self, xlsx_3_langs, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step4_analyze_gap
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["pt"])
+        ctx.entries = [{"origin": "Hello"}, {"origin": "World"}]
+        ctx.existing_translations = {"FR": {"Hello": "Bonjour"}}
+        ctx.missing_languages = ["pt"]
+        step4_analyze_gap(ctx)
+        assert "pt" in ctx.gap_by_lang
+        assert ctx.gap_by_lang["pt"]["missing_count"] == 2
+        assert set(ctx.gap_by_lang["pt"]["to_translate"]) == {"Hello", "World"}
+
+    def test_all_origins_present_no_gap(self, xlsx_3_langs, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step4_analyze_gap
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["fr"])
+        ctx.entries = [{"origin": "Hello"}, {"origin": "World"}]
+        ctx.existing_translations = {"FR": {"Hello": "Bonjour", "World": "Monde"}}
+        ctx.missing_languages = []
+        step4_analyze_gap(ctx)
+        assert ctx.gap_by_lang["fr"]["missing_count"] == 0
+        assert ctx.gap_by_lang["fr"]["to_translate"] == []
+
+
+# ═══ D8 : Étape 5 — Rapport + confirmation (TDD) ═══
+
+
+class TestStep5ReportAndConfirm:
+    """Tests de step5_report_and_confirm() — rapport + confirmation [ÉTAPE CLÉ]."""
+
+    def test_report_has_all_sections(self, xlsx_3_langs, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step5_report_and_confirm
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["pt"])
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.missing_languages = ["pt"]
+        ctx.gap_by_lang = {"pt": {"missing_count": 1, "to_translate": ["Hello"]}}
+        ctx.interactive = False
+        step5_report_and_confirm(ctx)
+        out = capsys.readouterr().out
+        assert "Source" in out
+        assert "Écart" in out or "écart" in out
+        assert "Plan" in out
+
+    def test_dry_run_returns_false(self, xlsx_3_langs, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step5_report_and_confirm
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, dry_run=True)
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.missing_languages = ["pt"]
+        ctx.gap_by_lang = {"pt": {"missing_count": 1, "to_translate": ["Hello"]}}
+        assert step5_report_and_confirm(ctx) is False
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()
+
+    def test_non_interactive_returns_true(self, xlsx_3_langs):
+        from pipeline_dropdown import PipelineDropdownContext, step5_report_and_confirm
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, interactive=False)
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.missing_languages = ["pt"]
+        ctx.gap_by_lang = {"pt": {"missing_count": 1, "to_translate": ["Hello"]}}
+        assert step5_report_and_confirm(ctx) is True
+
+    def test_interactive_confirm_yes(self, xlsx_3_langs):
+        from pipeline_dropdown import PipelineDropdownContext, step5_report_and_confirm
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, interactive=True)
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.missing_languages = ["pt"]
+        ctx.gap_by_lang = {"pt": {"missing_count": 1, "to_translate": ["Hello"]}}
+        with patch("builtins.input", return_value="y"):
+            assert step5_report_and_confirm(ctx) is True
+
+    def test_interactive_confirm_no(self, xlsx_3_langs):
+        from pipeline_dropdown import PipelineDropdownContext, step5_report_and_confirm
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, interactive=True)
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.missing_languages = ["pt"]
+        ctx.gap_by_lang = {"pt": {"missing_count": 1, "to_translate": ["Hello"]}}
+        with patch("builtins.input", return_value="n"):
+            assert step5_report_and_confirm(ctx) is False
