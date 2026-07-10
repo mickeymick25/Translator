@@ -419,7 +419,12 @@ Architecture retenue : 2 pipelines séparés (DDD) + `pipeline_common.py` (share
 | D15 | Tests d'intégration e2e (dry-run + `--yes` mocké sur le XLSX en10) | ~1.5h | D14 |
 | D16 | Documentation (README FR/EN + section pipeline dropdown) + `--no-cache` ajouté au pipeline JSON | ~1h | D14 |
 | D17 | Non-régression : suite complète (917 tests + nouveaux) | ~30min | D14 |
-| **Total** | | **~21h** (~3 jours dev) | |
+| **Total** | | **~21h** (~3 jours dev) |
+
+### Notes de progression
+
+- **2026-07-09 — Phase D1 terminée (D1-D3)** : extraction du shared kernel `pipeline_common.py` (helpers : `confirm`, `step_banner`, `backup_translation_file`, `BasePipelineContext`, `short_repr`, `json_load`/`json_write`) ; `pipeline.py` les réimporte sans changement de comportement (917 tests verts). D2 : `detect_source_kind()` (auto par extension) + flag `--mode` + dispatcher dans `run_pipeline` (13 tests TDD). D3 : `load_dropdown_xlsx_all_sheets()` + `detect_missing_languages()` dans `core/io_xlsx.py` (8 tests TDD). Suite complète : 938 tests OK, ruff propre.
+- **Tâches D4-D17** : à implémenter (Phases D2-D5).
 
 Découpage de phase possible, calqué sur le JSON :
 

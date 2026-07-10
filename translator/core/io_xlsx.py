@@ -245,3 +245,68 @@ def save_dropdown_xlsx(
         len(languages),
         path.name,
     )
+
+
+# ─── Pipeline dropdown : lecture multi-feuilles ──────────────────────
+
+
+def load_dropdown_xlsx_all_sheets(path: Path) -> dict[str, dict[str, str]]:
+    """Lit TOUTES les feuilles d'un XLSX dropdown (une feuille par langue).
+
+    Contrairement à `load_dropdown_xlsx` qui ne lit que la feuille active,
+    cette fonction parcourt toutes les feuilles et construit un dict :
+      {LANG_CODE: {origin: traduction}}
+
+    Args:
+        path: Chemin du fichier XLSX.
+
+    Returns:
+        Dict {nom_feuille_upper: {origin: traduction}}.
+        Les lignes dont l'Origin est vide sont ignorées.
+
+    Raises:
+        FileNotFoundError: Si le fichier n'existe pas.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+
+    wb = openpyxl.load_workbook(path, data_only=True)
+    result: dict[str, dict[str, str]] = {}
+    for ws in wb.worksheets:
+        lang = ws.title.upper()
+        translations: dict[str, str] = {}
+        for row in range(2, ws.max_row + 1):
+            origin = clean_text(ws.cell(row=row, column=1).value or "")
+            traduction = clean_text(ws.cell(row=row, column=2).value or "")
+            if origin:  # ignorer les lignes vides
+                translations[origin] = traduction
+        result[lang] = translations
+    return result
+
+
+def detect_missing_languages(
+    xlsx_path: Path,
+    configured_langs: list[str],
+) -> list[str]:
+    """Détecte les langues configurées absentes du XLSX source.
+
+    Compare les noms de feuilles du XLSX (en majuscules) avec les langues
+    configurées (en minuscules). 'en' (source) n'est jamais considéré
+    comme manquant.
+
+    Args:
+        xlsx_path: Chemin du fichier XLSX à inspecter.
+        configured_langs: Liste des codes langues configurés (ex : ['fr','cz','sk',...]).
+
+    Returns:
+        Liste triée des codes langues manquants (en minuscules).
+    """
+    all_sheets = load_dropdown_xlsx_all_sheets(xlsx_path)
+    present = {lang.lower() for lang in all_sheets}
+    missing = [
+        lang
+        for lang in configured_langs
+        if lang.lower() != "en" and lang.lower() not in present
+    ]
+    return sorted(missing)

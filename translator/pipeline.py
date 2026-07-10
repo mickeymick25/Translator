@@ -50,6 +50,15 @@ if str(TRANSLATOR_DIR) not in sys.path:
 
 # Imports projet (E402 attendu : suit le sys.path.insert ci-dessus).
 from core.config import LANGUAGES, _find_source_file_in_import  # noqa: E402
+from pipeline_common import (  # noqa: E402
+    BasePipelineContext,
+    backup_translation_file,
+    confirm,
+    json_load,
+    json_write,
+    short_repr,
+    step_banner,
+)
 
 from analyze_translation_gap import LangGap, analyze_export  # noqa: E402
 from analyze_translation_gap import render as render_gap  # noqa: E402
@@ -65,61 +74,40 @@ DEFAULT_TARGET_LANGS = [code for code in LANGUAGES if code != "en"]
 TYPHOS_PATH = TRANSLATOR_DIR / "source_typos.json"
 
 
-# ─── Contexte du pipeline ────────────────────────────────────────────
+# ─── Dispatcher : détection du type de source ─────────────────────────
+
+
+def detect_source_kind(source_path: Path | None) -> str:
+    """Détecte le type de source : 'json' ou 'dropdown'.
+
+    Basé sur l'extension du fichier (.xlsx/.xls → dropdown, sinon json).
+    Retourne 'json' par défaut si le path est None ou l'extension inconnue.
+    """
+    if source_path is None:
+        return "json"
+    ext = Path(source_path).suffix.lower()
+    if ext in (".xlsx", ".xls"):
+        return "dropdown"
+    return "json"
+
+
+# ─── Contexte du pipeline (hérite de la base partagée) ───────────────
 
 
 @dataclass
-class PipelineContext:
-    """Transporte l'état du pipeline d'une étape à l'autre."""
+class PipelineContext(BasePipelineContext):
+    """Contexte du pipeline JSON — étend la base avec les champs spécifiques."""
 
-    # Sources
-    new_source: Path | None = None
-    prev_source: Path | None = None
+    # Dossiers (spécifiques JSON)
     new_import_folder: Path | None = None
     prev_import_folder: Path | None = None
     export_dir: Path | None = None  # dernier *_Export
 
-    # Paramètres
-    languages: list[str] = field(default_factory=lambda: list(DEFAULT_TARGET_LANGS))
-    provider: str = "hybride"  # google | ollama | hybride
-    dry_run: bool = False
-    interactive: bool = True
-    report_path: Path | None = None
-
-    # Résultats d'étapes
+    # Résultats d'étapes (spécifiques JSON)
     comparison: Comparison | None = None
     typos_found: list[dict] = field(default_factory=list)
     typos_corrected: bool = False
     gaps: list[LangGap] = field(default_factory=list)
-
-
-# ─── Utilitaires interactifs ─────────────────────────────────────────
-
-
-def confirm(ctx: PipelineContext, prompt: str, default: bool = False) -> bool:
-    """Demande une confirmation oui/non.
-
-    En mode non-interactif (--yes / --dry-run), retourne `default` sans
-    demander.
-    """
-    if not ctx.interactive:
-        return default
-    suffix = " [Y/n] " if default else " [y/N] "
-    try:
-        answer = input(prompt + suffix).strip().lower()
-    except EOFError:
-        return default
-    if answer in ("y", "yes", "o", "oui"):
-        return True
-    if answer in ("n", "no", "non"):
-        return False
-    return default
-
-
-def step_banner(num: int, title: str) -> None:
-    print("\n" + "═" * 70)
-    print(f"  ÉTAPE {num} — {title}")
-    print("═" * 70)
 
 
 # ─── Étape 1 : Détection source + précédente ──────────────────────────
@@ -504,17 +492,6 @@ def step5_report_and_confirm(ctx: PipelineContext) -> bool:
 # ─── Étape 6 : Pré-peuplement + gestion clés modifiées ────────────────
 
 
-def backup_translation_file(path: Path) -> Path:
-    """Copie un fichier de traduction en `<name>.bak_pre_pipeline`.
-
-    Écrase un backup existant (cas d'un re-run du pipeline).
-    Retourne le chemin du backup.
-    """
-    backup = path.with_suffix(path.suffix + ".bak_pre_pipeline")
-    shutil.copy2(path, backup)
-    return backup
-
-
 def prepopulate_output(
     last_export_dir: Path,
     languages: list[str],
@@ -622,20 +599,19 @@ def _manual_input_for_all(export_dir: Path, languages: list[str], key: str) -> N
         print(f"    → {lang.upper()}: '{value}' enregistré.")
 
 
-def short_repr(v) -> str:
-    """Représentation courte d'une valeur pour l'affichage interactif."""
-    s = str(v).replace("\n", " ")
-    return s[:80] + "..." if len(s) > 80 else s
-
-
-def json_load(path: Path) -> dict:
-    with path.open(encoding="utf-8") as fh:
-        return json.load(fh)
-
-
-def json_write(path: Path, data: dict) -> None:
-    with path.open("w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=2)
+def _prompt_action(key: str) -> str:
+    """Demande l'action pour une clé modifiée. Retourne '1', '2' ou '3'."""
+    while True:
+        try:
+            answer = input(
+                "  Action: [1] Retraduire  [2] Garder l'existant  "
+                "[3] Saisir manuellement  "
+            ).strip()
+        except EOFError:
+            return "2"  # défaut sûr : garder
+        if answer in ("1", "2", "3"):
+            return answer
+        print("    Réponse invalide. Tapez 1, 2 ou 3.")
 
 
 def step6_prepopulate_and_manage(ctx: PipelineContext) -> Path | None:
@@ -1184,11 +1160,45 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Mode non-interactif : valide toutes les étapes clés sans demander.",
     )
+    p.add_argument(
+        "--mode",
+        choices=["json", "dropdown"],
+        default=None,
+        help="Force le type de pipeline (json ou dropdown). "
+        "Détection auto par extension si non spécifié.",
+    )
     return p
 
 
 def run_pipeline(args: argparse.Namespace) -> int:
-    """Point d'entrée : exécute les étapes 1-11 (Phases 1-3)."""
+    """Point d'entrée : dispatch vers le pipeline JSON ou dropdown.
+
+    Détection du type de source :
+      1. Flag `--mode` explicite (prioritaire)
+      2. Auto-détection par extension de `--source` (si fourni)
+      3. Défaut : JSON (comportement historique)
+    """
+    # Déterminer le mode
+    if args.mode:
+        mode = args.mode
+    elif args.source:
+        mode = detect_source_kind(args.source)
+    else:
+        mode = "json"  # défaut historique
+
+    if mode == "dropdown":
+        print("❌ Le pipeline dropdown n'est pas encore implémenté.", file=sys.stderr)
+        print(
+            "   Utilisez --mode json pour le pipeline JSON existant.",
+            file=sys.stderr,
+        )
+        return 2
+
+    return _run_pipeline_json(args)
+
+
+def _run_pipeline_json(args: argparse.Namespace) -> int:
+    """Exécute le pipeline JSON (étapes 1-11, Phases 1-3)."""
     ctx = PipelineContext(
         dry_run=args.dry_run,
         provider=args.provider,

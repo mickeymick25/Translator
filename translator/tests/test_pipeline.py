@@ -59,6 +59,7 @@ from pipeline import (  # noqa: E402
     step11_final_report,
     step_banner,
 )
+from pipeline import detect_source_kind  # noqa: E402
 
 # ─── Fixtures : arborescence de test ────────────────────────────────
 
@@ -1800,3 +1801,77 @@ class TestPipelineDryRunUnified:
         run_pipeline(args)
         after = set((patched_translator_dir / "doc").iterdir())
         assert before == after, "dry-run a écrit un rapport dans doc/"
+
+
+# ═══ Phase D1 — D2 : Dispatcher (detect_source_kind + --mode) (TDD) ═══
+
+
+class TestDetectSourceKind:
+    """Tests de detect_source_kind() — détection du type de source."""
+
+    @pytest.mark.parametrize(
+        "filename,expected",
+        [
+            ("en10.json", "json"),
+            ("dropdown.xlsx", "dropdown"),
+            ("dropdown.xls", "dropdown"),
+            ("source.JSON", "json"),
+            ("data.XLSX", "dropdown"),
+        ],
+    )
+    def test_detect_by_extension(self, tmp_path, filename, expected):
+        path = tmp_path / filename
+        path.write_text("{}", encoding="utf-8")
+        assert detect_source_kind(path) == expected
+
+    def test_unknown_extension_defaults_json(self, tmp_path):
+        path = tmp_path / "file.txt"
+        path.write_text("{}", encoding="utf-8")
+        assert detect_source_kind(path) == "json"
+
+    def test_none_returns_json(self):
+        assert detect_source_kind(None) == "json"
+
+
+class TestBuildParserMode:
+    """Tests du flag --mode du dispatcher."""
+
+    def test_mode_default_none(self):
+        args = build_parser().parse_args([])
+        assert args.mode is None
+
+    def test_mode_json(self):
+        args = build_parser().parse_args(["--mode", "json"])
+        assert args.mode == "json"
+
+    def test_mode_dropdown(self):
+        args = build_parser().parse_args(["--mode", "dropdown"])
+        assert args.mode == "dropdown"
+
+    def test_mode_invalid_exits(self):
+        with pytest.raises(SystemExit):
+            build_parser().parse_args(["--mode", "invalid"])
+
+
+class TestRunPipelineDispatch:
+    """Tests du dispatch selon --mode / détection."""
+
+    def test_mode_json_runs_json_pipeline(self, patched_translator_dir, monkeypatch):
+        """--mode json → pipeline JSON existant (dry-run)."""
+        monkeypatch.setattr(pipeline, "REPO_ROOT", patched_translator_dir)
+        args = build_parser().parse_args(
+            ["--mode", "json", "--dry-run", "--languages", "fr"]
+        )
+        rc = run_pipeline(args)
+        assert rc == 0
+
+    def test_mode_dropdown_not_implemented_returns_error(
+        self, patched_translator_dir, monkeypatch, capsys
+    ):
+        """--mode dropdown sans pipeline_dropdown implémenté → message + rc 2."""
+        monkeypatch.setattr(pipeline, "REPO_ROOT", patched_translator_dir)
+        args = build_parser().parse_args(["--mode", "dropdown", "--dry-run"])
+        rc = run_pipeline(args)
+        assert rc == 2
+        err = capsys.readouterr().err
+        assert "dropdown" in err.lower() or "pas" in err.lower()
