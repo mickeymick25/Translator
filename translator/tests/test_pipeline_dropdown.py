@@ -3,7 +3,8 @@ Tests pour le pipeline dropdown (TDD strict).
 
 Couvre :
 - D3 : load_dropdown_xlsx_all_sheets() + detect_missing_languages() (io_xlsx)
-- D4-D14 : pipeline_dropdown.py (à venir)
+- D4 : PipelineDropdownContext + build_parser_dropdown() + flags (pipeline_dropdown)
+- D5-D14 : étapes 1-11 du pipeline dropdown (à venir)
 """
 
 import openpyxl
@@ -114,3 +115,146 @@ class TestDetectMissingLanguages:
 
         missing = detect_missing_languages(xlsx_3_langs, ["en", "fr", "sk"])
         assert missing == ["sk"]
+
+
+# ═══ D4 : PipelineDropdownContext + parser + flags (TDD) ═══
+
+
+class TestPipelineDropdownContext:
+    """Tests de PipelineDropdownContext — champs spécifiques dropdown."""
+
+    def test_defaults(self):
+        from pipeline_dropdown import PipelineDropdownContext
+
+        ctx = PipelineDropdownContext()
+        assert ctx.xlsx_path is None
+        assert ctx.prev_xlsx_path is None
+        assert ctx.output_dir is None
+        assert ctx.existing_translations == {}
+        assert ctx.missing_languages == []
+        assert ctx.retranslate_all is False
+        assert ctx.retranslate_langs == []
+        assert ctx.no_cache is False
+        assert ctx.output_format == "auto"
+        assert ctx.entries == []
+
+    def test_inherits_base_fields(self):
+        """Hérite des champs communs de BasePipelineContext."""
+        from pipeline_dropdown import PipelineDropdownContext
+
+        ctx = PipelineDropdownContext(dry_run=True, provider="ollama", languages=["pt"])
+        assert ctx.dry_run is True
+        assert ctx.provider == "ollama"
+        assert ctx.languages == ["pt"]
+
+    def test_independent_list_factories(self):
+        from pipeline_dropdown import PipelineDropdownContext
+
+        a = PipelineDropdownContext()
+        b = PipelineDropdownContext()
+        a.missing_languages.append("pt")
+        assert b.missing_languages == []
+
+
+class TestBuildParserDropdown:
+    """Tests de build_parser_dropdown() — flags spécifiques dropdown."""
+
+    def test_dry_run_flag(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args(["--dry-run"])
+        assert args.dry_run is True
+
+    def test_languages_flag(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args(["--languages", "pt,es,hu"])
+        assert args.languages == "pt,es,hu"
+
+    def test_provider_flag(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args(["--provider", "ollama"])
+        assert args.provider == "ollama"
+
+    def test_source_flag(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args(["--source", "dropdown.xlsx"])
+        assert args.source is not None
+
+    def test_yes_flag(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args(["--yes"])
+        assert args.yes is True
+
+    def test_mode_flag(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args(["--mode", "dropdown"])
+        assert args.mode == "dropdown"
+
+    def test_retranslate_all_flag(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args(["--retranslate-all"])
+        assert args.retranslate_all is True
+
+    def test_retranslate_all_default_false(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args([])
+        assert args.retranslate_all is False
+
+    def test_retranslate_langs_flag(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args(["--retranslate", "fr,de"])
+        assert args.retranslate == "fr,de"
+
+    def test_retranslate_default_none(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args([])
+        assert args.retranslate is None
+
+    def test_no_cache_flag(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args(["--no-cache"])
+        assert args.no_cache is True
+
+    def test_no_cache_default_false(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args([])
+        assert args.no_cache is False
+
+    def test_format_flag(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args(["--format", "xlsx"])
+        assert args.format == "xlsx"
+
+    def test_format_default_auto(self):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args([])
+        assert args.format == "auto"
+
+
+class TestRunPipelineDropdown:
+    """Tests de run_pipeline_dropdown() — squelette (étapes à venir en D5+)."""
+
+    def test_dry_run_returns_zero(self, xlsx_3_langs, monkeypatch, capsys):
+        """Dry-run sans source → message + rc 0."""
+        from pipeline_dropdown import build_parser_dropdown, run_pipeline_dropdown
+
+        args = build_parser_dropdown().parse_args(
+            ["--dry-run", "--source", str(xlsx_3_langs), "--languages", "pt"]
+        )
+        rc = run_pipeline_dropdown(args)
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()

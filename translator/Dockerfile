@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r requirements-dev.txt
 COPY core/ ./core/
 COPY modes/ ./modes/
 COPY service.py .
+COPY pipeline.py .
+COPY pipeline_common.py .
+COPY pipeline_dropdown.py .
 
 # Copie des tests et config pytest
 COPY tests/ ./tests/
