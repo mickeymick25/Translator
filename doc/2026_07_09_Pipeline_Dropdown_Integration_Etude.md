@@ -400,26 +400,26 @@ Conformément à la pratique du projet (TDD strict Red→Green→Refactor, cf. `
 
 Architecture retenue : 2 pipelines séparés (DDD) + `pipeline_common.py` (shared kernel).
 
-| # | Tâche | Estimation | Dépendance |
-|---|---|---|---|
-| D1 | Refactoring : extraire `pipeline_common.py` (helpers partagés : `confirm`, `step_banner`, `backup_translation_file`, `PipelineContext` de base) ; `pipeline.py` les réimporte (comportement JSON strictement identique) | ~2h | — |
-| D2 | `pipeline.py` → dispatcher léger : `detect_source_kind()` (extension/contenu) + `--mode` optionnel ; délégation à `pipeline_json.py` (ex-`run_pipeline`) ou `pipeline_dropdown.py` | ~1h | D1 |
-| D3 | `io_xlsx.load_dropdown_xlsx_all_sheets` + `detect_missing_languages` (TDD) | ~1.5h | — |
-| D4 | `pipeline_dropdown.py` : `PipelineDropdownContext` + `build_parser_dropdown()` + flags `--retranslate-all` / `--retranslate` / `--no-cache` (TDD) | ~1h | D1, D2 |
-| D5 | `pipeline_dropdown.py` étapes 1-2 (détection XLSX + comparaison par Origin, skip si pas de précédent) (TDD) | ~2h | D3, D4 |
-| D6 | `pipeline_dropdown.py` étape 3 (coquilles sur Origins — `source_typos.json` avec `scope`) (TDD) | ~1h | D5 |
-| D7 | `pipeline_dropdown.py` étape 4 (écart dropdown par langue — langues manquantes) (TDD) | ~1.5h | D5 |
-| D8 | `pipeline_dropdown.py` étape 5 (rapport + confirmation) (TDD) | ~1h | D6, D7 |
-| D9 | `pipeline_dropdown.py` étape 6 (pré-peuplement XLSX + gestion Origins modifiées) (TDD) | ~2h | D8 |
-| D10 | `pipeline_dropdown.py` étape 7 (traduction avec réutilisation colonne B des feuilles existantes) (TDD) | ~1.5h | D3, D9 |
-| D11 | `pipeline_dropdown.py` étape 8 (réordonnancement par Origin) (TDD) | ~45min | D10 |
-| D12 | `validate_dropdown` + étape 9 (TDD) | ~1.5h | D10 |
-| D13 | `pipeline_dropdown.py` étape 10 (mésalignements par Origin partagé dans un même contexte) (TDD) | ~1h | D10 |
-| D14 | `pipeline_dropdown.py` étape 11 (rapport final adapté) (TDD) | ~1h | D12, D13 |
-| D15 | Tests d'intégration e2e (dry-run + `--yes` mocké sur le XLSX en10) | ~1.5h | D14 |
-| D16 | Documentation (README FR/EN + section pipeline dropdown) + `--no-cache` ajouté au pipeline JSON | ~1h | D14 |
-| D17 | Non-régression : suite complète (917 tests + nouveaux) | ~30min | D14 |
-| **Total** | | **~21h** (~3 jours dev) |
+| # | Tâche | Statut | Estimation | Dépendance |
+|---|---|:---:|---|---|
+| D1 | Refactoring : extraire `pipeline_common.py` (helpers partagés : `confirm`, `step_banner`, `backup_translation_file`, `PipelineContext` de base) ; `pipeline.py` les réimporte (comportement JSON strictement identique) | ✅ | ~2h | — |
+| D2 | `pipeline.py` → dispatcher léger : `detect_source_kind()` (extension/contenu) + `--mode` optionnel ; délégation à `pipeline_json.py` (ex-`run_pipeline`) ou `pipeline_dropdown.py` | ✅ | ~1h | D1 |
+| D3 | `io_xlsx.load_dropdown_xlsx_all_sheets` + `detect_missing_languages` (TDD) | ✅ | ~1.5h | — |
+| D4 | `pipeline_dropdown.py` : `PipelineDropdownContext` + `build_parser_dropdown()` + flags `--retranslate-all` / `--retranslate` / `--no-cache` (TDD) | ⬜ | ~1h | D1, D2 |
+| D5 | `pipeline_dropdown.py` étapes 1-2 (détection XLSX + comparaison par Origin, skip si pas de précédent) (TDD) | ⬜ | ~2h | D3, D4 |
+| D6 | `pipeline_dropdown.py` étape 3 (coquilles sur Origins — `source_typos.json` avec `scope`) (TDD) | ⬜ | ~1h | D5 |
+| D7 | `pipeline_dropdown.py` étape 4 (écart dropdown par langue — langues manquantes) (TDD) | ⬜ | ~1.5h | D5 |
+| D8 | `pipeline_dropdown.py` étape 5 (rapport + confirmation) (TDD) | ⬜ | ~1h | D6, D7 |
+| D9 | `pipeline_dropdown.py` étape 6 (pré-peuplement XLSX + gestion Origins modifiées) (TDD) | ⬜ | ~2h | D8 |
+| D10 | `pipeline_dropdown.py` étape 7 (traduction avec réutilisation colonne B des feuilles existantes) (TDD) | ⬜ | ~1.5h | D3, D9 |
+| D11 | `pipeline_dropdown.py` étape 8 (réordonnancement par Origin) (TDD) | ⬜ | ~45min | D10 |
+| D12 | `validate_dropdown` + étape 9 (TDD) | ⬜ | ~1.5h | D10 |
+| D13 | `pipeline_dropdown.py` étape 10 (mésalignements par Origin partagé dans un même contexte) (TDD) | ⬜ | ~1h | D10 |
+| D14 | `pipeline_dropdown.py` étape 11 (rapport final adapté) (TDD) | ⬜ | ~1h | D12, D13 |
+| D15 | Tests d'intégration e2e (dry-run + `--yes` mocké sur le XLSX en10) | ⬜ | ~1.5h | D14 |
+| D16 | Documentation (README FR/EN + section pipeline dropdown) + `--no-cache` ajouté au pipeline JSON | ⬜ | ~1h | D14 |
+| D17 | Non-régression : suite complète (917 tests + nouveaux) | ⬜ | ~30min | D14 |
+| **Total** | | | **~21h** (~3 jours dev) | |
 
 ### Notes de progression
 
