@@ -4,7 +4,8 @@ Tests pour le pipeline dropdown (TDD strict).
 Couvre :
 - D3 : load_dropdown_xlsx_all_sheets() + detect_missing_languages() (io_xlsx)
 - D4 : PipelineDropdownContext + build_parser_dropdown() + flags (pipeline_dropdown)
-- D5-D14 : étapes 1-11 du pipeline dropdown (à venir)
+- D5 : Étapes 1-2 — Détection XLSX + comparaison (pipeline_dropdown)
+- D6-D14 : étapes 3-11 du pipeline dropdown (à venir)
 """
 
 import openpyxl
@@ -42,6 +43,54 @@ def xlsx_empty(tmp_path):
     wb.active.title = "EN"
     wb.active.append(["Origin", "Anglais", "Contexte"])
     path = tmp_path / "empty_dropdown.xlsx"
+    wb.save(path)
+    return path
+
+
+@pytest.fixture
+def xlsx_prev(tmp_path):
+    """XLSX précédent : 2 feuilles (EN/FR), Origins = Hello, World, Goodbye."""
+    wb = openpyxl.Workbook()
+    ws_en = wb.active
+    ws_en.title = "EN"
+    ws_en.append(["Origin", "Anglais", "Contexte"])
+    ws_en.append(["Hello", "Hello", "greeting"])
+    ws_en.append(["World", "World", "greeting"])
+    ws_en.append(["Goodbye", "Goodbye", "farewell"])
+    ws_fr = wb.create_sheet("FR")
+    ws_fr.append(["Origin", "Français", "Contexte"])
+    ws_fr.append(["Hello", "Bonjour", "greeting"])
+    ws_fr.append(["World", "Monde", "greeting"])
+    ws_fr.append(["Goodbye", "Au revoir", "farewell"])
+    path = tmp_path / "prev_dropdown.xlsx"
+    wb.save(path)
+    return path
+
+
+@pytest.fixture
+def xlsx_new(tmp_path):
+    """XLSX nouveau : 3 feuilles (EN/FR/CZ), Origins = Hello, World, Welcome.
+
+    Goodbye supprimé, Welcome ajouté vs xlsx_prev.
+    """
+    wb = openpyxl.Workbook()
+    ws_en = wb.active
+    ws_en.title = "EN"
+    ws_en.append(["Origin", "Anglais", "Contexte"])
+    ws_en.append(["Hello", "Hello", "greeting"])
+    ws_en.append(["World", "World", "greeting"])
+    ws_en.append(["Welcome", "Welcome", "greeting"])
+    ws_fr = wb.create_sheet("FR")
+    ws_fr.append(["Origin", "Français", "Contexte"])
+    ws_fr.append(["Hello", "Bonjour", "greeting"])
+    ws_fr.append(["World", "Monde", "greeting"])
+    ws_fr.append(["Welcome", "Bienvenue", "greeting"])
+    ws_cz = wb.create_sheet("CZ")
+    ws_cz.append(["Origin", "Tchèque", "Contexte"])
+    ws_cz.append(["Hello", "Ahoj", "greeting"])
+    ws_cz.append(["World", "Svět", "greeting"])
+    ws_cz.append(["Welcome", "Vítej", "greeting"])
+    path = tmp_path / "new_dropdown.xlsx"
     wb.save(path)
     return path
 
@@ -258,3 +307,98 @@ class TestRunPipelineDropdown:
         assert rc == 0
         out = capsys.readouterr().out
         assert "dry-run" in out.lower()
+
+
+# ═══ D5 : Étapes 1-2 — Détection XLSX + comparaison (TDD) ═══
+
+
+class TestStep1DetectSource:
+    """Tests de step1_detect_source() — détection XLSX + chargement données."""
+
+    def test_loads_existing_translations(self, xlsx_3_langs, capsys):
+        """Step1 charge existing_translations depuis les feuilles par langue."""
+        from pipeline_dropdown import PipelineDropdownContext, step1_detect_source
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["pt"])
+        step1_detect_source(ctx)
+        assert "FR" in ctx.existing_translations
+        assert ctx.existing_translations["FR"]["Hello"] == "Bonjour"
+        assert "CZ" in ctx.existing_translations
+
+    def test_detects_missing_languages(self, xlsx_3_langs, capsys):
+        """Step1 détecte les langues manquantes vs les langues configurées."""
+        from pipeline_dropdown import PipelineDropdownContext, step1_detect_source
+
+        ctx = PipelineDropdownContext(
+            xlsx_path=xlsx_3_langs, languages=["fr", "cz", "pt", "es"]
+        )
+        step1_detect_source(ctx)
+        assert sorted(ctx.missing_languages) == ["es", "pt"]
+
+    def test_loads_entries(self, xlsx_3_langs, capsys):
+        """Step1 charge les entries (Origin/French/Context) depuis la feuille active."""
+        from pipeline_dropdown import PipelineDropdownContext, step1_detect_source
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["pt"])
+        step1_detect_source(ctx)
+        assert len(ctx.entries) == 2  # Hello, World
+        origins = [e["origin"] for e in ctx.entries]
+        assert "Hello" in origins and "World" in origins
+
+    def test_source_missing_raises(self, tmp_path, capsys):
+        """Source inexistante → FileNotFoundError."""
+        from pipeline_dropdown import PipelineDropdownContext, step1_detect_source
+
+        ctx = PipelineDropdownContext(xlsx_path=tmp_path / "absent.xlsx")
+        with pytest.raises(FileNotFoundError):
+            step1_detect_source(ctx)
+
+    def test_all_languages_present_no_missing(self, xlsx_3_langs, capsys):
+        """Toutes les langues configurées sont déjà dans le XLSX → missing vide."""
+        from pipeline_dropdown import PipelineDropdownContext, step1_detect_source
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["fr", "cz"])
+        step1_detect_source(ctx)
+        assert ctx.missing_languages == []
+
+
+class TestStep2CompareSources:
+    """Tests de step2_compare_sources() — comparaison par Origin (skip si pas de précédent)."""
+
+    def test_skips_without_prev(self, xlsx_3_langs, capsys):
+        """Sans XLSX précédent → étape skippée."""
+        from pipeline_dropdown import PipelineDropdownContext, step2_compare_sources
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs)
+        step2_compare_sources(ctx)
+        out = capsys.readouterr().out
+        assert "ignorée" in out.lower() or "skip" in out.lower()
+
+    def test_detects_added_origins(self, xlsx_prev, xlsx_new, capsys):
+        """Origins ajoutés (Welcome) détectés."""
+        from pipeline_dropdown import PipelineDropdownContext, step2_compare_sources
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_new, prev_xlsx_path=xlsx_prev)
+        step2_compare_sources(ctx)
+        out = capsys.readouterr().out
+        assert "Welcome" in out or "ajout" in out.lower()
+
+    def test_detects_removed_origins(self, xlsx_prev, xlsx_new, capsys):
+        """Origins supprimés (Goodbye) détectés."""
+        from pipeline_dropdown import PipelineDropdownContext, step2_compare_sources
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_new, prev_xlsx_path=xlsx_prev)
+        step2_compare_sources(ctx)
+        out = capsys.readouterr().out
+        assert "Goodbye" in out or "supprim" in out.lower()
+
+    def test_populates_comparison_results(self, xlsx_prev, xlsx_new):
+        """La comparaison remplit ctx avec added/removed/unchanged."""
+        from pipeline_dropdown import PipelineDropdownContext, step2_compare_sources
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_new, prev_xlsx_path=xlsx_prev)
+        step2_compare_sources(ctx)
+        assert hasattr(ctx, "comparison_added")
+        assert hasattr(ctx, "comparison_removed")
+        assert "Welcome" in ctx.comparison_added
+        assert "Goodbye" in ctx.comparison_removed

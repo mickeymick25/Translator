@@ -30,6 +30,11 @@ if str(REPO_ROOT) not in sys.path:
 if str(TRANSLATOR_DIR) not in sys.path:
     sys.path.insert(0, str(TRANSLATOR_DIR))
 
+from core.io_xlsx import (  # noqa: E402
+    detect_missing_languages,
+    load_dropdown_xlsx,
+    load_dropdown_xlsx_all_sheets,
+)
 from core.config import LANGUAGES  # noqa: E402
 from pipeline_common import BasePipelineContext, confirm, step_banner  # noqa: E402, F401
 
@@ -58,6 +63,11 @@ class PipelineDropdownContext(BasePipelineContext):
     retranslate_langs: list[str] = field(default_factory=list)
     no_cache: bool = False
     output_format: str = "auto"  # json | xlsx | auto
+
+    # Résultats de comparaison (étape 2)
+    comparison_added: list[str] = field(default_factory=list)
+    comparison_removed: list[str] = field(default_factory=list)
+    comparison_unchanged: list[str] = field(default_factory=list)
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────
@@ -142,7 +152,86 @@ def build_parser_dropdown() -> argparse.ArgumentParser:
     return p
 
 
-# ─── Point d'entrée (squelette — étapes à venir en D5+) ─────────────
+# ─── Étape 1 : Détection source XLSX + chargement données ───────────
+
+
+def step1_detect_source(ctx: PipelineDropdownContext) -> None:
+    """Détecte le XLSX source, charge les traductions existantes et les entries.
+
+    - Charge `existing_translations` (toutes les feuilles par langue).
+    - Charge `entries` (Origin/French/Context depuis la feuille active).
+    - Détecte `missing_languages` vs les langues configurées.
+    """
+    step_banner(1, "Détection source XLSX")
+
+    if not ctx.xlsx_path or not ctx.xlsx_path.exists():
+        raise FileNotFoundError(f"Source XLSX introuvable : {ctx.xlsx_path}")
+
+    # Charger toutes les feuilles par langue (cache colonne B)
+    ctx.existing_translations = load_dropdown_xlsx_all_sheets(ctx.xlsx_path)
+    present_langs = sorted(
+        lang.lower() for lang in ctx.existing_translations if lang.lower() != "en"
+    )
+    print(f"  Source : {ctx.xlsx_path.name}")
+    print(f"  Feuilles par langue : {', '.join(ctx.existing_translations.keys())}")
+    print(
+        f"  Langues déjà traduites : {', '.join(present_langs) if present_langs else 'aucune'}"
+    )
+
+    # Charger les entries depuis la feuille active (format Origin/Traduction/Contexte)
+    ctx.entries = load_dropdown_xlsx(ctx.xlsx_path)
+    print(f"  Entrées (Origins) : {len(ctx.entries)}")
+
+    # Détecter les langues manquantes
+    ctx.missing_languages = detect_missing_languages(ctx.xlsx_path, ctx.languages)
+    if ctx.missing_languages:
+        print(f"  Langues manquantes à traduire : {', '.join(ctx.missing_languages)}")
+    else:
+        print("  ✅ Toutes les langues configurées sont déjà présentes.")
+
+
+# ─── Étape 2 : Comparaison des sources dropdown ─────────────────────
+
+
+def step2_compare_sources(ctx: PipelineDropdownContext) -> None:
+    """Compare les Origins entre le XLSX courant et le précédent.
+
+    Skippe si pas de XLSX précédent (pas de source précédente pertinente).
+    """
+    step_banner(2, "Comparaison des sources")
+
+    if not ctx.prev_xlsx_path:
+        print("  ⚠️  Étape ignorée (pas de XLSX précédent).")
+        return
+    if not ctx.prev_xlsx_path.exists():
+        print(f"  ⚠️  XLSX précédent introuvable : {ctx.prev_xlsx_path}")
+        return
+
+    # Charger les Origins des deux XLSX (depuis la feuille active)
+    old_entries = load_dropdown_xlsx(ctx.prev_xlsx_path)
+    new_entries = ctx.entries if ctx.entries else load_dropdown_xlsx(ctx.xlsx_path)
+
+    old_origins = {e["origin"] for e in old_entries if e["origin"]}
+    new_origins = {e["origin"] for e in new_entries if e["origin"]}
+
+    ctx.comparison_added = sorted(new_origins - old_origins)
+    ctx.comparison_removed = sorted(old_origins - new_origins)
+    ctx.comparison_unchanged = sorted(new_origins & old_origins)
+
+    print(f"  Ancien : {len(old_origins)} Origins")
+    print(f"  Nouveau : {len(new_origins)} Origins")
+    print(f"  Ajoutés : {len(ctx.comparison_added)}")
+    if ctx.comparison_added:
+        for o in ctx.comparison_added[:10]:
+            print(f"    + {o}")
+    print(f"  Supprimés : {len(ctx.comparison_removed)}")
+    if ctx.comparison_removed:
+        for o in ctx.comparison_removed[:10]:
+            print(f"    - {o}")
+    print(f"  Inchangés : {len(ctx.comparison_unchanged)}")
+
+
+# ─── Point d'entrée (étapes 1-11, D5-D14) ───────────────────────────
 
 
 def run_pipeline_dropdown(args: argparse.Namespace) -> int:
