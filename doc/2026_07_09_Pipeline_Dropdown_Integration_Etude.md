@@ -407,7 +407,7 @@ Architecture retenue : 2 pipelines séparés (DDD) + `pipeline_common.py` (share
 | D3 | `io_xlsx.load_dropdown_xlsx_all_sheets` + `detect_missing_languages` (TDD) | ✅ | ~1.5h | — |
 | D4 | `pipeline_dropdown.py` : `PipelineDropdownContext` + `build_parser_dropdown()` + flags `--retranslate-all` / `--retranslate` / `--no-cache` (TDD) | ✅ | ~1h | D1, D2 |
 | D5 | `pipeline_dropdown.py` étapes 1-2 (détection XLSX + comparaison par Origin, skip si pas de précédent) (TDD) | ✅ | ~2h | D3, D4 |
-| D6 | `pipeline_dropdown.py` étape 3 (coquilles sur Origins — `source_typos.json` avec `scope`) (TDD) | ⬜ | ~1h | D5 |
+| D6 | `pipeline_dropdown.py` étape 3 (coquilles sur Origins — `source_typos.json` avec `scope`) (TDD) | ✅ | ~1h | D5 |
 | D7 | `pipeline_dropdown.py` étape 4 (écart dropdown par langue — langues manquantes) (TDD) | ⬜ | ~1.5h | D5 |
 | D8 | `pipeline_dropdown.py` étape 5 (rapport + confirmation) (TDD) | ⬜ | ~1h | D6, D7 |
 | D9 | `pipeline_dropdown.py` étape 6 (pré-peuplement XLSX + gestion Origins modifiées) (TDD) | ⬜ | ~2h | D8 |

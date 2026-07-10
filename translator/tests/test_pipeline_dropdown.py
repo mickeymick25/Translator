@@ -5,11 +5,14 @@ Couvre :
 - D3 : load_dropdown_xlsx_all_sheets() + detect_missing_languages() (io_xlsx)
 - D4 : PipelineDropdownContext + build_parser_dropdown() + flags (pipeline_dropdown)
 - D5 : Étapes 1-2 — Détection XLSX + comparaison (pipeline_dropdown)
-- D6-D14 : étapes 3-11 du pipeline dropdown (à venir)
+- D6 : Étape 3 — Coquilles sur Origins (pipeline_dropdown)
+- D7-D14 : étapes 4-11 du pipeline dropdown (à venir)
 """
 
 import openpyxl
 import pytest
+from unittest.mock import patch
+
 
 # ─── Fixtures XLSX de test ─────────────────────────────────────────
 
@@ -69,10 +72,7 @@ def xlsx_prev(tmp_path):
 
 @pytest.fixture
 def xlsx_new(tmp_path):
-    """XLSX nouveau : 3 feuilles (EN/FR/CZ), Origins = Hello, World, Welcome.
-
-    Goodbye supprimé, Welcome ajouté vs xlsx_prev.
-    """
+    """XLSX nouveau : Origins = Hello, World, Welcome (Goodbye supprimé, Welcome ajouté)."""
     wb = openpyxl.Workbook()
     ws_en = wb.active
     ws_en.title = "EN"
@@ -95,6 +95,20 @@ def xlsx_new(tmp_path):
     return path
 
 
+@pytest.fixture
+def xlsx_with_typo(tmp_path):
+    """XLSX avec une coquille 'Hiearchy' dans un Origin."""
+    wb = openpyxl.Workbook()
+    ws_en = wb.active
+    ws_en.title = "EN"
+    ws_en.append(["Origin", "Anglais", "Contexte"])
+    ws_en.append(["Hello", "Hello", "greeting"])
+    ws_en.append(["Hiearchy menu", "Hiearchy menu", "menu"])
+    path = tmp_path / "typo_dropdown.xlsx"
+    wb.save(path)
+    return path
+
+
 # ═══ D3 : load_dropdown_xlsx_all_sheets + detect_missing_languages ═══
 
 
@@ -102,7 +116,6 @@ class TestLoadDropdownXlsxAllSheets:
     """Tests de load_dropdown_xlsx_all_sheets() — lit toutes les feuilles."""
 
     def test_returns_dict_lang_to_translations(self, xlsx_3_langs):
-        """Retourne un dict {lang: {origin: traduction}}."""
         from core.io_xlsx import load_dropdown_xlsx_all_sheets
 
         result = load_dropdown_xlsx_all_sheets(xlsx_3_langs)
@@ -114,14 +127,12 @@ class TestLoadDropdownXlsxAllSheets:
         assert result["EN"]["Hello"] == "Hello"
 
     def test_empty_rows_skipped(self, xlsx_3_langs):
-        """Les lignes vides (Origin vide) ne sont pas incluses."""
         from core.io_xlsx import load_dropdown_xlsx_all_sheets
 
         result = load_dropdown_xlsx_all_sheets(xlsx_3_langs)
         assert len(result["FR"]) == 2
 
     def test_only_header_row(self, xlsx_empty):
-        """Une feuille avec uniquement l'en-tête retourne un dict vide."""
         from core.io_xlsx import load_dropdown_xlsx_all_sheets
 
         result = load_dropdown_xlsx_all_sheets(xlsx_empty)
@@ -138,7 +149,6 @@ class TestDetectMissingLanguages:
     """Tests de detect_missing_languages() — compare feuilles vs langues configurées."""
 
     def test_detects_missing(self, xlsx_3_langs):
-        """3 feuilles (EN/FR/CZ) + 9 langues configurées → 6 manquantes."""
         from core.io_xlsx import detect_missing_languages
 
         configured = ["fr", "cz", "sk", "de", "it", "ar", "pt", "es", "hu"]
@@ -152,14 +162,12 @@ class TestDetectMissingLanguages:
         assert missing == []
 
     def test_case_insensitive_sheet_names(self, xlsx_3_langs):
-        """Les noms de feuilles sont comparés en majuscules (EN/fr/cz → match)."""
         from core.io_xlsx import detect_missing_languages
 
         missing = detect_missing_languages(xlsx_3_langs, ["fr", "cz", "sk"])
         assert missing == ["sk"]
 
     def test_en_excluded_from_missing(self, xlsx_3_langs):
-        """EN est la source, jamais 'manquante'."""
         from core.io_xlsx import detect_missing_languages
 
         missing = detect_missing_languages(xlsx_3_langs, ["en", "fr", "sk"])
@@ -188,7 +196,6 @@ class TestPipelineDropdownContext:
         assert ctx.entries == []
 
     def test_inherits_base_fields(self):
-        """Hérite des champs communs de BasePipelineContext."""
         from pipeline_dropdown import PipelineDropdownContext
 
         ctx = PipelineDropdownContext(dry_run=True, provider="ollama", languages=["pt"])
@@ -294,10 +301,9 @@ class TestBuildParserDropdown:
 
 
 class TestRunPipelineDropdown:
-    """Tests de run_pipeline_dropdown() — squelette (étapes à venir en D5+)."""
+    """Tests de run_pipeline_dropdown() — squelette (étapes à venir en D7+)."""
 
-    def test_dry_run_returns_zero(self, xlsx_3_langs, monkeypatch, capsys):
-        """Dry-run sans source → message + rc 0."""
+    def test_dry_run_returns_zero(self, xlsx_3_langs, capsys):
         from pipeline_dropdown import build_parser_dropdown, run_pipeline_dropdown
 
         args = build_parser_dropdown().parse_args(
@@ -316,7 +322,6 @@ class TestStep1DetectSource:
     """Tests de step1_detect_source() — détection XLSX + chargement données."""
 
     def test_loads_existing_translations(self, xlsx_3_langs, capsys):
-        """Step1 charge existing_translations depuis les feuilles par langue."""
         from pipeline_dropdown import PipelineDropdownContext, step1_detect_source
 
         ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["pt"])
@@ -326,7 +331,6 @@ class TestStep1DetectSource:
         assert "CZ" in ctx.existing_translations
 
     def test_detects_missing_languages(self, xlsx_3_langs, capsys):
-        """Step1 détecte les langues manquantes vs les langues configurées."""
         from pipeline_dropdown import PipelineDropdownContext, step1_detect_source
 
         ctx = PipelineDropdownContext(
@@ -336,17 +340,15 @@ class TestStep1DetectSource:
         assert sorted(ctx.missing_languages) == ["es", "pt"]
 
     def test_loads_entries(self, xlsx_3_langs, capsys):
-        """Step1 charge les entries (Origin/French/Context) depuis la feuille active."""
         from pipeline_dropdown import PipelineDropdownContext, step1_detect_source
 
         ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["pt"])
         step1_detect_source(ctx)
-        assert len(ctx.entries) == 2  # Hello, World
+        assert len(ctx.entries) == 2
         origins = [e["origin"] for e in ctx.entries]
         assert "Hello" in origins and "World" in origins
 
-    def test_source_missing_raises(self, tmp_path, capsys):
-        """Source inexistante → FileNotFoundError."""
+    def test_source_missing_raises(self, tmp_path):
         from pipeline_dropdown import PipelineDropdownContext, step1_detect_source
 
         ctx = PipelineDropdownContext(xlsx_path=tmp_path / "absent.xlsx")
@@ -354,7 +356,6 @@ class TestStep1DetectSource:
             step1_detect_source(ctx)
 
     def test_all_languages_present_no_missing(self, xlsx_3_langs, capsys):
-        """Toutes les langues configurées sont déjà dans le XLSX → missing vide."""
         from pipeline_dropdown import PipelineDropdownContext, step1_detect_source
 
         ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["fr", "cz"])
@@ -363,10 +364,9 @@ class TestStep1DetectSource:
 
 
 class TestStep2CompareSources:
-    """Tests de step2_compare_sources() — comparaison par Origin (skip si pas de précédent)."""
+    """Tests de step2_compare_sources() — comparaison par Origin."""
 
     def test_skips_without_prev(self, xlsx_3_langs, capsys):
-        """Sans XLSX précédent → étape skippée."""
         from pipeline_dropdown import PipelineDropdownContext, step2_compare_sources
 
         ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs)
@@ -375,7 +375,6 @@ class TestStep2CompareSources:
         assert "ignorée" in out.lower() or "skip" in out.lower()
 
     def test_detects_added_origins(self, xlsx_prev, xlsx_new, capsys):
-        """Origins ajoutés (Welcome) détectés."""
         from pipeline_dropdown import PipelineDropdownContext, step2_compare_sources
 
         ctx = PipelineDropdownContext(xlsx_path=xlsx_new, prev_xlsx_path=xlsx_prev)
@@ -384,7 +383,6 @@ class TestStep2CompareSources:
         assert "Welcome" in out or "ajout" in out.lower()
 
     def test_detects_removed_origins(self, xlsx_prev, xlsx_new, capsys):
-        """Origins supprimés (Goodbye) détectés."""
         from pipeline_dropdown import PipelineDropdownContext, step2_compare_sources
 
         ctx = PipelineDropdownContext(xlsx_path=xlsx_new, prev_xlsx_path=xlsx_prev)
@@ -393,7 +391,6 @@ class TestStep2CompareSources:
         assert "Goodbye" in out or "supprim" in out.lower()
 
     def test_populates_comparison_results(self, xlsx_prev, xlsx_new):
-        """La comparaison remplit ctx avec added/removed/unchanged."""
         from pipeline_dropdown import PipelineDropdownContext, step2_compare_sources
 
         ctx = PipelineDropdownContext(xlsx_path=xlsx_new, prev_xlsx_path=xlsx_prev)
@@ -402,3 +399,87 @@ class TestStep2CompareSources:
         assert hasattr(ctx, "comparison_removed")
         assert "Welcome" in ctx.comparison_added
         assert "Goodbye" in ctx.comparison_removed
+
+
+# ═══ D6 : Étape 3 — Coquilles sur Origins (TDD) ═══
+
+
+class TestStep3DetectTypos:
+    """Tests de step3_detect_typos() — coquilles sur Origins avec scope."""
+
+    def test_no_typos_detected(self, xlsx_3_langs, monkeypatch, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step3_detect_typos
+
+        monkeypatch.setattr(
+            "pipeline_dropdown.load_typos_dropdown",
+            lambda: [{"typo": "XYZNonexistent", "correction": "Fixed"}],
+        )
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs)
+        ctx.entries = [{"origin": "Hello"}, {"origin": "World"}]
+        step3_detect_typos(ctx)
+        out = capsys.readouterr().out
+        assert "Aucune coquille" in out
+
+    def test_detects_typo_in_origin(self, xlsx_with_typo, monkeypatch, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step3_detect_typos
+        from core.io_xlsx import load_dropdown_xlsx
+
+        monkeypatch.setattr(
+            "pipeline_dropdown.load_typos_dropdown",
+            lambda: [{"typo": "Hiearchy", "correction": "Hierarchy", "scope": "both"}],
+        )
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_with_typo, dry_run=True)
+        ctx.entries = load_dropdown_xlsx(xlsx_with_typo)
+        step3_detect_typos(ctx)
+        assert len(ctx.typos_found) == 1
+        assert ctx.typos_found[0]["typo"] == "Hiearchy"
+
+    def test_scope_dropdown_detected(self):
+        from pipeline_dropdown import detect_typos_in_origins
+
+        typos = [{"typo": "Desactive", "correction": "Deactivate", "scope": "dropdown"}]
+        entries = [{"origin": "Desactive button"}, {"origin": "Hello"}]
+        found = detect_typos_in_origins(entries, typos)
+        assert len(found) == 1
+        assert found[0]["typo"] == "Desactive"
+
+    def test_no_scope_defaults_both(self):
+        from pipeline_dropdown import detect_typos_in_origins
+
+        typos = [{"typo": "Parners", "correction": "Partners"}]
+        entries = [{"origin": "Parners list"}]
+        found = detect_typos_in_origins(entries, typos)
+        assert len(found) == 1
+
+    def test_dry_run_no_correction(self, xlsx_with_typo, monkeypatch, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step3_detect_typos
+        from core.io_xlsx import load_dropdown_xlsx
+
+        monkeypatch.setattr(
+            "pipeline_dropdown.load_typos_dropdown",
+            lambda: [{"typo": "Hiearchy", "correction": "Hierarchy", "scope": "both"}],
+        )
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_with_typo, dry_run=True)
+        ctx.entries = load_dropdown_xlsx(xlsx_with_typo)
+        step3_detect_typos(ctx)
+        assert ctx.typos_corrected is False
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()
+
+    def test_corrects_on_confirm_yes(self, xlsx_with_typo, monkeypatch):
+        from pipeline_dropdown import PipelineDropdownContext, step3_detect_typos
+        from core.io_xlsx import load_dropdown_xlsx
+
+        monkeypatch.setattr(
+            "pipeline_dropdown.load_typos_dropdown",
+            lambda: [{"typo": "Hiearchy", "correction": "Hierarchy", "scope": "both"}],
+        )
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_with_typo, interactive=True)
+        ctx.entries = load_dropdown_xlsx(xlsx_with_typo)
+        with patch("builtins.input", return_value="y"):
+            step3_detect_typos(ctx)
+        assert ctx.typos_corrected is True
+        corrected_entries = load_dropdown_xlsx(xlsx_with_typo)
+        origins = [e["origin"] for e in corrected_entries]
+        assert "Hierarchy menu" in origins
+        assert "Hiearchy menu" not in origins
