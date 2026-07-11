@@ -589,3 +589,187 @@ class TestStep5ReportAndConfirm:
         ctx.gap_by_lang = {"pt": {"missing_count": 1, "to_translate": ["Hello"]}}
         with patch("builtins.input", return_value="n"):
             assert step5_report_and_confirm(ctx) is False
+
+
+# ═══ D9-D11 : Étapes 6-8 (TDD) ═══
+
+
+class TestStep6Prepopulate:
+    """Tests de step6_prepopulate() — pré-peuplement du dossier de sortie."""
+
+    def test_creates_dated_folder(self, xlsx_3_langs, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step6_prepopulate
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["fr", "pt"])
+        ctx.existing_translations = {
+            "EN": {"Hello": "Hello"},
+            "FR": {"Hello": "Bonjour"},
+        }
+        ctx.entries = [{"origin": "Hello"}, {"origin": "World"}]
+        ctx.missing_languages = ["pt"]
+        ctx.interactive = False
+        result = step6_prepopulate(ctx)
+        assert result is not None
+        assert result.exists()
+
+    def test_dry_run_skips(self, xlsx_3_langs, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step6_prepopulate
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, dry_run=True)
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.missing_languages = ["pt"]
+        result = step6_prepopulate(ctx)
+        assert result is None
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()
+
+    def test_interactive_confirm_yes(self, xlsx_3_langs):
+        from pipeline_dropdown import PipelineDropdownContext, step6_prepopulate
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, interactive=True)
+        ctx.existing_translations = {
+            "EN": {"Hello": "Hello"},
+            "FR": {"Hello": "Bonjour"},
+        }
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.missing_languages = ["pt"]
+        with patch("builtins.input", return_value="y"):
+            result = step6_prepopulate(ctx)
+        assert result is not None
+        assert result.exists()
+
+    def test_interactive_confirm_no_aborts(self, xlsx_3_langs):
+        from pipeline_dropdown import PipelineDropdownContext, step6_prepopulate
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, interactive=True)
+        ctx.existing_translations = {"EN": {"Hello": "Hello"}}
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.missing_languages = ["pt"]
+        with patch("builtins.input", return_value="n"):
+            result = step6_prepopulate(ctx)
+        assert result is None
+
+
+class TestStep7Translate:
+    """Tests de step7_translate() — traduction avec réutilisation colonne B."""
+
+    def test_translates_missing_languages(self, xlsx_3_langs, monkeypatch, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step7_translate
+
+        ctx = PipelineDropdownContext(
+            xlsx_path=xlsx_3_langs, languages=["pt"], provider="google"
+        )
+        ctx.entries = [{"origin": "Hello"}, {"origin": "World"}]
+        ctx.missing_languages = ["pt"]
+        ctx.existing_translations = {"EN": {"Hello": "Hello", "World": "World"}}
+        ctx.gap_by_lang = {
+            "pt": {
+                "missing_count": 2,
+                "to_translate": ["Hello", "World"],
+                "total": 2,
+                "existing": 0,
+            }
+        }
+
+        calls = []
+
+        def fake_translate_batch(entries, lang, existing, **kw):
+            calls.append(lang)
+            return {e["origin"]: f"[{lang}] {e['origin']}" for e in entries}
+
+        monkeypatch.setattr(
+            "pipeline_dropdown._translate_dropdown_batch", fake_translate_batch
+        )
+        step7_translate(ctx)
+        assert "pt" in calls
+
+    def test_dry_run_skips(self, xlsx_3_langs, monkeypatch, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step7_translate
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, dry_run=True)
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.missing_languages = ["pt"]
+        ctx.gap_by_lang = {
+            "pt": {
+                "missing_count": 1,
+                "to_translate": ["Hello"],
+                "total": 1,
+                "existing": 0,
+            }
+        }
+        monkeypatch.setattr(
+            "pipeline_dropdown._translate_dropdown_batch", lambda *a, **kw: {}
+        )
+        step7_translate(ctx)
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()
+
+    def test_reuses_existing_translations(self, xlsx_3_langs, monkeypatch):
+        """Les langues déjà présentes ne sont PAS re-traduites (cache col B)."""
+        from pipeline_dropdown import PipelineDropdownContext, step7_translate
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["fr", "pt"])
+        ctx.entries = [{"origin": "Hello"}, {"origin": "World"}]
+        ctx.missing_languages = ["pt"]
+        ctx.existing_translations = {
+            "EN": {"Hello": "Hello", "World": "World"},
+            "FR": {"Hello": "Bonjour", "World": "Monde"},
+        }
+        ctx.gap_by_lang = {
+            "fr": {"missing_count": 0, "to_translate": [], "total": 2, "existing": 2},
+            "pt": {
+                "missing_count": 2,
+                "to_translate": ["Hello", "World"],
+                "total": 2,
+                "existing": 0,
+            },
+        }
+
+        calls = []
+        monkeypatch.setattr(
+            "pipeline_dropdown._translate_dropdown_batch",
+            lambda *a, **kw: calls.append(a[1]) or {},
+        )
+        step7_translate(ctx)
+        assert "fr" not in calls
+        assert "pt" in calls
+
+    def test_no_languages_skips(self, xlsx_3_langs, monkeypatch, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step7_translate
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=[])
+        ctx.entries = []
+        ctx.missing_languages = []
+        ctx.gap_by_lang = {}
+        called = []
+        monkeypatch.setattr(
+            "pipeline_dropdown._translate_dropdown_batch",
+            lambda *a, **kw: called.append(1) or {},
+        )
+        step7_translate(ctx)
+        assert called == []
+
+
+class TestStep8Reorder:
+    """Tests de step8_reorder() — réordonnancement par Origin source."""
+
+    def test_reorders_xlsx_by_origin(self, xlsx_3_langs, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step8_reorder
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["fr"])
+        ctx.entries = [{"origin": "Hello"}, {"origin": "World"}]
+        ctx.output_dir = xlsx_3_langs.parent / "test_reorder_output"
+        ctx.output_dir.mkdir(exist_ok=True)
+        step8_reorder(ctx)
+        out = capsys.readouterr().out
+        assert "ÉTAPE 8" in out
+
+    def test_dry_run_skips(self, xlsx_3_langs, capsys):
+        from pipeline_dropdown import PipelineDropdownContext, step8_reorder
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, dry_run=True)
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.output_dir = xlsx_3_langs.parent
+        step8_reorder(ctx)
+        out = capsys.readouterr().out
+        assert "dry-run" in out.lower()

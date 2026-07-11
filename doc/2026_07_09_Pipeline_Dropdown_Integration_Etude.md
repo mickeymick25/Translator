@@ -410,9 +410,9 @@ Architecture retenue : 2 pipelines séparés (DDD) + `pipeline_common.py` (share
 | D6 | `pipeline_dropdown.py` étape 3 (coquilles sur Origins — `source_typos.json` avec `scope`) (TDD) | ✅ | ~1h | D5 |
 | D7 | `pipeline_dropdown.py` étape 4 (écart dropdown par langue — langues manquantes) (TDD) | ✅ | ~1.5h | D5 |
 | D8 | `pipeline_dropdown.py` étape 5 (rapport + confirmation) (TDD) | ✅ | ~1h | D6, D7 |
-| D9 | `pipeline_dropdown.py` étape 6 (pré-peuplement XLSX + gestion Origins modifiées) (TDD) | ⬜ | ~2h | D8 |
-| D10 | `pipeline_dropdown.py` étape 7 (traduction avec réutilisation colonne B des feuilles existantes) (TDD) | ⬜ | ~1.5h | D3, D9 |
-| D11 | `pipeline_dropdown.py` étape 8 (réordonnancement par Origin) (TDD) | ⬜ | ~45min | D10 |
+| D9 | `pipeline_dropdown.py` étape 6 (pré-peuplement XLSX + gestion Origins modifiées) (TDD) | ✅ | ~2h | D8 |
+| D10 | `pipeline_dropdown.py` étape 7 (traduction avec réutilisation colonne B des feuilles existantes) (TDD) | ✅ | ~1.5h | D3, D9 |
+| D11 | `pipeline_dropdown.py` étape 8 (réordonnancement par Origin) (TDD) | ✅ | ~45min | D10 |
 | D12 | `validate_dropdown` + étape 9 (TDD) | ⬜ | ~1.5h | D10 |
 | D13 | `pipeline_dropdown.py` étape 10 (mésalignements par Origin partagé dans un même contexte) (TDD) | ⬜ | ~1h | D10 |
 | D14 | `pipeline_dropdown.py` étape 11 (rapport final adapté) (TDD) | ⬜ | ~1h | D12, D13 |

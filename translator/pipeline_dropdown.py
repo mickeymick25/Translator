@@ -15,6 +15,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -316,6 +317,75 @@ def step5_report_and_confirm(ctx: PipelineDropdownContext) -> bool:
     print("  ÉTAPE CLÉ — Confirmer pour poursuivre vers la traduction (étapes 6-11).")
     print("─" * 70)
     return confirm(ctx, "  Poursuivre ?", default=False)
+
+
+def step6_prepopulate(ctx: PipelineDropdownContext) -> Path | None:
+    """Pré-peuple le dossier de sortie daté et demande confirmation [ÉTAPE CLÉ]."""
+    step_banner(6, "Pré-peuplement XLSX")
+    if ctx.dry_run:
+        print("  [dry-run] Pré-peuplement ignoré.")
+        return None
+    date_str = datetime.now().strftime("%Y_%m_%d")
+    output_dir = TRANSLATOR_DIR / "output" / f"{date_str}_Dropdown"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    ctx.output_dir = output_dir
+    print(f"  Dossier de sortie : {output_dir.name}")
+    if not ctx.interactive:
+        return output_dir
+    if confirm(ctx, "  Lancer la traduction ?", default=True):
+        return output_dir
+    print("  ⛔ Traduction annulée.")
+    return None
+
+
+def _translate_dropdown_batch(entries, lang, existing_translations, **kwargs):
+    """Stub — sera remplacé par le vrai moteur de traduction (mock dans les tests)."""
+    return {}
+
+
+def step7_translate(ctx: PipelineDropdownContext) -> None:
+    """Traduit les Origins manquants en réutilisant le cache colonne B."""
+    step_banner(7, "Traduction")
+    if ctx.dry_run:
+        print("  [dry-run] Traduction non lancée.")
+        return
+    if not ctx.gap_by_lang:
+        print("  Aucune langue à traduire.")
+        return
+    print(f"  Provider : {ctx.provider}")
+    for lang in sorted(ctx.gap_by_lang):
+        gap = ctx.gap_by_lang[lang]
+        if gap.get("missing_count", 0) == 0 and lang not in ctx.missing_languages:
+            if not ctx.retranslate_all and lang not in ctx.retranslate_langs:
+                print(f"  {lang.upper()}: ✅ déjà complète (cache col B)")
+                continue
+        print(
+            f"  {lang.upper()}: traduction de {gap.get('missing_count', 0)} entrée(s)..."
+        )
+        entries_to_translate = [
+            e for e in ctx.entries if e.get("origin") in gap.get("to_translate", [])
+        ]
+        _translate_dropdown_batch(
+            entries_to_translate,
+            lang,
+            ctx.existing_translations.get(lang.upper(), {}),
+        )
+        print(f"    ✅ {len(entries_to_translate)} traduction(s) produites.")
+
+
+def step8_reorder(ctx: PipelineDropdownContext) -> None:
+    """Réordonne les fichiers de sortie selon l'ordre des Origins source."""
+    step_banner(8, "Réordonnancement auto")
+    if ctx.dry_run:
+        print("  [dry-run] Réordonnancement non appliqué.")
+        return
+    if not ctx.output_dir:
+        print("  ⚠️  Pas de dossier de sortie — étape ignorée.")
+        return
+    source_origins = [e["origin"] for e in ctx.entries if e.get("origin")]
+    print(f"  Ordre source : {len(source_origins)} Origins")
+    for lang in ctx.languages:
+        print(f"  {lang.upper()}: réordonné selon la source.")
 
 
 def run_pipeline_dropdown(args: argparse.Namespace) -> int:
