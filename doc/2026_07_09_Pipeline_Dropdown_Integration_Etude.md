@@ -413,9 +413,9 @@ Architecture retenue : 2 pipelines séparés (DDD) + `pipeline_common.py` (share
 | D9 | `pipeline_dropdown.py` étape 6 (pré-peuplement XLSX + gestion Origins modifiées) (TDD) | ✅ | ~2h | D8 |
 | D10 | `pipeline_dropdown.py` étape 7 (traduction avec réutilisation colonne B des feuilles existantes) (TDD) | ✅ | ~1.5h | D3, D9 |
 | D11 | `pipeline_dropdown.py` étape 8 (réordonnancement par Origin) (TDD) | ✅ | ~45min | D10 |
-| D12 | `validate_dropdown` + étape 9 (TDD) | ⬜ | ~1.5h | D10 |
-| D13 | `pipeline_dropdown.py` étape 10 (mésalignements par Origin partagé dans un même contexte) (TDD) | ⬜ | ~1h | D10 |
-| D14 | `pipeline_dropdown.py` étape 11 (rapport final adapté) (TDD) | ⬜ | ~1h | D12, D13 |
+| D12 | `validate_dropdown` + étape 9 (TDD) | ✅ | ~1.5h | D10 |
+| D13 | `pipeline_dropdown.py` étape 10 (mésalignements par Origin partagé dans un même contexte) (TDD) | ✅ | ~1h | D10 |
+| D14 | `pipeline_dropdown.py` étape 11 (rapport final adapté) (TDD) | ✅ | ~1h | D12, D13 |
 | D15 | Tests d'intégration e2e (dry-run + `--yes` mocké sur le XLSX en10) | ⬜ | ~1.5h | D14 |
 | D16 | Documentation (README FR/EN + section pipeline dropdown) + `--no-cache` ajouté au pipeline JSON | ⬜ | ~1h | D14 |
 | D17 | Non-régression : suite complète (917 tests + nouveaux) | ⬜ | ~30min | D14 |
