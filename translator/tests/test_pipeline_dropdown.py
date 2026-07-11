@@ -993,3 +993,86 @@ class TestStep11FinalReport:
         assert result.suffix == ".md"
         content = result.read_text(encoding="utf-8")
         assert "Rapport final" in content
+
+
+# ═══ D15 : Tests e2e — run_pipeline_dropdown (orchestration complète) ═══
+
+
+class TestRunPipelineDropdownE2E:
+    """Tests e2e de run_pipeline_dropdown() — enchaînement des 11 étapes."""
+
+    def test_dry_run_shows_all_steps(self, xlsx_3_langs, capsys):
+        """En dry-run, les 11 bandeaux d'étape sont affichés et rc=0."""
+        from pipeline_dropdown import build_parser_dropdown, run_pipeline_dropdown
+
+        args = build_parser_dropdown().parse_args(
+            ["--dry-run", "--source", str(xlsx_3_langs), "--languages", "pt"]
+        )
+        rc = run_pipeline_dropdown(args)
+        out = capsys.readouterr().out
+        assert rc == 0
+        # Les 11 étapes doivent être annoncées par leur bandeau
+        for n in range(1, 12):
+            assert f"ÉTAPE {n}" in out, f"ÉTAPE {n} manquante dans la sortie dry-run"
+        assert "[dry-run] Simulation complète" in out
+
+    def test_dry_run_no_files_written(
+        self, xlsx_3_langs, tmp_path, capsys, monkeypatch
+    ):
+        """En dry-run, aucun dossier output/ ni doc/ n'est créé."""
+        import pipeline_dropdown as pd
+
+        monkeypatch.setattr(pd, "TRANSLATOR_DIR", tmp_path)
+        monkeypatch.setattr(pd, "REPO_ROOT", tmp_path)
+        args = pd.build_parser_dropdown().parse_args(
+            ["--dry-run", "--source", str(xlsx_3_langs), "--languages", "pt"]
+        )
+        rc = pd.run_pipeline_dropdown(args)
+        assert rc == 0
+        capsys.readouterr()  # consomme la sortie
+        # Aucun dossier output/ ni doc/ ne doit avoir été créé
+        assert not (tmp_path / "output").exists(), "output/ créé en dry-run !"
+        assert not (tmp_path / "doc").exists(), "doc/ créé en dry-run !"
+
+    def test_full_pipeline_yes_mocked(
+        self, xlsx_3_langs, tmp_path, capsys, monkeypatch
+    ):
+        """Pipeline complet en --yes : dossier daté créé, traduction mockée, rc=0."""
+        import pipeline_dropdown as pd
+
+        # Rediriger les dossiers vers tmp_path pour ne pas écrire dans le repo
+        monkeypatch.setattr(pd, "TRANSLATOR_DIR", tmp_path)
+        monkeypatch.setattr(pd, "REPO_ROOT", tmp_path)
+        # Mocker le moteur de traduction (pas d'appel réseau)
+        monkeypatch.setattr(pd, "_translate_dropdown_batch", lambda *a, **k: {})
+
+        args = pd.build_parser_dropdown().parse_args(
+            ["--yes", "--source", str(xlsx_3_langs), "--languages", "pt"]
+        )
+        rc = pd.run_pipeline_dropdown(args)
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert "Pipeline dropdown terminé" in out
+        # Un dossier daté *_Dropdown doit être créé dans output/
+        output_root = tmp_path / "output"
+        assert output_root.exists(), "output/ non créé"
+        dated = list(output_root.glob("*_Dropdown"))
+        assert dated, "Aucun dossier daté *_Dropdown créé"
+        # Le rapport final doit être écrit dans doc/
+        doc_dir = tmp_path / "doc"
+        assert doc_dir.exists(), "doc/ non créé"
+        reports = list(doc_dir.glob("*_Pipeline_Dropdown_Report.md"))
+        assert reports, "Aucun rapport final écrit"
+
+    def test_missing_source_returns_2(self, tmp_path, capsys):
+        """Source XLSX absente → FileNotFoundError géré → rc=2."""
+        from pipeline_dropdown import build_parser_dropdown, run_pipeline_dropdown
+
+        missing = tmp_path / "does_not_exist.xlsx"
+        args = build_parser_dropdown().parse_args(
+            ["--yes", "--source", str(missing), "--languages", "fr"]
+        )
+        rc = run_pipeline_dropdown(args)
+        assert rc == 2
+        err = capsys.readouterr().err
+        assert "introuvable" in err.lower() or "FileNotFoundError" in err

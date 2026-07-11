@@ -109,6 +109,9 @@ class PipelineContext(BasePipelineContext):
     typos_corrected: bool = False
     gaps: list[LangGap] = field(default_factory=list)
 
+    # Flags runtime
+    no_cache: bool = False
+
 
 # ─── Étape 1 : Détection source + précédente ──────────────────────────
 
@@ -704,6 +707,8 @@ def step7_translate(ctx: PipelineContext, export_dir: Path) -> None:
         TRANSLATION_PROVIDER=provider,
         dry_run=False,
     )
+    if ctx.no_cache:
+        config.TRANSLATION_CACHE = "false"
     config_module._config = config
 
     # Charger la source
@@ -1167,6 +1172,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Force le type de pipeline (json ou dropdown). "
         "Détection auto par extension si non spécifié.",
     )
+    p.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Désactive le cache du service (.translation_cache.json).",
+    )
     return p
 
 
@@ -1211,6 +1221,8 @@ def _run_pipeline_json(args: argparse.Namespace) -> int:
         ctx.prev_source = args.prev_source
     if args.languages:
         ctx.languages = [lg.strip() for lg in args.languages.split(",") if lg.strip()]
+    if getattr(args, "no_cache", False):
+        ctx.no_cache = True
 
     print(
         "🚀 Pipeline de traduction COP — Phases 1-3 (analyse + exécution + validation)"
@@ -1218,6 +1230,8 @@ def _run_pipeline_json(args: argparse.Namespace) -> int:
     print(f"   Provider : {ctx.provider} | Langues : {', '.join(ctx.languages)}")
     if ctx.dry_run:
         print("   Mode : dry-run (analyse seule, pas d'exécution)")
+    if ctx.no_cache:
+        print("   Cache service : désactivé (--no-cache)")
 
     try:
         step1_detect_sources(ctx)

@@ -644,12 +644,51 @@ def run_pipeline_dropdown(args: argparse.Namespace) -> int:
     if ctx.no_cache:
         print("   Cache service : désactivé (--no-cache)")
 
+    try:
+        step1_detect_source(ctx)
+        step2_compare_sources(ctx)
+        step3_detect_typos(ctx)
+        step4_analyze_gap(ctx)
+        confirmed = step5_report_and_confirm(ctx)
+    except FileNotFoundError as e:
+        print(f"\n❌ {e}", file=sys.stderr)
+        return 2
+
     if ctx.dry_run:
-        print("\n⏹  [dry-run] Analyse complète — aucune exécution.")
+        # Dry-run unifié : simuler les étapes 6-11 sans rien exécuter.
+        # Chaque étape a sa propre garde `dry_run` qui affiche un message et skippe.
+        simulated_output = ctx.output_dir or Path("/dev/null")
+        step6_prepopulate(ctx)  # skippé (retourne None)
+        step7_translate(ctx)  # skippé
+        step8_reorder(ctx)  # skippé
+        validate_dropdown(ctx, simulated_output)  # skippé
+        detect_misalignments_dropdown(ctx, {})  # skippé
+        step11_final_report_dropdown(ctx, simulated_output, None, {})  # skippé
+        print("\n⏹  [dry-run] Simulation complète — aucune exécution.")
         return 0
 
-    # TODO D9-D14 : implémenter les étapes 6-11
-    print("\n⏳ Les étapes 6-11 du pipeline dropdown seront implémentées (D9-D14).")
+    if not confirmed:
+        print("\n⏹  Parcours arrêté (confirmation refusée).")
+        return 0
+
+    output_dir = step6_prepopulate(ctx)
+    if not output_dir:
+        print("\n⏹  Traduction annulée à l'étape 6.")
+        return 0
+
+    try:
+        step7_translate(ctx)
+        step8_reorder(ctx)
+    except Exception as e:  # noqa: BLE001
+        print(f"\n❌ Erreur durant la traduction : {e}", file=sys.stderr)
+        return 3
+
+    # Phase 3 — Validation + mésalignements + rapport final
+    validation_results = validate_dropdown(ctx, output_dir)
+    misalignments = detect_misalignments_dropdown(ctx, validation_results)
+    step11_final_report_dropdown(ctx, output_dir, validation_results, misalignments)
+
+    print("\n✅ Pipeline dropdown terminé.")
     return 0
 
 
