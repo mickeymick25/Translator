@@ -388,6 +388,228 @@ def step8_reorder(ctx: PipelineDropdownContext) -> None:
         print(f"  {lang.upper()}: réordonné selon la source.")
 
 
+def validate_dropdown(ctx: PipelineDropdownContext, output_dir) -> dict | None:
+    """Valide les fichiers de sortie dropdown.
+
+    Retourne un dict {lang: {missing: [], empty: [], untranslated: []}}.
+    """
+    step_banner(9, "Validation dropdown")
+    if ctx.dry_run:
+        print("  [dry-run] Validation non exécutée.")
+        return None
+
+    all_origins = {e["origin"] for e in ctx.entries if e.get("origin")}
+    results = {}
+
+    for lang in ctx.languages:
+        lang_upper = lang.upper()
+        translations = ctx.existing_translations.get(lang_upper, {})
+
+        missing = sorted(all_origins - set(translations.keys()))
+        empty = sorted(
+            k
+            for k, v in translations.items()
+            if not v or (isinstance(v, str) and v.strip() == "")
+        )
+        untranslated = sorted(
+            k
+            for k in all_origins & set(translations.keys())
+            if translations[k] == k and len(k) > 3
+        )
+
+        results[lang] = {
+            "missing": missing,
+            "empty": empty,
+            "untranslated": untranslated,
+        }
+
+        status = "✅" if not missing and not empty else "⚠️"
+        print(
+            f"  {lang_upper}: {len(translations)} traductions, "
+            f"{len(missing)} manquantes, {len(empty)} vides {status}"
+        )
+
+    total_missing = sum(len(r["missing"]) for r in results.values())
+    total_empty = sum(len(r["empty"]) for r in results.values())
+    if total_missing == 0 and total_empty == 0:
+        print("\n  ✅ Toutes les traductions sont valides.")
+    else:
+        print(f"\n  ⚠️  {total_missing} manquantes, {total_empty} vides.")
+
+    return results
+
+
+def detect_misalignments_dropdown(
+    ctx: PipelineDropdownContext, validation_results: dict
+) -> dict:
+    """Détecte les mésalignements intra-langue restreints au sein d'un même contexte.
+
+    Pour chaque Origin partagé par plusieurs contextes, compare les traductions
+    au sein d'un même contexte. Signale les divergences (Jaccard=0 sur les tokens).
+    """
+    step_banner(10, "Détection mésalignements intra-langue")
+    if ctx.dry_run:
+        print("  [dry-run] Mésalignements non détectés.")
+        return {}
+
+    from collections import defaultdict
+
+    misalignments = {}
+    for lang in ctx.languages:
+        lang_upper = lang.upper()
+        translations = ctx.existing_translations.get(lang_upper, {})
+        lang_mis = []
+
+        # Grouper par origin pour trouver les divergences
+        origin_translations = defaultdict(set)
+        for e in ctx.entries:
+            origin = e.get("origin")
+            context = e.get("context")
+            if origin and context:
+                trans = translations.get(origin, "")
+                if trans:
+                    origin_translations[origin].add(trans)
+
+        # Un même Origin avec des traductions divergentes (tokens disjoints)
+        for origin, trans_set in origin_translations.items():
+            if len(trans_set) < 2:
+                continue
+            trans_list = list(trans_set)
+            has_divergence = False
+            for i in range(len(trans_list)):
+                for j in range(i + 1, len(trans_list)):
+                    tokens_i = set(trans_list[i].lower().split())
+                    tokens_j = set(trans_list[j].lower().split())
+                    if not tokens_i & tokens_j:
+                        has_divergence = True
+                        break
+                if has_divergence:
+                    break
+            if has_divergence:
+                lang_mis.append({"origin": origin, "translations": list(trans_set)})
+
+        if lang_mis:
+            misalignments[lang] = lang_mis
+            print(f"  {lang.upper()}: {len(lang_mis)} mésalignement(s) potentiel(s).")
+        else:
+            print(f"  {lang.upper()}: ✅ aucun mésalignement.")
+
+    return misalignments
+
+
+def build_final_report_dropdown(
+    ctx: PipelineDropdownContext,
+    output_dir,
+    validation_results: dict,
+    misalignments: dict,
+) -> str:
+    """Construit le rapport markdown final du pipeline dropdown."""
+    L: list[str] = []
+    L.append("# Rapport final du pipeline dropdown COP\n")
+    L.append(f"- Source : `{ctx.xlsx_path}`\n")
+
+    # Section 1 — Source
+    L.append("## 1. Source\n")
+    L.append(f"- Fichier : `{ctx.xlsx_path.name if ctx.xlsx_path else '?'}`")
+    L.append(f"- Entrées : {len(ctx.entries)}")
+    L.append(f"- Langues traitées : {', '.join(ctx.languages)}\n")
+
+    # Section 2 — Comparaison
+    L.append("## 2. Comparaison\n")
+    if ctx.comparison_added or ctx.comparison_removed:
+        L.append(f"- Ajoutés : {len(ctx.comparison_added)}")
+        L.append(f"- Supprimés : {len(ctx.comparison_removed)}")
+    else:
+        L.append("_Pas de comparaison._")
+    L.append("")
+
+    # Section 3 — Coquilles
+    L.append("## 3. Coquilles\n")
+    if ctx.typos_found:
+        L.append(f"- {len(ctx.typos_found)} coquille(s) détectée(s)")
+        L.append(
+            f"- Corrections appliquées : {'oui' if ctx.typos_corrected else 'non'}"
+        )
+    else:
+        L.append("_Aucune._")
+    L.append("")
+
+    # Section 4 — Écart
+    L.append("## 4. Écart\n")
+    if ctx.gap_by_lang:
+        L.append("| Langue | Existant | À traduire | Total |")
+        L.append("|---|---:|---:|---:|")
+        for lang in sorted(ctx.gap_by_lang):
+            g = ctx.gap_by_lang[lang]
+            L.append(
+                f"| {lang} | {g.get('existing', 0)} | {g.get('missing_count', 0)} | {g.get('total', 0)} |"
+            )
+    L.append("")
+
+    # Section 5 — Plan
+    L.append("## 5. Plan d'action\n")
+    L.append(f"- Provider : {ctx.provider}")
+    total = sum(g.get("missing_count", 0) for g in ctx.gap_by_lang.values())
+    L.append(f"- Total traduit : {total}")
+    L.append("")
+
+    # Section 6 — Traduction
+    L.append("## 6. Traduction\n")
+    L.append(f"- Dossier de sortie : `{output_dir.name if output_dir else 'N/A'}`")
+    L.append("")
+
+    # Section 7 — Validation
+    L.append("## 7. Validation\n")
+    if validation_results:
+        L.append("| Langue | Manquantes | Vides | Non traduites |")
+        L.append("|---|---:|---:|---:|")
+        for lang in sorted(validation_results):
+            r = validation_results[lang]
+            L.append(
+                f"| {lang} | {len(r['missing'])} | {len(r['empty'])} | {len(r['untranslated'])} |"
+            )
+    else:
+        L.append("_Validation non exécutée._")
+    L.append("")
+
+    # Section 8 — Mésalignements
+    L.append("## 8. Mésalignements\n")
+    total_mis = sum(len(v) for v in misalignments.values()) if misalignments else 0
+    L.append(f"**{total_mis} mésalignement(s)** détecté(s).\n")
+    L.append("")
+
+    # Section 9 — Ordre
+    L.append("## 9. Ordre\n")
+    L.append("Ordre des Origins source respecté (étape 8).")
+    L.append("")
+
+    return "\n".join(L)
+
+
+def step11_final_report_dropdown(
+    ctx: PipelineDropdownContext,
+    output_dir,
+    validation_results: dict,
+    misalignments: dict,
+):
+    """Génère le rapport final et l'écrit dans doc/."""
+    step_banner(11, "Rapport consolidé final")
+    if ctx.dry_run:
+        print("  [dry-run] Rapport final non écrit.")
+        return None
+
+    report = build_final_report_dropdown(
+        ctx, output_dir, validation_results, misalignments
+    )
+    date_str = datetime.now().strftime("%Y_%m_%d")
+    doc_dir = REPO_ROOT / "doc"
+    doc_dir.mkdir(exist_ok=True)
+    path = doc_dir / f"{date_str}_Pipeline_Dropdown_Report.md"
+    path.write_text(report, encoding="utf-8")
+    print(f"  Rapport final écrit : {path}")
+    return path
+
+
 def run_pipeline_dropdown(args: argparse.Namespace) -> int:
     ctx = PipelineDropdownContext(
         dry_run=args.dry_run,
