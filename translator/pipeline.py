@@ -486,8 +486,6 @@ def step5_report_and_confirm(ctx: PipelineContext) -> bool:
 
     print("\n" + "─" * 70)
     print("  ÉTAPE CLÉ — Confirmer pour poursuivre vers la traduction (étapes 6-11).")
-    print("  (Phase 2 + 3 seront implémentées ultérieurement ; pour l'instant")
-    print("   la confirmation valide le rapport d'analyse.)")
     print("─" * 70)
     return confirm(ctx, "  Poursuivre ?", default=False)
 

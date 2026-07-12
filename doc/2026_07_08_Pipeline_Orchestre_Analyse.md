@@ -208,7 +208,7 @@ Les scripts `compare_sources.py`, `analyze_translation_gap.py`, `validate_transl
 - **2026-07-09 — Tâches 18-19 (doc + e2e)** : documentation README FR + EN (section « Pipeline orchestré » avec les 11 étapes, options CLI, gestion clés modifiées). Test e2e sur la vraie source en10 (2545 clés) : parcours complet `--yes` avec traduction mockée (pré-peuplement + réordonnancement + validation + rapport final) + dry-run. 2 nouveaux tests (142 total sur pipeline), couverture 95%. Suite complète : 913 tests OK.
 - **2026-07-09 — Tâche 17 (dry-run unifié)** : le dry-run couvre désormais les **11 étapes** (pas seulement 1-5). `run_pipeline()` en dry-run simule les étapes 6-11 via les gardes `dry_run` existantes de chaque étape, sans créer de dossier/backup/rapport. 4 tests de non-régression (toutes étapes affichées, aucun fichier créé, aucun backup, aucun rapport dans doc/). 4 nouveaux tests (146 total sur pipeline), couverture 95%. Suite complète : 917 tests OK.
 - **Tâche 16 (tests)** : ✅ terminé — 140 tests couvrant les 11 étapes du pipeline (89 characterization Phase 1 + 51 TDD Phases 2-3).
-- **Tâche 17 (dry-run)** : 🟡 couvre les étapes 1-5 (rapport d'analyse sans exécution). Le dry-run complet (couvrant aussi étapes 6-11) nécessiterait un mode mock. Les étapes 6-11 ont chacune leur propre garde `if ctx.dry_run` qui skippe proprement.
+- **Tâche 17 (dry-run)** : ✅ — dry-run unifié couvrant les 11 étapes (simulation complète sans exécution, étapes 6-11 skippées via leurs gardes `dry_run` internes).
 
 ## Décisions tranchées (2026-07-08)
 
