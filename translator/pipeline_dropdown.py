@@ -612,21 +612,22 @@ def step11_final_report_dropdown(
 
 def run_pipeline_dropdown(args: argparse.Namespace) -> int:
     ctx = PipelineDropdownContext(
-        dry_run=args.dry_run,
-        provider=args.provider,
-        interactive=not args.yes and not args.dry_run,
-        report_path=args.report,
-        output_format=args.format,
-        retranslate_all=args.retranslate_all,
-        no_cache=args.no_cache,
+        dry_run=getattr(args, "dry_run", False),
+        provider=getattr(args, "provider", "hybride"),
+        interactive=not getattr(args, "yes", False)
+        and not getattr(args, "dry_run", False),
+        report_path=getattr(args, "report", None),
+        output_format=getattr(args, "format", "auto"),
+        retranslate_all=getattr(args, "retranslate_all", False),
+        no_cache=getattr(args, "no_cache", False),
     )
-    if args.source:
+    if getattr(args, "source", None):
         ctx.xlsx_path = Path(args.source)
-    if args.prev_source:
+    if getattr(args, "prev_source", None):
         ctx.prev_xlsx_path = Path(args.prev_source)
-    if args.languages:
+    if getattr(args, "languages", None):
         ctx.languages = [lg.strip() for lg in args.languages.split(",") if lg.strip()]
-    if args.retranslate:
+    if getattr(args, "retranslate", None):
         ctx.retranslate_langs = [
             lg.strip() for lg in args.retranslate.split(",") if lg.strip()
         ]

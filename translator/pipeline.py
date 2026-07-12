@@ -1197,12 +1197,9 @@ def run_pipeline(args: argparse.Namespace) -> int:
         mode = "json"  # défaut historique
 
     if mode == "dropdown":
-        print("❌ Le pipeline dropdown n'est pas encore implémenté.", file=sys.stderr)
-        print(
-            "   Utilisez --mode json pour le pipeline JSON existant.",
-            file=sys.stderr,
-        )
-        return 2
+        from pipeline_dropdown import run_pipeline_dropdown
+
+        return run_pipeline_dropdown(args)
 
     return _run_pipeline_json(args)
 

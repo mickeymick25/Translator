@@ -1865,13 +1865,33 @@ class TestRunPipelineDispatch:
         rc = run_pipeline(args)
         assert rc == 0
 
-    def test_mode_dropdown_not_implemented_returns_error(
-        self, patched_translator_dir, monkeypatch, capsys
+    def test_mode_dropdown_dispatches_to_dropdown_pipeline(
+        self, tmp_path, monkeypatch, capsys
     ):
-        """--mode dropdown sans pipeline_dropdown implémenté → message + rc 2."""
-        monkeypatch.setattr(pipeline, "REPO_ROOT", patched_translator_dir)
-        args = build_parser().parse_args(["--mode", "dropdown", "--dry-run"])
+        """--mode dropdown délègue au pipeline dropdown (dry-run → rc 0)."""
+        import openpyxl
+
+        monkeypatch.setattr(pipeline, "REPO_ROOT", tmp_path)
+        (tmp_path / "doc").mkdir(exist_ok=True)
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "EN"
+        ws.append(["Origin", "Anglais", "Contexte"])
+        ws.append(["Hello", "Hello", "greeting"])
+        xlsx_path = tmp_path / "test_dropdown.xlsx"
+        wb.save(xlsx_path)
+        args = build_parser().parse_args(
+            [
+                "--mode",
+                "dropdown",
+                "--dry-run",
+                "--source",
+                str(xlsx_path),
+                "--languages",
+                "pt",
+            ]
+        )
         rc = run_pipeline(args)
-        assert rc == 2
-        err = capsys.readouterr().err
-        assert "dropdown" in err.lower() or "pas" in err.lower()
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "dropdown" in out.lower()
