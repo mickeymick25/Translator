@@ -15,6 +15,7 @@ Traduction automatique de fichiers JSON et XLSX via Google Translate, DeepL ou *
 - [Utilisation](#utilisation)
 - [Modes d'opération](#modes-dopération)
 - [Pipeline orchestré](#pipeline-orchestré)
+- [Pipeline dropdown (XLSX)](#pipeline-dropdown-xlsx)
 - [Multi-Provider et Fallback](#multi-provider-et-fallback)
 - [Provider Ollama (IMP3)](#provider-ollama-imp3)
 - [Cache intelligent](#cache-intelligent)
@@ -246,6 +247,65 @@ Avant chaque run, backup des fichiers existants : `translation_en_{lang}.json.ba
 ### Détail technique
 
 Voir `doc/2026_07_08_Pipeline_Orchestre_Analyse.md` pour l'architecture complète et `doc/2026_07_08_TDD_Methode_Etude.md` pour la méthodologie de développement (TDD).
+
+## Pipeline dropdown (XLSX)
+
+Le pipeline dropdown (`translator/pipeline.py --mode dropdown`) enchaîne en **une seule commande** le parcours complet de production d'un fichier XLSX dropdown traduit à partir d'un XLSX source : détection, analyse, pré-peuplement, traduction (avec réutilisation de la colonne B des feuilles existantes), validation et rapport final.
+
+Le projet dispose désormais de **deux pipelines orchestrés** accessibles depuis une seule commande :
+
+```bash
+# Pipeline JSON (par défaut, inchangé)
+python translator/pipeline.py --source en10.json --languages fr,de
+
+# Pipeline dropdown (nouveau)
+python translator/pipeline.py --mode dropdown --source dropdown.xlsx --languages pt,es,hu
+```
+
+Le mode est auto-détecté par l'extension du fichier source (`.json` → json, `.xlsx` → dropdown). L'option `--mode` force le mode si nécessaire.
+
+### Les 11 étapes
+
+| Étape | Description | Confirmation |
+|---:|---|:---:|
+| 1 | Détection source XLSX + chargement des données (feuilles par langue) | |
+| 2 | Comparaison des sources (skip si pas de XLSX précédent) | |
+| 3 | Détection des coquilles sur Origins (`source_typos.json` avec scope) | |
+| 4 | Analyse de l'écart par langue (Origins manquants) | |
+| 5 | Rapport consolidé + confirmation | ✅ |
+| 6 | Pré-peuplement du dossier de sortie | ✅ |
+| 7 | Traduction (avec réutilisation colonne B des feuilles existantes) | |
+| 8 | Réordonnancement par Origin | |
+| 9 | Validation (Origins manquants, traductions vides, non traduits) | |
+| 10 | Détection mésalignements intra-langue (par contexte) | |
+| 11 | Rapport final → `doc/{date}_Pipeline_Dropdown_Report.md` | |
+
+### Options CLI spécifiques au dropdown
+
+| Option | Description | Défaut |
+|---|---|---|
+| `--mode dropdown` | Force le mode dropdown (auto-détection par extension `.xlsx`) | auto |
+| `--format json\|xlsx\|auto` | Format de sortie | auto |
+| `--retranslate-all` | Ignore le cache colonne B → re-traduit toutes les langues | `false` |
+| `--retranslate fr,de` | Retraduit les langues listées, garde le cache pour les autres | — |
+| `--no-cache` | Désactive le cache du service (`.translation_cache.json`) | `false` |
+
+Les options génériques du pipeline orchestré (`--dry-run`, `--languages`, `--provider`, `--source`, `--prev-source`, `--report`, `--yes`) restent disponibles.
+
+### Deux caches distincts
+
+Le pipeline dropdown gère deux caches indépendants :
+
+- **Cache colonne B** (feuilles du XLSX source) : réutilise les traductions déjà présentes dans les feuilles par langue du XLSX source. Ignoré avec `--retranslate-all` ou `--retranslate <lang>`.
+- **Cache du service** (`.translation_cache.json`) : évite de re-traduire via l'API un texte déjà traduit. Désactivé avec `--no-cache`.
+
+### Architecture DDD
+
+Le pipeline dropdown est un bounded context distinct du pipeline JSON :
+
+- `pipeline_common.py` : shared kernel (helpers partagés entre les deux pipelines)
+- `pipeline.py` : dispatcher unique (`--mode json` ou `dropdown`, auto-détection par défaut)
+- `pipeline_dropdown.py` : orchestration dropdown (les 11 étapes ci-dessus)
 
 ## Multi-Provider et Fallback
 
