@@ -3,7 +3,7 @@
 - **Date** : 2026-07-09
 - **Auteur** : Michael Boitan
 - **Objet** : Étendre `translator/pipeline.py` (11 étapes, `translate-json`) pour couvrir aussi `translate-dropdowns` (XLSX multi-feuilles), afin que les devs soient autonomes sur les deux types de sources.
-- **Statut** : Étude mise à jour — décisions tranchées (2026-07-09), prêt pour implémentation TDD.
+- **Statut** : Implémenté (2026-07-09) — 17/17 tâches D terminées, 1004 tests, dispatcher branché, README FR+EN à jour.
 
 ## 1. Contexte
 
@@ -424,7 +424,7 @@ Architecture retenue : 2 pipelines séparés (DDD) + `pipeline_common.py` (share
 ### Notes de progression
 
 - **2026-07-09 — Phase D1 terminée (D1-D3)** : extraction du shared kernel `pipeline_common.py` (helpers : `confirm`, `step_banner`, `backup_translation_file`, `BasePipelineContext`, `short_repr`, `json_load`/`json_write`) ; `pipeline.py` les réimporte sans changement de comportement (917 tests verts). D2 : `detect_source_kind()` (auto par extension) + flag `--mode` + dispatcher dans `run_pipeline` (13 tests TDD). D3 : `load_dropdown_xlsx_all_sheets()` + `detect_missing_languages()` dans `core/io_xlsx.py` (8 tests TDD). Suite complète : 938 tests OK, ruff propre.
-- **Tâches D4-D17** : à implémenter (Phases D2-D5).
+- **2026-07-09 — Phases D2-D5 terminées (D4-D17)** : toutes les étapes 1-11 du pipeline dropdown implémentées en TDD strict. Context + parser + flags (D4), étapes 1-5 analyse (D5-D8), étapes 6-8 exécution (D9-D11), étapes 9-11 validation (D12-D14), tests e2e + --no-cache JSON + non-régression (D15-D17). Dispatcher branché : --mode dropdown délègue au pipeline dropdown. Suite complète : 1004 tests OK. README FR+EN mis à jour.
 
 Découpage de phase possible, calqué sur le JSON :
 
