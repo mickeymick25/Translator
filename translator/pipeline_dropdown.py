@@ -66,6 +66,7 @@ class PipelineDropdownContext(BasePipelineContext):
     typos_corrected: bool = False
 
     gap_by_lang: dict[str, dict] = field(default_factory=dict)
+    translations_by_lang: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 def build_parser_dropdown() -> argparse.ArgumentParser:
@@ -339,8 +340,10 @@ def step6_prepopulate(ctx: PipelineDropdownContext) -> Path | None:
 
 
 def _translate_dropdown_batch(entries, lang, existing_translations, **kwargs):
-    """Stub — sera remplacé par le vrai moteur de traduction (mock dans les tests)."""
-    return {}
+    """Traduit les entries via le vrai moteur (mode_translate_dropdowns)."""
+    from modes.mode_translate_dropdowns import _translate_dropdown_entries_batch
+
+    return _translate_dropdown_entries_batch(entries, lang, existing_translations)
 
 
 def step7_translate(ctx: PipelineDropdownContext) -> None:
@@ -352,7 +355,23 @@ def step7_translate(ctx: PipelineDropdownContext) -> None:
     if not ctx.gap_by_lang:
         print("  Aucune langue à traduire.")
         return
-    print(f"  Provider : {ctx.provider}")
+
+    # Configurer le singleton Config pour que get_provider() retourne le bon provider
+    import core.config as config_module
+    from core.config import Config
+
+    provider = ctx.provider if ctx.provider != "hybride" else "google"
+    config = Config(
+        SOURCE_LANG="en",
+        SOURCE_FILE=str(ctx.xlsx_path),
+        OUTPUT_DIR=str(ctx.output_dir or TRANSLATOR_DIR / "output"),
+        TRANSLATION_PROVIDER=provider,
+    )
+    if ctx.no_cache:
+        config.TRANSLATION_CACHE = "false"
+    config_module._config = config
+
+    print(f"  Provider : {provider}")
     for lang in sorted(ctx.gap_by_lang):
         gap = ctx.gap_by_lang[lang]
         if gap.get("missing_count", 0) == 0 and lang not in ctx.missing_languages:
@@ -362,15 +381,20 @@ def step7_translate(ctx: PipelineDropdownContext) -> None:
         print(
             f"  {lang.upper()}: traduction de {gap.get('missing_count', 0)} entrée(s)..."
         )
-        entries_to_translate = [
-            e for e in ctx.entries if e.get("origin") in gap.get("to_translate", [])
-        ]
-        _translate_dropdown_batch(
-            entries_to_translate,
-            lang,
-            ctx.existing_translations.get(lang.upper(), {}),
-        )
+        if ctx.retranslate_all or lang in ctx.retranslate_langs:
+            entries_to_translate = list(ctx.entries)
+            existing = {}
+        else:
+            entries_to_translate = [
+                e for e in ctx.entries if e.get("origin") in gap.get("to_translate", [])
+            ]
+            existing = ctx.existing_translations.get(lang.upper(), {})
+        result = _translate_dropdown_batch(entries_to_translate, lang, existing)
+        ctx.translations_by_lang[lang] = result
         print(f"    ✅ {len(entries_to_translate)} traduction(s) produites.")
+
+    # Restaurer le singleton Config (propreté)
+    config_module._config = None
 
 
 def step8_reorder(ctx: PipelineDropdownContext) -> None:

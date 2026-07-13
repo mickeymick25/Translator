@@ -1076,3 +1076,26 @@ class TestRunPipelineDropdownE2E:
         assert rc == 2
         err = capsys.readouterr().err
         assert "introuvable" in err.lower() or "FileNotFoundError" in err
+
+
+class TestTranslateDropdownBatchReal:
+    """Tests que _translate_dropdown_batch délègue au vrai moteur."""
+
+    def test_calls_real_engine(self, monkeypatch):
+        from pipeline_dropdown import _translate_dropdown_batch
+
+        calls = []
+
+        def fake_engine(entries, lang, existing):
+            calls.append((lang, len(entries)))
+            return {e["origin"]: f"[{lang}] {e['origin']}" for e in entries}
+
+        monkeypatch.setattr(
+            "modes.mode_translate_dropdowns._translate_dropdown_entries_batch",
+            fake_engine,
+        )
+        entries = [{"origin": "Hello"}, {"origin": "World"}]
+        result = _translate_dropdown_batch(entries, "pt", {})
+        assert len(calls) == 1
+        assert calls[0] == ("pt", 2)
+        assert result["Hello"] == "[pt] Hello"
