@@ -1099,3 +1099,60 @@ class TestTranslateDropdownBatchReal:
         assert len(calls) == 1
         assert calls[0] == ("pt", 2)
         assert result["Hello"] == "[pt] Hello"
+
+
+class TestWriteDropdownOutput:
+    """Tests de _write_dropdown_output() — écriture des fichiers JSON."""
+
+    def test_writes_json_per_lang(self, tmp_path):
+        from pipeline_dropdown import PipelineDropdownContext, _write_dropdown_output
+
+        ctx = PipelineDropdownContext(output_format="json")
+        ctx.output_dir = tmp_path
+        ctx.languages = ["pt", "es"]
+        ctx.entries = [
+            {"origin": "Hello", "context": "greeting"},
+            {"origin": "World", "context": "greeting"},
+        ]
+        ctx.translations_by_lang = {
+            "pt": {"Hello": "Olá", "World": "Mundo"},
+            "es": {"Hello": "Hola", "World": "Mundo"},
+        }
+        ctx.existing_translations = {}
+        _write_dropdown_output(ctx)
+        assert (tmp_path / "dropdown_pt.json").exists()
+        assert (tmp_path / "dropdown_es.json").exists()
+        import json
+
+        pt = json.loads((tmp_path / "dropdown_pt.json").read_text(encoding="utf-8"))
+        assert "contexts" in pt
+        assert pt["contexts"]["greeting"]["Hello"] == "Olá"
+
+    def test_merges_existing_translations(self, tmp_path):
+        """Les traductions existantes (cache col B) sont aussi écrites."""
+        from pipeline_dropdown import PipelineDropdownContext, _write_dropdown_output
+
+        ctx = PipelineDropdownContext(output_format="json")
+        ctx.output_dir = tmp_path
+        ctx.languages = ["fr", "pt"]
+        ctx.entries = [{"origin": "Hello", "context": "greeting"}]
+        ctx.translations_by_lang = {"pt": {"Hello": "Olá"}}
+        ctx.existing_translations = {"FR": {"Hello": "Bonjour"}}
+        _write_dropdown_output(ctx)
+        import json
+
+        fr = json.loads((tmp_path / "dropdown_fr.json").read_text(encoding="utf-8"))
+        assert fr["contexts"]["greeting"]["Hello"] == "Bonjour"
+        pt = json.loads((tmp_path / "dropdown_pt.json").read_text(encoding="utf-8"))
+        assert pt["contexts"]["greeting"]["Hello"] == "Olá"
+
+    def test_dry_run_skips(self, tmp_path):
+        from pipeline_dropdown import PipelineDropdownContext, _write_dropdown_output
+
+        ctx = PipelineDropdownContext(output_format="json", dry_run=True)
+        ctx.output_dir = tmp_path
+        ctx.languages = ["pt"]
+        ctx.entries = [{"origin": "Hello", "context": "greeting"}]
+        ctx.translations_by_lang = {"pt": {"Hello": "Olá"}}
+        _write_dropdown_output(ctx)
+        assert not (tmp_path / "dropdown_pt.json").exists()

@@ -393,8 +393,80 @@ def step7_translate(ctx: PipelineDropdownContext) -> None:
         ctx.translations_by_lang[lang] = result
         print(f"    ✅ {len(entries_to_translate)} traduction(s) produites.")
 
+    # Écriture des fichiers de sortie (JSON/XLSX) dans ctx.output_dir
+    _write_dropdown_output(ctx)
+
     # Restaurer le singleton Config (propreté)
     config_module._config = None
+
+
+def _write_dropdown_output(ctx: PipelineDropdownContext) -> None:
+    """Écrit les fichiers de sortie (JSON/XLSX) dans ctx.output_dir.
+
+    Format JSON : un fichier `dropdown_{lang}.json` par langue, groupé par
+    contexte, fusionnant traductions produites et cache colonne B.
+    Format XLSX : un fichier multi-feuilles via `core.io_xlsx.save_dropdown_xlsx`.
+    """
+    if ctx.dry_run:
+        print("  [dry-run] Écriture des fichiers ignorée.")
+        return
+    if not ctx.output_dir:
+        print("  ⚠️  Pas de dossier de sortie — écriture ignorée.")
+        return
+
+    source_file = ctx.xlsx_path.name if ctx.xlsx_path else "dropdown.xlsx"
+    fmt = ctx.output_format
+    if fmt == "auto":
+        # Par défaut on produit du JSON (le plus utilisé pour le dropdown)
+        fmt = "json"
+
+    # Indexer le contexte de chaque origin pour regrouper les traductions
+    context_by_origin: dict[str, str] = {
+        e.get("origin", ""): e.get("context", "") for e in ctx.entries
+    }
+
+    if fmt == "json":
+        for lang in ctx.languages:
+            merged: dict[str, str] = dict(
+                ctx.existing_translations.get(lang.upper(), {})
+            )
+            merged.update(ctx.translations_by_lang.get(lang, {}))
+            contexts: dict[str, dict[str, str]] = {}
+            for origin, translation in merged.items():
+                ctx_name = context_by_origin.get(origin, "")
+                contexts.setdefault(ctx_name, {})[origin] = translation
+            payload = {
+                "metadata": {
+                    "language": lang.upper(),
+                    "source_file": source_file,
+                    "total_entries": len(merged),
+                },
+                "contexts": contexts,
+            }
+            out_path = ctx.output_dir / f"dropdown_{lang}.json"
+            out_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(
+                f"  {lang.upper()}: {out_path.name} écrit " f"({len(merged)} entrées)."
+            )
+    elif fmt == "xlsx":
+        from core.config import LANGUAGES as _LANGS
+        from core.io_xlsx import save_dropdown_xlsx
+
+        translations: dict[str, dict[str, str]] = {}
+        for lang in ctx.languages:
+            merged_lang: dict[str, str] = dict(
+                ctx.existing_translations.get(lang.upper(), {})
+            )
+            merged_lang.update(ctx.translations_by_lang.get(lang, {}))
+            translations[lang] = merged_lang
+        out_path = ctx.output_dir / "dropdown_translations.xlsx"
+        save_dropdown_xlsx(ctx.entries, translations, out_path, _LANGS)
+        print(f"  XLSX écrit : {out_path.name}")
+    else:
+        print(f"  ⚠️  Format de sortie inconnu : {ctx.output_format}")
 
 
 def step8_reorder(ctx: PipelineDropdownContext) -> None:
