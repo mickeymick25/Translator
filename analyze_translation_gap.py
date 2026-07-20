@@ -32,7 +32,12 @@ from pathlib import Path
 
 def load_json(path: Path) -> dict:
     with path.open(encoding="utf-8") as fh:
-        return json.load(fh)
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Source {path} n'est pas un objet JSON (type: {type(data).__name__})"
+        )
+    return data
 
 
 def is_empty(v) -> bool:

@@ -10,15 +10,69 @@ séparés).
 from __future__ import annotations
 
 import json
+import re
 import shutil
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Iterator
 
 # Langues cibles par défaut (toutes configurées sauf 'en' = source).
 # Import ici pour être partagé par les deux pipelines.
 from core.config import LANGUAGES
 
 DEFAULT_TARGET_LANGS = [code for code in LANGUAGES if code != "en"]
+
+# ─── Patterns de placeholders partagés (C14) ────────────────────────
+# Liste des patterns bruts (utilisée par validate_translations) + forme
+# compilée combinée (utilisée par compare_sources). Centraliser évite la
+# divergence entre les deux modules.
+PLACEHOLDER_PATTERNS: list[str] = [
+    r"%[sd]",  # %s, %d
+    r"\{[^}]+\}",  # {name}, {count}, {0}, {1}, ICU
+    r"<[^>]+>",  # <b>, </b>, <br/>
+    r"\\n",  # \n littéral
+]
+PLACEHOLDER_RE = re.compile("|".join(PLACEHOLDER_PATTERNS))
+
+
+# ─── Context manager : override du singleton Config (C2) ─────────────
+
+
+@contextmanager
+def override_config(
+    *,
+    source_file: str,
+    output_dir: str,
+    provider: str,
+    no_cache: bool = False,
+) -> Iterator[None]:
+    """Injecte temporairement une `Config` dans le singleton `core.config`.
+
+    Sauvegarde l'ancienne valeur de `config_module._config`, installe une
+    nouvelle `Config` configurée pour l'exécution d'une étape du pipeline
+    (typiquement `step7_translate`), puis restaure l'ancienne valeur dans un
+    `finally` — y compris si l'étape lève une exception. Évite la pollution
+    du singleton entre appels successifs (tests, usage programmatique).
+    """
+    import core.config as config_module
+    from core.config import Config
+
+    prev = config_module._config
+    config = Config(
+        SOURCE_LANG="en",
+        SOURCE_FILE=source_file,
+        OUTPUT_DIR=output_dir,
+        TRANSLATION_PROVIDER=provider,
+        dry_run=False,
+    )
+    if no_cache:
+        config.TRANSLATION_CACHE = "false"
+    config_module._config = config
+    try:
+        yield
+    finally:
+        config_module._config = prev
 
 
 # ─── Contexte de base ────────────────────────────────────────────────

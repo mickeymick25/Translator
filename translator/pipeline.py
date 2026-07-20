@@ -494,7 +494,7 @@ def step5_report_and_confirm(ctx: PipelineContext) -> bool:
 
 
 def prepopulate_output(
-    last_export_dir: Path,
+    last_export_dir: Path | None,
     languages: list[str],
     base_output_dir: Path,
 ) -> Path:
@@ -502,20 +502,50 @@ def prepopulate_output(
 
     Args:
         last_export_dir: Dossier *_Export source (copie de référence).
+            ``None`` ou un chemin inexistant signifie « pas d'export
+            précédent » : un dossier daté vide est créé (C12).
         languages: Langues à copier (fichiers translation_en_<lang>.json).
         base_output_dir: Dossier parent des *_Export.
 
     Returns:
         Le chemin du nouveau dossier daté.
+
+    Si un dossier daté du même jour existe déjà et n'est pas vide, un suffixe
+        `_run2`, `_run3`, ... est ajouté pour ne pas écraser silencieusement
+        l'export précédent (C6).
     """
     date_str = datetime.now().strftime("%Y_%m_%d")
-    new_dir = base_output_dir / f"{date_str}_Export"
+    new_dir = _next_dated_dir(base_output_dir, f"{date_str}_Export")
     new_dir.mkdir(parents=True, exist_ok=True)
-    for lang in languages:
-        src_file = last_export_dir / f"translation_en_{lang}.json"
-        if src_file.exists():
-            shutil.copy2(src_file, new_dir / src_file.name)
+    if last_export_dir is not None and last_export_dir.exists():
+        for lang in languages:
+            src_file = last_export_dir / f"translation_en_{lang}.json"
+            if src_file.exists():
+                shutil.copy2(src_file, new_dir / src_file.name)
     return new_dir
+
+
+def _next_dated_dir(base: Path, base_name: str) -> Path:
+    """Retourne un chemin unique sous `base` pour éviter d'écraser un dossier.
+
+    Si `base/base_name` n'existe pas ou est vide, le retourne tel quel.
+    Sinon, ajoute `_run2`, `_run3`, ... jusqu'à trouver un nom libre.
+    """
+    candidate = base / base_name
+    if not candidate.exists() or not any(candidate.iterdir()):
+        return candidate
+    # base_name a la forme "YYYY_MM_DD_Export" ; on insère _runN avant le
+    # suffixe final ("Export").
+    parts = base_name.rsplit("_", 1)
+    head = parts[0] if len(parts) == 2 else base_name
+    tail = parts[1] if len(parts) == 2 else ""
+    n = 2
+    while True:
+        name = f"{head}_run{n}" + (f"_{tail}" if tail else "")
+        candidate = base / name
+        if not candidate.exists() or not any(candidate.iterdir()):
+            return candidate
+        n += 1
 
 
 def manage_modified_keys(
@@ -541,13 +571,16 @@ def manage_modified_keys(
         print(f"\n  Clé modifiée: {key}")
         print(f"    ancien source: {short_repr(old_val)}")
         print(f"    nouveau source: {short_repr(new_val)}")
-        fr_file = export_dir / f"translation_en_{languages[0]}.json"
+        # Langue d'affichage par défaut : le français est la langue pivot
+        # historique du projet, indépendante de l'ordre de --languages (C11).
+        display_lang = "fr"
+        fr_file = export_dir / f"translation_en_{display_lang}.json"
         current = ""
         if fr_file.exists():
             data = json_load(fr_file)
             current = data.get(key, "")
         print(
-            f"    traduction actuelle ({languages[0].upper()}): {short_repr(current)}"
+            f"    traduction actuelle ({display_lang.upper()}): {short_repr(current)}"
         )
         action = _prompt_action(key)
         if action == "1":
@@ -600,21 +633,6 @@ def _manual_input_for_all(export_dir: Path, languages: list[str], key: str) -> N
         print(f"    → {lang.upper()}: '{value}' enregistré.")
 
 
-def _prompt_action(key: str) -> str:
-    """Demande l'action pour une clé modifiée. Retourne '1', '2' ou '3'."""
-    while True:
-        try:
-            answer = input(
-                "  Action: [1] Retraduire  [2] Garder l'existant  "
-                "[3] Saisir manuellement  "
-            ).strip()
-        except EOFError:
-            return "2"  # défaut sûr : garder
-        if answer in ("1", "2", "3"):
-            return answer
-        print("    Réponse invalide. Tapez 1, 2 ou 3.")
-
-
 def step6_prepopulate_and_manage(ctx: PipelineContext) -> Path | None:
     """Pré-peuple le dossier output, gère les clés modifiées, demande confirmation.
 
@@ -629,9 +647,11 @@ def step6_prepopulate_and_manage(ctx: PipelineContext) -> Path | None:
 
     if not ctx.export_dir:
         print("  ⚠️  Aucun export précédent — dossier vide créé.")
-        # Créer un dossier vide pour la traduction
+        # Créer un dossier daté vide pour la traduction (C12 : plus de
+        # Path("/dev/null") non portable — on passe None à prepopulate_output
+        # qui crée simplement un dossier vide).
         base = TRANSLATOR_DIR / "output"
-        new_dir = prepopulate_output(Path("/dev/null"), ctx.languages, base)
+        new_dir = prepopulate_output(None, ctx.languages, base)
         return new_dir
 
     # 1. Backup des fichiers du dernier export
@@ -693,21 +713,12 @@ def step7_translate(ctx: PipelineContext, export_dir: Path) -> None:
         print("  Aucune langue à traduire.")
         return
 
-    # Configurer le singleton Config pour que get_provider() retourne le bon provider
-    import core.config as config_module
-    from core.config import Config
+    # Configurer le singleton Config via le context manager `override_config`
+    # qui restaure l'ancienne valeur dans un `finally` — y compris si la
+    # traduction lève (C2 : singleton non restauré sur exception).
+    from pipeline_common import override_config
 
     provider = ctx.provider if ctx.provider != "hybride" else "google"
-    config = Config(
-        SOURCE_LANG="en",
-        SOURCE_FILE=str(ctx.new_source),
-        OUTPUT_DIR=str(export_dir),
-        TRANSLATION_PROVIDER=provider,
-        dry_run=False,
-    )
-    if ctx.no_cache:
-        config.TRANSLATION_CACHE = "false"
-    config_module._config = config
 
     # Charger la source
     with ctx.new_source.open(encoding="utf-8") as fh:
@@ -721,16 +732,21 @@ def step7_translate(ctx: PipelineContext, export_dir: Path) -> None:
     print(f"  Langues  : {', '.join(ctx.languages)}")
     print(f"  Source   : {ctx.new_source.name} ({len(source_keys)} clés)")
 
-    for lang in ctx.languages:
-        print(f"\n  → {lang.upper()}...")
-        _translate_single_language(ctx.new_source, source_data, "en", lang, export_dir)
-        out_file = export_dir / f"translation_en_{lang}.json"
-        if out_file.exists():
-            count = len(json.loads(out_file.read_text(encoding="utf-8")))
-            print(f"    {count} clés traduites.")
-
-    # Restaurer le singleton Config (propreté)
-    config_module._config = None
+    with override_config(
+        source_file=str(ctx.new_source),
+        output_dir=str(export_dir),
+        provider=provider,
+        no_cache=ctx.no_cache,
+    ):
+        for lang in ctx.languages:
+            print(f"\n  → {lang.upper()}...")
+            _translate_single_language(
+                ctx.new_source, source_data, "en", lang, export_dir
+            )
+            out_file = export_dir / f"translation_en_{lang}.json"
+            if out_file.exists():
+                count = len(json.loads(out_file.read_text(encoding="utf-8")))
+                print(f"    {count} clés traduites.")
 
 
 # ─── Étape 8 : Réordonnancement auto ─────────────────────────────────
@@ -819,7 +835,14 @@ def step9_validate(ctx: PipelineContext, export_dir: Path) -> ValidationReport |
 
 
 def _tokenize(text: str) -> set[str]:
-    """Tokenise une chaîne pour la comparaison (lowercase, alphanumérique)."""
+    """Tokenise une chaîne pour la comparaison (lowercase, alphanumérique).
+
+    Retourne un ensemble de tokens alphanumériques. Si aucun token n'est
+    trouvé (texte composé uniquement de ponctuation/emoji), retourne
+    `set()` plutôt que `{text.lower()}` — deux textes sans token ne peuvent
+    pas être comparés token-à-token et ne doivent pas être signalés comme
+    mésalignés (C15 : false positive sur texte ponctué).
+    """
     import unicodedata
 
     # Normaliser (enlever les accents pour la comparaison approximative)
@@ -834,7 +857,7 @@ def _tokenize(text: str) -> set[str]:
             current = []
     if current:
         tokens.append("".join(current))
-    return set(tokens) if tokens else {text.lower()}
+    return set(tokens)
 
 
 def detect_misalignments(source: dict, translation: dict, lang: str) -> list[dict]:
@@ -874,7 +897,11 @@ def detect_misalignments(source: dict, translation: dict, lang: str) -> list[dic
             continue
         # Comparer les jeux de tokens par paires
         token_sets = {k: _tokenize(v) for k, v in trans.items()}
-        keys_list = list(token_sets.keys())
+        # Skipper la comparaison si l'un des deux sets est vide de tokens
+        # (texte sans contenu alphanumérique — C15).
+        keys_list = [k for k in trans if token_sets[k]]
+        if len(keys_list) < 2:
+            continue
         has_divergence = False
         for i in range(len(keys_list)):
             for j in range(i + 1, len(keys_list)):
@@ -887,8 +914,8 @@ def detect_misalignments(source: dict, translation: dict, lang: str) -> list[dic
             misalignments.append(
                 {
                     "source_text": source_text,
-                    "keys": sorted(trans.keys()),
-                    "translations": {k: trans[k] for k in sorted(trans.keys())},
+                    "keys": sorted(keys_list),
+                    "translations": {k: trans[k] for k in sorted(keys_list)},
                 }
             )
     return misalignments
@@ -1175,6 +1202,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Désactive le cache du service (.translation_cache.json).",
     )
+    # Flags spécifiques au mode dropdown (C5) — acceptés par le parser JSON
+    # pour permettre `--mode dropdown --retranslate-all` via pipeline.py.
+    # `default=None`/`False` pour ne pas perturber le mode JSON.
+    p.add_argument("--retranslate-all", action="store_true", default=False)
+    p.add_argument("--retranslate", type=str, default=None)
+    p.add_argument("--format", choices=["json", "xlsx", "auto"], default=None)
     return p
 
 
@@ -1241,8 +1274,10 @@ def _run_pipeline_json(args: argparse.Namespace) -> int:
     if ctx.dry_run:
         # Dry-run unifié : simuler les étapes 6-11 sans rien exécuter.
         # Chaque étape a sa propre garde `dry_run` qui affiche un message et
-        # skippe. On utilise le dernier export existant comme dossier factice.
-        simulated_export = ctx.export_dir or Path("/dev/null")
+        # skippe. On utilise le dernier export existant comme dossier factice ;
+        # sinon le dossier de base output/ (C12 : plus de Path("/dev/null")
+        # non portable — les étapes dry-run n'accèdent pas au chemin).
+        simulated_export = ctx.export_dir or (TRANSLATOR_DIR / "output")
         step6_prepopulate_and_manage(ctx)  # skippé (retourne None)
         step7_translate(ctx, simulated_export)  # skippé
         step8_reorder(ctx, simulated_export)  # skippé

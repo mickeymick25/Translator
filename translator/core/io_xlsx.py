@@ -211,12 +211,29 @@ def save_dropdown_xlsx(
     wb = Workbook()
     wb.remove(wb.active)  # Remove default sheet
 
-    # Create a sheet for each language
+    # C10 : ne créer une feuille que pour les langues réellement traduites.
+    # `en` (source) et `fr` (issue de la colonne `french` du XLSX source)
+    # sont toujours créées car leurs valeurs proviennent du fichier source,
+    # pas d'un dict de traduction. Pour les autres langues, on exige un dict
+    # de traduction non vide ; sinon on insère un marqueur `[NOT TRANSLATED]`
+    # pour éviter un XLSX qui prétend être traduit à tort.
+    sheets_created: list[str] = []
     for lang_code, lang_info in languages.items():
-        ws = wb.create_sheet(title=lang_code.upper())
-        ws.append(["Origin", "Traduction", "Contexte"])
+        if lang_code in ("en", "fr"):
+            create_sheet = True
+        else:
+            lang_translations = translations.get(lang_code, {})
+            create_sheet = bool(lang_translations)
+        if create_sheet:
+            ws = wb.create_sheet(title=lang_code.upper())
+            ws.append(["Origin", "Traduction", "Contexte"])
+            sheets_created.append(lang_code)
+        else:
+            ws = wb.create_sheet(title=f"{lang_code.upper()}_NOT_TRANSLATED")
+            ws.append(["[NOT TRANSLATED]"])
+            sheets_created.append(f"{lang_code}_not_translated")
 
-    logger.info("Created %d language sheets", len(languages))
+    logger.info("Created %d language sheets", len(sheets_created))
 
     # Write data to each sheet
     for entry in data:
@@ -224,7 +241,11 @@ def save_dropdown_xlsx(
         context = entry["context"]
 
         for lang_code, lang_info in languages.items():
-            ws = wb[lang_code.upper()]
+            sheet_title = lang_code.upper()
+            if lang_code not in ("en", "fr") and not translations.get(lang_code):
+                # Feuille marqueur — pas de données par entrée
+                continue
+            ws = wb[sheet_title]
 
             if lang_code == "en":
                 value = origin
@@ -266,7 +287,10 @@ def load_dropdown_xlsx_all_sheets(path: Path) -> dict[str, dict[str, str]]:
 
     Raises:
         FileNotFoundError: Si le fichier n'existe pas.
+        ImportError: Si openpyxl n'est pas installé (C8).
     """
+    if openpyxl is None:
+        raise ImportError("openpyxl is required for XLSX functionality")
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")

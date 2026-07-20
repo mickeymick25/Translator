@@ -170,12 +170,16 @@ def detect_typos_in_origins(entries: list[dict], typos: list[dict]) -> list[dict
 
 
 def _apply_typo_corrections_xlsx(xlsx_path: Path, typos_found: list[dict]) -> int:
+    if openpyxl is None:
+        raise ImportError("openpyxl is required for XLSX functionality")
     wb = openpyxl.load_workbook(xlsx_path)
     modified = 0
     for entry in typos_found:
         for ws in wb.worksheets:
             for row in range(2, ws.max_row + 1):
-                for col in range(1, 4):
+                # C9 : parcourir TOUTES les colonnes utilisées (et non plus
+                # uniquement les 3 premières).
+                for col in range(1, ws.max_column + 1):
                     val = ws.cell(row=row, column=col).value
                     if isinstance(val, str) and entry["typo"] in val:
                         ws.cell(row=row, column=col).value = val.replace(
@@ -321,13 +325,18 @@ def step5_report_and_confirm(ctx: PipelineDropdownContext) -> bool:
 
 
 def step6_prepopulate(ctx: PipelineDropdownContext) -> Path | None:
-    """Pré-peuple le dossier de sortie daté et demande confirmation [ÉTAPE CLÉ]."""
+    """Pré-peuple le dossier de sortie daté et demande confirmation [ÉTAPE CLÉ].
+
+    Si un dossier daté du même jour existe déjà et n'est pas vide, ajoute un
+    suffixe `_run2`, `_run3`, ... pour ne pas écraser silencieusement l'export
+    précédent (C6).
+    """
     step_banner(6, "Pré-peuplement XLSX")
     if ctx.dry_run:
         print("  [dry-run] Pré-peuplement ignoré.")
         return None
     date_str = datetime.now().strftime("%Y_%m_%d")
-    output_dir = TRANSLATOR_DIR / "output" / f"{date_str}_Dropdown"
+    output_dir = _next_dated_dir(TRANSLATOR_DIR / "output", f"{date_str}_Dropdown")
     output_dir.mkdir(parents=True, exist_ok=True)
     ctx.output_dir = output_dir
     print(f"  Dossier de sortie : {output_dir.name}")
@@ -337,6 +346,23 @@ def step6_prepopulate(ctx: PipelineDropdownContext) -> Path | None:
         return output_dir
     print("  ⛔ Traduction annulée.")
     return None
+
+
+def _next_dated_dir(base: Path, base_name: str) -> Path:
+    """Retourne un chemin unique sous `base` (suffixe _runN si écrasement)."""
+    candidate = base / base_name
+    if not candidate.exists() or not any(candidate.iterdir()):
+        return candidate
+    parts = base_name.rsplit("_", 1)
+    head = parts[0] if len(parts) == 2 else base_name
+    tail = parts[1] if len(parts) == 2 else ""
+    n = 2
+    while True:
+        name = f"{head}_run{n}" + (f"_{tail}" if tail else "")
+        candidate = base / name
+        if not candidate.exists() or not any(candidate.iterdir()):
+            return candidate
+        n += 1
 
 
 def _translate_dropdown_batch(entries, lang, existing_translations, **kwargs):
@@ -356,48 +382,46 @@ def step7_translate(ctx: PipelineDropdownContext) -> None:
         print("  Aucune langue à traduire.")
         return
 
-    # Configurer le singleton Config pour que get_provider() retourne le bon provider
-    import core.config as config_module
-    from core.config import Config
+    # Configurer le singleton Config via le context manager `override_config`
+    # qui restaure l'ancienne valeur dans un `finally` — y compris si la
+    # traduction lève (C2 : singleton non restauré sur exception).
+    from pipeline_common import override_config
 
     provider = ctx.provider if ctx.provider != "hybride" else "google"
-    config = Config(
-        SOURCE_LANG="en",
-        SOURCE_FILE=str(ctx.xlsx_path),
-        OUTPUT_DIR=str(ctx.output_dir or TRANSLATOR_DIR / "output"),
-        TRANSLATION_PROVIDER=provider,
-    )
-    if ctx.no_cache:
-        config.TRANSLATION_CACHE = "false"
-    config_module._config = config
+    output_dir = ctx.output_dir or (TRANSLATOR_DIR / "output")
 
     print(f"  Provider : {provider}")
-    for lang in sorted(ctx.gap_by_lang):
-        gap = ctx.gap_by_lang[lang]
-        if gap.get("missing_count", 0) == 0 and lang not in ctx.missing_languages:
-            if not ctx.retranslate_all and lang not in ctx.retranslate_langs:
-                print(f"  {lang.upper()}: ✅ déjà complète (cache col B)")
-                continue
-        print(
-            f"  {lang.upper()}: traduction de {gap.get('missing_count', 0)} entrée(s)..."
-        )
-        if ctx.retranslate_all or lang in ctx.retranslate_langs:
-            entries_to_translate = list(ctx.entries)
-            existing = {}
-        else:
-            entries_to_translate = [
-                e for e in ctx.entries if e.get("origin") in gap.get("to_translate", [])
-            ]
-            existing = ctx.existing_translations.get(lang.upper(), {})
-        result = _translate_dropdown_batch(entries_to_translate, lang, existing)
-        ctx.translations_by_lang[lang] = result
-        print(f"    ✅ {len(entries_to_translate)} traduction(s) produites.")
+    with override_config(
+        source_file=str(ctx.xlsx_path),
+        output_dir=str(output_dir),
+        provider=provider,
+        no_cache=ctx.no_cache,
+    ):
+        for lang in sorted(ctx.gap_by_lang):
+            gap = ctx.gap_by_lang[lang]
+            if gap.get("missing_count", 0) == 0 and lang not in ctx.missing_languages:
+                if not ctx.retranslate_all and lang not in ctx.retranslate_langs:
+                    print(f"  {lang.upper()}: ✅ déjà complète (cache col B)")
+                    continue
+            print(
+                f"  {lang.upper()}: traduction de {gap.get('missing_count', 0)} entrée(s)..."
+            )
+            if ctx.retranslate_all or lang in ctx.retranslate_langs:
+                entries_to_translate = list(ctx.entries)
+                existing = {}
+            else:
+                entries_to_translate = [
+                    e
+                    for e in ctx.entries
+                    if e.get("origin") in gap.get("to_translate", [])
+                ]
+                existing = ctx.existing_translations.get(lang.upper(), {})
+            result = _translate_dropdown_batch(entries_to_translate, lang, existing)
+            ctx.translations_by_lang[lang] = result
+            print(f"    ✅ {len(entries_to_translate)} traduction(s) produites.")
 
-    # Écriture des fichiers de sortie (JSON/XLSX) dans ctx.output_dir
-    _write_dropdown_output(ctx)
-
-    # Restaurer le singleton Config (propreté)
-    config_module._config = None
+        # Écriture des fichiers de sortie (JSON/XLSX) dans ctx.output_dir
+        _write_dropdown_output(ctx)
 
 
 def _write_dropdown_output(ctx: PipelineDropdownContext) -> None:
@@ -470,7 +494,13 @@ def _write_dropdown_output(ctx: PipelineDropdownContext) -> None:
 
 
 def step8_reorder(ctx: PipelineDropdownContext) -> None:
-    """Réordonne les fichiers de sortie selon l'ordre des Origins source."""
+    """Réordonne les fichiers de sortie selon l'ordre des Origins source.
+
+    Pour chaque fichier `dropdown_{lang}.json` dans `ctx.output_dir`, recharge
+    le JSON, réordonne les entrées de chaque contexte selon l'ordre des
+    Origins de `ctx.entries`, et réécrit le fichier (C4 : implementation
+    réelle — l'ancienne version n'écrivait rien).
+    """
     step_banner(8, "Réordonnancement auto")
     if ctx.dry_run:
         print("  [dry-run] Réordonnancement non appliqué.")
@@ -481,7 +511,42 @@ def step8_reorder(ctx: PipelineDropdownContext) -> None:
     source_origins = [e["origin"] for e in ctx.entries if e.get("origin")]
     print(f"  Ordre source : {len(source_origins)} Origins")
     for lang in ctx.languages:
-        print(f"  {lang.upper()}: réordonné selon la source.")
+        out_path = ctx.output_dir / f"dropdown_{lang}.json"
+        if not out_path.exists():
+            print(f"  {lang.upper()}: fichier absent — ignoré.")
+            continue
+        try:
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            print(f"  {lang.upper()}: ⚠️  lecture impossible ({e}).")
+            continue
+        contexts = payload.get("contexts") if isinstance(payload, dict) else None
+        if not isinstance(contexts, dict):
+            print(f"  {lang.upper()}: structure inattendue — ignoré.")
+            continue
+        ordered_contexts: dict[str, dict[str, str]] = {}
+        for ctx_name, entries in contexts.items():
+            if not isinstance(entries, dict):
+                ordered_contexts[ctx_name] = entries
+                continue
+            ordered: dict[str, str] = {}
+            for origin in source_origins:
+                if origin in entries:
+                    ordered[origin] = entries[origin]
+            # Clés extras (présentes dans le fichier, pas dans la source) → à la fin
+            for origin, value in entries.items():
+                if origin not in ordered:
+                    ordered[origin] = value
+            ordered_contexts[ctx_name] = ordered
+        payload["contexts"] = ordered_contexts
+        out_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(
+            f"  {lang.upper()}: réordonné selon la source "
+            f"({len(source_origins)} Origins)."
+        )
 
 
 def validate_dropdown(ctx: PipelineDropdownContext, output_dir) -> dict | None:
@@ -542,6 +607,10 @@ def detect_misalignments_dropdown(
 
     Pour chaque Origin partagé par plusieurs contextes, compare les traductions
     au sein d'un même contexte. Signale les divergences (Jaccard=0 sur les tokens).
+
+    Analyse les traductions **fraîches** produites par `step7_translate` (C3 :
+    l'ancienne version lisait `ctx.existing_translations` — cache stale — au
+    lieu de fusionner avec `ctx.translations_by_lang`).
     """
     step_banner(10, "Détection mésalignements intra-langue")
     if ctx.dry_run:
@@ -552,8 +621,11 @@ def detect_misalignments_dropdown(
 
     misalignments = {}
     for lang in ctx.languages:
-        lang_upper = lang.upper()
-        translations = ctx.existing_translations.get(lang_upper, {})
+        # Fusionner cache existant (colonne B) et traductions fraîches (C3).
+        merged = {
+            **ctx.existing_translations.get(lang.upper(), {}),
+            **ctx.translations_by_lang.get(lang, {}),
+        }
         lang_mis = []
 
         # Grouper par origin pour trouver les divergences
@@ -562,7 +634,7 @@ def detect_misalignments_dropdown(
             origin = e.get("origin")
             context = e.get("context")
             if origin and context:
-                trans = translations.get(origin, "")
+                trans = merged.get(origin, "")
                 if trans:
                     origin_translations[origin].add(trans)
 
@@ -754,7 +826,9 @@ def run_pipeline_dropdown(args: argparse.Namespace) -> int:
     if ctx.dry_run:
         # Dry-run unifié : simuler les étapes 6-11 sans rien exécuter.
         # Chaque étape a sa propre garde `dry_run` qui affiche un message et skippe.
-        simulated_output = ctx.output_dir or Path("/dev/null")
+        # C12 : plus de Path("/dev/null") — on utilise le dossier output/ existant
+        # (les étapes dry-run n'accèdent pas au chemin).
+        simulated_output = ctx.output_dir or (TRANSLATOR_DIR / "output")
         step6_prepopulate(ctx)  # skippé (retourne None)
         step7_translate(ctx)  # skippé
         step8_reorder(ctx)  # skippé

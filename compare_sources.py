@@ -25,13 +25,24 @@ from dataclasses import dataclass, field
 from difflib import unified_diff
 from pathlib import Path
 
-PLACEHOLDER_RE = re.compile(r"%[sd]|\{[^}]+\}|<[^>]+>|\{[0-9]+\}")
+# C14 : PLACEHOLDER_RE partagé via pipeline_common. Import tolérant pour ne
+# pas casser l'usage standalone de compare_sources.py hors translator/.
+try:
+    from pipeline_common import PLACEHOLDER_RE  # noqa: E402
+except ImportError:
+    PLACEHOLDER_RE = re.compile(r"%[sd]|\{[^}]+\}|<[^>]+>|\{[0-9]+\}")
+
 ICU_RE = re.compile(r"\{[^}]+,\s*(plural|select|selectordinal)", re.I)
 
 
 def load_json(path: Path) -> dict:
     with path.open(encoding="utf-8") as fh:
-        return json.load(fh)
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Source {path} n'est pas un objet JSON (type: {type(data).__name__})"
+        )
+    return data
 
 
 def prefix_of(key: str) -> str:

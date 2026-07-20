@@ -36,16 +36,13 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pipeline_common import PLACEHOLDER_PATTERNS  # noqa: E402  (C14)
+
 DEFAULT_LANGUAGES = ["ar", "cz", "de", "fr", "it", "sk", "pt", "es", "hu"]
 
-# Placeholders patterns that should be preserved in translations
-PLACEHOLDER_PATTERNS = [
-    r"%[sd]",  # %s, %d
-    r"\{[\w.]+\}",  # {name}, {count}
-    r"<[^>]+>",  # <b>, </b>, <br/>
-    r"\\n",  # \n
-    r"\{\d+\}",  # {0}, {1} ICU format
-]
+# Placeholders patterns that should be preserved in translations (C14 :
+# partagés via pipeline_common.PLACEHOLDER_PATTERNS — évite la divergence
+# avec compare_sources.py).
 
 
 def _latest_folder(parent: Path, suffix: str) -> Path | None:
@@ -64,9 +61,17 @@ def _latest_folder(parent: Path, suffix: str) -> Path | None:
 
 
 def load_json(filepath):
-    """Load a JSON file and return as dict."""
+    """Load a JSON file and return as dict.
+
+    Raises ValueError si le JSON n'est pas un objet (C13).
+    """
     with open(filepath, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Source {filepath} n'est pas un objet JSON (type: {type(data).__name__})"
+        )
+    return data
 
 
 def extract_placeholders(text):
@@ -182,18 +187,28 @@ class ValidationReport:
 
 
 def _detect_duplicate_keys(filepath: Path) -> dict[str, int]:
-    """Parse le JSON brut et retourne les clés apparaissant plus d'une fois."""
+    r"""Détecte les clés JSON en doublon pendant le parsing (C7).
+
+    Utilise `json.JSONDecoder.object_pairs_hook` pour signaler les doublons
+    au moment du parsing, au lieu de découper le fichier à la regex (approche
+    cassée pour JSON minifié, objets imbriqués, clés contenant `":"` ou
+    échappées en `\uXXXX`). Ne retourne que les clés apparaissant plus d'une
+    fois au sein d'un même objet.
+    """
     if not filepath.exists():
         return {}
+    counts: dict[str, int] = defaultdict(int)
+
+    def _hook(pairs):
+        d = {}
+        for k, v in pairs:
+            counts[k] += 1
+            d[k] = v
+        return d
+
     with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
-    key_counts: dict[str, int] = defaultdict(int)
-    for line in content.split("\n"):
-        line = line.strip()
-        if line.startswith('"') and '":' in line:
-            key = line.split('":')[0].strip('"')
-            key_counts[key] += 1
-    return {k: v for k, v in key_counts.items() if v > 1}
+        json.load(f, object_pairs_hook=_hook)
+    return {k: v for k, v in counts.items() if v > 1}
 
 
 def validate_lang(
