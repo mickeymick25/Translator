@@ -35,6 +35,32 @@ services:
       - OLLAMA_MAX_RETRIES=${OLLAMA_MAX_RETRIES:-2}
     working_dir: /app
 
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cop_pipeline
+    entrypoint: ["python", "pipeline.py"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./output:/app/output
+      - ./source:/app/source
+      - ../doc:/app/doc
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TRANSLATION_PROVIDER=${TRANSLATION_PROVIDER:-google}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-minimax-m3:cloud}
+      - OLLAMA_CHUNK_SIZE=${OLLAMA_CHUNK_SIZE:-50}
+      - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0}
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-300}
+      - OLLAMA_MAX_RETRIES=${OLLAMA_MAX_RETRIES:-2}
+      - DEEPL_API_KEY=${DEEPL_API_KEY:-}
+      - DEEPL_USE_FREE_API=${DEEPL_USE_FREE_API:-true}
+      - TRANSLATION_FALLBACK=${TRANSLATION_FALLBACK:-false}
+    working_dir: /app
+
   test:
     build:
       context: .
