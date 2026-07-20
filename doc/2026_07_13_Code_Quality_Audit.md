@@ -462,3 +462,34 @@ Pour franchir le cap **8.5 / 10**, deux familles d'actions sont prioritaires :
 Le reste (logging, constantes, docstrings dropdown, README) est du polish qui fait la différence entre « propre » et « platinum ».
 
 **Aucune des modifications proposées ne doit casser les tests existants** si elles sont faites dans l'ordre (d'abord les tests rouges pour C1-C15, puis le refactoring). Le filet de sécurité e2e (`TestPipelineEndToEndEn10`) est précieux et doit être préservé.
+---
+
+## 7. Suivi d'avancement
+
+### Sprint 1 — Bugs critiques : ✅ Terminé (2026-07-13)
+
+Les 15 bugs critiques (C1-C15) ont été corrigés en TDD. Score estimé après corrections : **~8/10**.
+
+| # | Bug | Statut |
+|---|---|:---:|
+| C1 | _prompt_action doublon | ✅ |
+| C2 | Singleton Config non restauré | ✅ |
+| C3 | Mésalignements sur stale data | ✅ |
+| C4 | step8_reorder dropdown no-op | ✅ |
+| C5 | --retranslate-all casse argparse | ✅ |
+| C6 | Re-run écrase silencieusement | ✅ |
+| C7 | _detect_duplicate_keys à la regex | ✅ |
+| C8 | load_dropdown_xlsx_all_sheets sans garde openpyxl | ✅ |
+| C9 | Colonnes 1-3 en dur | ✅ |
+| C10 | Feuilles XLSX pour langues non traduites | ✅ |
+| C11 | Affichage languages[0] | ✅ |
+| C12 | Path("/dev/null") | ✅ |
+| C13 | Pas de garde "JSON pas un dict" | ✅ |
+| C14 | Regex placeholders divergentes | ✅ |
+| C15 | _tokenize faux positifs | ✅ |
+
+Validation : 1008 tests OK, ruff propre, 7 fichiers modifiés (348 insertions, 130 suppressions).
+
+### Sprint 2 — Refactoring & dette : ⬜ À faire
+### Sprint 3 — Tests & documentation : ⬜ À faire
+### Sprint 4 — Polish : ⬜ À faire
