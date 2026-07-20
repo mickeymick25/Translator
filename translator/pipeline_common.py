@@ -10,6 +10,7 @@ séparés).
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 from contextlib import contextmanager
@@ -22,6 +23,22 @@ from typing import Iterator
 from core.config import LANGUAGES
 
 DEFAULT_TARGET_LANGS = [code for code in LANGUAGES if code != "en"]
+
+# ─── Constantes nommées (Sprint 2 - tâche 21) ───────────────────────
+# Centralise les magic numbers previously hardcoded dans les pipelines.
+BANNER_WIDTH = 70
+PREVIEW_LIMIT = 5
+MAX_REPORT_ENTRIES = 120
+
+# ─── Logger du pipeline (Sprint 2 - tâche 18) ───────────────────────
+# Les pipelines utilisent `logger.info` pour les messages d'information ;
+# `print` est conservé uniquement pour les rapports markdown affichés,
+# les bandeaux `step_banner` et les confirmations interactives.
+logger = logging.getLogger("pipeline")
+
+# Répertoire de référence pour les fichiers partagés (source_typos.json).
+TRANSLATOR_DIR = Path(__file__).resolve().parent
+TYPOS_PATH = TRANSLATOR_DIR / "source_typos.json"
 
 # ─── Patterns de placeholders partagés (C14) ────────────────────────
 # Liste des patterns bruts (utilisée par validate_translations) + forme
@@ -123,9 +140,43 @@ def confirm(ctx: BasePipelineContext, prompt: str, default: bool = False) -> boo
 
 def step_banner(num: int, title: str) -> None:
     """Affiche un bandeau d'étape standardisé."""
-    print("\n" + "═" * 70)
+    print("\n" + "═" * BANNER_WIDTH)
     print(f"  ÉTAPE {num} — {title}")
-    print("═" * 70)
+    print("═" * BANNER_WIDTH)
+
+
+# ─── Coquilles source (Sprint 2 - tâche 16 : load_typos unifié) ─────
+
+
+def load_typos(path: Path | None = None, scope: str = "both") -> list[dict]:
+    """Charge le dictionnaire des coquilles connues, optionnellement filtré.
+
+    Lit `source_typos.json` depuis `TRANSLATOR_DIR` (ou un chemin explicite)
+    et retourne les entrées dont le `scope` correspond.
+
+    Args:
+        path: Chemin du fichier `source_typos.json`. Si `None`, utilise
+            `pipeline_common.TYPOS_PATH` (TRANSLATOR_DIR / source_typos.json).
+        scope: Filtre de portée — "both" (défaut) retourne toutes les
+            entrées ; "json" retourne les entrées dont le scope est
+            "json" ou "both" ; "dropdown" retourne celles dont le scope
+            est "dropdown" ou "both". Les entrées sans champ `scope`
+            sont considérées comme "both".
+
+    Returns:
+        Liste des entrées typo ({typo, correction, ...}). Liste vide si
+        le fichier est absent ou ne contient pas la clé `typos`.
+    """
+    if path is None:
+        path = TYPOS_PATH
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as fh:
+        data = json.load(fh)
+    typos = data.get("typos", [])
+    if scope == "both":
+        return typos
+    return [e for e in typos if e.get("scope", "both") in (scope, "both")]
 
 
 # ─── Sauvegarde ──────────────────────────────────────────────────────

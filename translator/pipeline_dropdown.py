@@ -25,13 +25,23 @@ if str(REPO_ROOT) not in sys.path:
 if str(TRANSLATOR_DIR) not in sys.path:
     sys.path.insert(0, str(TRANSLATOR_DIR))
 
+from typing import Literal  # noqa: E402
+
 from core.config import LANGUAGES  # noqa: E402
 from core.io_xlsx import (  # noqa: E402
     detect_missing_languages,
     load_dropdown_xlsx,
     load_dropdown_xlsx_all_sheets,
 )
-from pipeline_common import BasePipelineContext, confirm, step_banner  # noqa: E402, F401
+from pipeline_common import (  # noqa: E402, F401
+    BasePipelineContext,
+    BANNER_WIDTH,
+    PREVIEW_LIMIT,
+    confirm,
+    load_typos,
+    logger,
+    step_banner,
+)
 
 try:
     import openpyxl  # noqa: E402
@@ -56,7 +66,8 @@ class PipelineDropdownContext(BasePipelineContext):
     retranslate_all: bool = False
     retranslate_langs: list[str] = field(default_factory=list)
     no_cache: bool = False
-    output_format: str = "auto"
+    # Sprint 2 - tâche 27 : type Literal pour output_format (validation statique).
+    output_format: Literal["json", "xlsx", "auto"] = "auto"
 
     comparison_added: list[str] = field(default_factory=list)
     comparison_removed: list[str] = field(default_factory=list)
@@ -92,6 +103,14 @@ def build_parser_dropdown() -> argparse.ArgumentParser:
 
 
 def step1_detect_source(ctx: PipelineDropdownContext) -> None:
+    """Détecte la source XLSX, charge les feuilles existantes et les langues manquantes.
+
+    Args:
+        ctx: Contexte du pipeline dropdown. `ctx.xlsx_path` doit être défini.
+
+    Raises:
+        FileNotFoundError: Si `ctx.xlsx_path` est None ou n'existe pas.
+    """
     step_banner(1, "Détection source XLSX")
     if not ctx.xlsx_path or not ctx.xlsx_path.exists():
         raise FileNotFoundError(f"Source XLSX introuvable : {ctx.xlsx_path}")
@@ -102,7 +121,11 @@ def step1_detect_source(ctx: PipelineDropdownContext) -> None:
     print(f"  Langues déjà traduites : {', '.join(present) if present else 'aucune'}")
     ctx.entries = load_dropdown_xlsx(ctx.xlsx_path)
     print(f"  Entrées (Origins) : {len(ctx.entries)}")
-    ctx.missing_languages = detect_missing_languages(ctx.xlsx_path, ctx.languages)
+    # Sprint 2 - tâche 24 : passer existing_translations déjà chargé évite une
+    # relecture du XLSX par detect_missing_languages (I10).
+    ctx.missing_languages = detect_missing_languages(
+        ctx.xlsx_path, ctx.languages, existing_translations=ctx.existing_translations
+    )
     if ctx.missing_languages:
         print(f"  Langues manquantes : {', '.join(ctx.missing_languages)}")
     else:
@@ -135,20 +158,17 @@ def step2_compare_sources(ctx: PipelineDropdownContext) -> None:
     print(f"  Inchangés : {len(ctx.comparison_unchanged)}")
 
 
-def load_typos_dropdown() -> list[dict]:
-    typos_path = TRANSLATOR_DIR / "source_typos.json"
-    if not typos_path.exists():
-        return []
-    with typos_path.open(encoding="utf-8") as fh:
-        data = json.load(fh)
-    return [
-        e
-        for e in data.get("typos", [])
-        if e.get("scope", "both") in ("dropdown", "both")
-    ]
-
-
 def detect_typos_in_origins(entries: list[dict], typos: list[dict]) -> list[dict]:
+    """Détecte les coquilles connues dans les Origins (colonne A) du XLSX.
+
+    Args:
+        entries: Liste d'entrées dropdown ({origin, french, context}).
+        typos: Liste d'entrées typo ({typo, correction, scope?}).
+
+    Returns:
+        Liste de {typo, correction, origins: [origin, ...]} pour chaque coquille
+        trouvée dans au moins un Origin. Les origins sont dédupliquées et triées.
+    """
     found: list[dict] = []
     for entry in typos:
         typo = entry["typo"]
@@ -170,6 +190,22 @@ def detect_typos_in_origins(entries: list[dict], typos: list[dict]) -> list[dict
 
 
 def _apply_typo_corrections_xlsx(xlsx_path: Path, typos_found: list[dict]) -> int:
+    """Applique les corrections de coquilles directement dans le XLSX source.
+
+    Parcourt toutes les feuilles et toutes les colonnes utilisées (C9 : plus
+    uniquement les 3 premières) et remplace `typo` par `correction`.
+
+    Args:
+        xlsx_path: Chemin du fichier XLSX à corriger (modifié in-place).
+        typos_found: Liste de {typo, correction, origins} issue de
+            `detect_typos_in_origins`.
+
+    Returns:
+        Nombre de cellules modifiées.
+
+    Raises:
+        ImportError: Si openpyxl n'est pas installé.
+    """
     if openpyxl is None:
         raise ImportError("openpyxl is required for XLSX functionality")
     wb = openpyxl.load_workbook(xlsx_path)
@@ -191,8 +227,15 @@ def _apply_typo_corrections_xlsx(xlsx_path: Path, typos_found: list[dict]) -> in
 
 
 def step3_detect_typos(ctx: PipelineDropdownContext) -> None:
+    """Détecte les coquilles source connues dans les Origins et propose correction.
+
+    Args:
+        ctx: Contexte du pipeline dropdown. Utilise `ctx.entries` et
+            `ctx.xlsx_path` ; met à jour `ctx.typos_found` et
+            `ctx.typos_corrected`.
+    """
     step_banner(3, "Détection des coquilles source")
-    typos = load_typos_dropdown()
+    typos = load_typos(scope="dropdown")
     if not typos:
         print("  Aucun dictionnaire de coquilles trouvé.")
         return
@@ -215,6 +258,12 @@ def step3_detect_typos(ctx: PipelineDropdownContext) -> None:
 
 
 def step4_analyze_gap(ctx: PipelineDropdownContext) -> None:
+    """Analyse l'écart par langue entre les Origins source et les traductions existantes.
+
+    Args:
+        ctx: Contexte du pipeline dropdown. Met à jour `ctx.gap_by_lang`
+        ({lang: {missing_count, to_translate, total, existing}}).
+    """
     step_banner(4, "Analyse de l'écart par langue")
     all_origins = {e["origin"] for e in ctx.entries if e.get("origin")}
     ctx.gap_by_lang = {}
@@ -248,54 +297,71 @@ def step4_analyze_gap(ctx: PipelineDropdownContext) -> None:
     print(f"\n  Total à traduire : {total} entrée(s) × langues.")
 
 
-def build_analysis_report_dropdown(ctx: PipelineDropdownContext) -> str:
-    L: list[str] = []
-    L.append("# Rapport d'analyse du pipeline dropdown\n")
-    L.append(f"- Source : `{ctx.xlsx_path}`\n")
-
-    L.append("## 1. Source\n")
+def _section_source_analysis_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 1 — Source (rapport d'analyse dropdown)."""
+    L: list[str] = ["## 1. Source\n"]
     L.append(f"- Fichier : `{ctx.xlsx_path.name if ctx.xlsx_path else '?'}`")
     L.append(f"- Entrées (Origins) : {len(ctx.entries)}")
     present = [k.lower() for k in ctx.existing_translations if k.lower() != "en"]
     L.append(
-        f"- Langues déjà présentes : {', '.join(sorted(present)) if present else 'aucune'}"
+        f"- Langues déjà présentes : "
+        f"{', '.join(sorted(present)) if present else 'aucune'}"
     )
     L.append(
-        f"- Langues manquantes : {', '.join(ctx.missing_languages) if ctx.missing_languages else 'aucune'}\n"
+        f"- Langues manquantes : "
+        f"{', '.join(ctx.missing_languages) if ctx.missing_languages else 'aucune'}\n"
     )
+    return L
 
-    L.append("## 2. Comparaison des sources\n")
+
+def _section_comparison_analysis_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 2 — Comparaison des sources (rapport d'analyse dropdown)."""
+    L: list[str] = ["## 2. Comparaison des sources\n"]
     if ctx.comparison_added or ctx.comparison_removed:
         L.append(f"- Origins ajoutés : {len(ctx.comparison_added)}")
         L.append(f"- Origins supprimés : {len(ctx.comparison_removed)}")
         L.append(f"- Origins inchangés : {len(ctx.comparison_unchanged)}\n")
     else:
         L.append("_Pas de comparaison (pas de XLSX précédent)._\n")
+    return L
 
-    L.append("## 3. Coquilles source\n")
+
+def _section_coquilles_analysis_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 3 — Coquilles source (rapport d'analyse dropdown)."""
+    L: list[str] = ["## 3. Coquilles source\n"]
     if ctx.typos_found:
         for entry in ctx.typos_found:
             L.append(f"- `{entry['typo']}` → `{entry['correction']}`")
         L.append(
-            f"\nCorrections appliquées : {'oui ✅' if ctx.typos_corrected else 'non'}\n"
+            f"\nCorrections appliquées : "
+            f"{'oui ✅' if ctx.typos_corrected else 'non'}\n"
         )
     else:
         L.append("_Aucune coquille connue détectée._\n")
+    return L
 
-    L.append("## 4. Écart de traduction par langue\n")
+
+def _section_gap_analysis_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 4 — Écart de traduction par langue (rapport d'analyse dropdown)."""
+    L: list[str] = ["## 4. Écart de traduction par langue\n"]
     if ctx.gap_by_lang:
         L.append("| Langue | Existant | À traduire | Total |")
         L.append("|---|---:|---:|---:|")
         for lang in sorted(ctx.gap_by_lang):
             g = ctx.gap_by_lang[lang]
             L.append(
-                f"| {lang} | {g.get('existing', 0)} | {g.get('missing_count', 0)} | {g.get('total', 0)} |"
+                f"| {lang} | {g.get('existing', 0)} | {g.get('missing_count', 0)} | "
+                f"{g.get('total', 0)} |"
             )
     else:
         L.append("_Écart non calculé._")
     L.append("")
+    return L
 
-    L.append("## 5. Plan d'action\n")
+
+def _section_plan_action_analysis_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 5 — Plan d'action (rapport d'analyse dropdown)."""
+    L: list[str] = ["## 5. Plan d'action\n"]
     L.append(f"- Provider : **{ctx.provider}**")
     L.append(f"- Langues à traiter : {', '.join(sorted(ctx.gap_by_lang.keys()))}")
     total = sum(g["missing_count"] for g in ctx.gap_by_lang.values())
@@ -307,10 +373,44 @@ def build_analysis_report_dropdown(ctx: PipelineDropdownContext) -> str:
     if ctx.no_cache:
         L.append("- Cache service désactivé (--no-cache)")
     L.append("")
+    return L
+
+
+def build_analysis_report_dropdown(ctx: PipelineDropdownContext) -> str:
+    """Construit le rapport markdown consolidé des étapes 1-4 du pipeline dropdown.
+
+    Assemble les 5 sections `_section_*` (Sprint 2 - tâche 17) en un seul
+    document markdown.
+
+    Args:
+        ctx: Contexte du pipeline dropdown.
+
+    Returns:
+        Le rapport markdown (5 sections : Source, Comparaison, Coquilles,
+        Écart, Plan d'action).
+    """
+    L: list[str] = []
+    L.append("# Rapport d'analyse du pipeline dropdown\n")
+    L.append(f"- Source : `{ctx.xlsx_path}`\n")
+
+    L.extend(_section_source_analysis_dropdown(ctx))
+    L.extend(_section_comparison_analysis_dropdown(ctx))
+    L.extend(_section_coquilles_analysis_dropdown(ctx))
+    L.extend(_section_gap_analysis_dropdown(ctx))
+    L.extend(_section_plan_action_analysis_dropdown(ctx))
     return "\n".join(L)
 
 
 def step5_report_and_confirm(ctx: PipelineDropdownContext) -> bool:
+    """Produit le rapport consolidé et demande confirmation pour continuer.
+
+    Args:
+        ctx: Contexte du pipeline dropdown.
+
+    Returns:
+        True si l'utilisateur confirme (ou en non-interactif), False sinon
+        (ou en dry-run).
+    """
     step_banner(5, "Rapport consolidé + confirmation")
     print(build_analysis_report_dropdown(ctx))
     if ctx.dry_run:
@@ -325,11 +425,22 @@ def step5_report_and_confirm(ctx: PipelineDropdownContext) -> bool:
 
 
 def step6_prepopulate(ctx: PipelineDropdownContext) -> Path | None:
-    """Pré-peuple le dossier de sortie daté et demande confirmation [ÉTAPE CLÉ].
+    """Pré-peuple le dossier de sortie daté (sans confirmation redondante).
+
+    Sprint 2 - tâche 23 : la confirmation « Lancer la traduction ? » était
+    redondante avec celle de `step5_report_and_confirm` (« Poursuivre vers la
+    traduction (étapes 6-11) ? »). Elle a été supprimée : step5 est désormais
+    la seule [ÉTAPE CLÉ] avant la traduction.
 
     Si un dossier daté du même jour existe déjà et n'est pas vide, ajoute un
     suffixe `_run2`, `_run3`, ... pour ne pas écraser silencieusement l'export
     précédent (C6).
+
+    Args:
+        ctx: Contexte du pipeline dropdown.
+
+    Returns:
+        Le chemin du dossier daté créé, ou None en dry-run.
     """
     step_banner(6, "Pré-peuplement XLSX")
     if ctx.dry_run:
@@ -340,12 +451,7 @@ def step6_prepopulate(ctx: PipelineDropdownContext) -> Path | None:
     output_dir.mkdir(parents=True, exist_ok=True)
     ctx.output_dir = output_dir
     print(f"  Dossier de sortie : {output_dir.name}")
-    if not ctx.interactive:
-        return output_dir
-    if confirm(ctx, "  Lancer la traduction ?", default=True):
-        return output_dir
-    print("  ⛔ Traduction annulée.")
-    return None
+    return output_dir
 
 
 def _next_dated_dir(base: Path, base_name: str) -> Path:
@@ -366,6 +472,17 @@ def _next_dated_dir(base: Path, base_name: str) -> Path:
 
 
 def _translate_dropdown_batch(entries, lang, existing_translations, **kwargs):
+    """Traduit les entries via le vrai moteur (mode_translate_dropdowns).
+
+    Args:
+        entries: Liste d'entrées dropdown à traduire.
+        lang: Code langue cible.
+        existing_translations: Dict {origin: traduction} déjà connu (cache col B).
+        **kwargs: Accepté pour compatibilité (ignoré).
+
+    Returns:
+        Dict {origin: traduction} produit par le moteur de traduction.
+    """
     """Traduit les entries via le vrai moteur (mode_translate_dropdowns)."""
     from modes.mode_translate_dropdowns import _translate_dropdown_entries_batch
 
@@ -373,7 +490,13 @@ def _translate_dropdown_batch(entries, lang, existing_translations, **kwargs):
 
 
 def step7_translate(ctx: PipelineDropdownContext) -> None:
-    """Traduit les Origins manquants en réutilisant le cache colonne B."""
+    """Traduit les Origins manquants en réutilisant le cache colonne B.
+
+    Args:
+        ctx: Contexte du pipeline dropdown. Utilise `ctx.gap_by_lang`,
+            `ctx.entries`, `ctx.existing_translations` ; met à jour
+            `ctx.translations_by_lang` puis appelle `_write_dropdown_output`.
+    """
     step_banner(7, "Traduction")
     if ctx.dry_run:
         print("  [dry-run] Traduction non lancée.")
@@ -441,8 +564,11 @@ def _write_dropdown_output(ctx: PipelineDropdownContext) -> None:
     source_file = ctx.xlsx_path.name if ctx.xlsx_path else "dropdown.xlsx"
     fmt = ctx.output_format
     if fmt == "auto":
-        # Par défaut on produit du JSON (le plus utilisé pour le dropdown)
-        fmt = "json"
+        # Sprint 2 - tâche 27 : auto déduit le format depuis l'extension du
+        # fichier source (.xlsx -> xlsx, sinon json). Auparavant auto résolvait
+        # toujours en json (I12).
+        src_ext = ctx.xlsx_path.suffix.lower() if ctx.xlsx_path else ""
+        fmt = "xlsx" if src_ext in (".xlsx", ".xls") else "json"
 
     # Indexer le contexte de chaque origin pour regrouper les traductions
     context_by_origin: dict[str, str] = {
@@ -549,10 +675,18 @@ def step8_reorder(ctx: PipelineDropdownContext) -> None:
         )
 
 
-def validate_dropdown(ctx: PipelineDropdownContext, output_dir) -> dict | None:
+def validate_dropdown(ctx: PipelineDropdownContext, output_dir: Path) -> dict | None:
     """Valide les fichiers de sortie dropdown.
 
-    Retourne un dict {lang: {missing: [], empty: [], untranslated: []}}.
+    Args:
+        ctx: Contexte du pipeline dropdown.
+        output_dir: Dossier de sortie contenant les fichiers `dropdown_<lang>.json`.
+            Conservé pour signature homogène avec le pipeline JSON ; la
+            validation se fait sur `ctx.existing_translations` (cache col B).
+
+    Returns:
+        Dict {lang: {missing: [], empty: [], untranslated: []}}, ou None en
+        dry-run.
     """
     step_banner(9, "Validation dropdown")
     if ctx.dry_run:
@@ -601,7 +735,7 @@ def validate_dropdown(ctx: PipelineDropdownContext, output_dir) -> dict | None:
 
 
 def detect_misalignments_dropdown(
-    ctx: PipelineDropdownContext, validation_results: dict
+    ctx: PipelineDropdownContext,
 ) -> dict:
     """Détecte les mésalignements intra-langue restreints au sein d'un même contexte.
 
@@ -611,6 +745,14 @@ def detect_misalignments_dropdown(
     Analyse les traductions **fraîches** produites par `step7_translate` (C3 :
     l'ancienne version lisait `ctx.existing_translations` — cache stale — au
     lieu de fusionner avec `ctx.translations_by_lang`).
+
+    Args:
+        ctx: Contexte du pipeline dropdown (entries, existing_translations,
+            translations_by_lang).
+
+    Returns:
+        Dict {lang: [mésalignement, ...]} où chaque mésalignement est un dict
+        `{origin, translations}`. Vide si aucune divergence détectée.
     """
     step_banner(10, "Détection mésalignements intra-langue")
     if ctx.dry_run:
@@ -665,34 +807,31 @@ def detect_misalignments_dropdown(
     return misalignments
 
 
-def build_final_report_dropdown(
-    ctx: PipelineDropdownContext,
-    output_dir,
-    validation_results: dict,
-    misalignments: dict,
-) -> str:
-    """Construit le rapport markdown final du pipeline dropdown."""
-    L: list[str] = []
-    L.append("# Rapport final du pipeline dropdown COP\n")
-    L.append(f"- Source : `{ctx.xlsx_path}`\n")
+def _section_source_final_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 1 — Source (rapport final dropdown)."""
+    return [
+        "## 1. Source\n",
+        f"- Fichier : `{ctx.xlsx_path.name if ctx.xlsx_path else '?'}`",
+        f"- Entrées : {len(ctx.entries)}",
+        f"- Langues traitées : {', '.join(ctx.languages)}\n",
+    ]
 
-    # Section 1 — Source
-    L.append("## 1. Source\n")
-    L.append(f"- Fichier : `{ctx.xlsx_path.name if ctx.xlsx_path else '?'}`")
-    L.append(f"- Entrées : {len(ctx.entries)}")
-    L.append(f"- Langues traitées : {', '.join(ctx.languages)}\n")
 
-    # Section 2 — Comparaison
-    L.append("## 2. Comparaison\n")
+def _section_comparison_final_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 2 — Comparaison (rapport final dropdown)."""
+    L: list[str] = ["## 2. Comparaison\n"]
     if ctx.comparison_added or ctx.comparison_removed:
         L.append(f"- Ajoutés : {len(ctx.comparison_added)}")
         L.append(f"- Supprimés : {len(ctx.comparison_removed)}")
     else:
         L.append("_Pas de comparaison._")
     L.append("")
+    return L
 
-    # Section 3 — Coquilles
-    L.append("## 3. Coquilles\n")
+
+def _section_coquilles_final_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 3 — Coquilles (rapport final dropdown)."""
+    L: list[str] = ["## 3. Coquilles\n"]
     if ctx.typos_found:
         L.append(f"- {len(ctx.typos_found)} coquille(s) détectée(s)")
         L.append(
@@ -701,66 +840,141 @@ def build_final_report_dropdown(
     else:
         L.append("_Aucune._")
     L.append("")
+    return L
 
-    # Section 4 — Écart
-    L.append("## 4. Écart\n")
+
+def _section_gap_final_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 4 — Écart (rapport final dropdown)."""
+    L: list[str] = ["## 4. Écart\n"]
     if ctx.gap_by_lang:
         L.append("| Langue | Existant | À traduire | Total |")
         L.append("|---|---:|---:|---:|")
         for lang in sorted(ctx.gap_by_lang):
             g = ctx.gap_by_lang[lang]
             L.append(
-                f"| {lang} | {g.get('existing', 0)} | {g.get('missing_count', 0)} | {g.get('total', 0)} |"
+                f"| {lang} | {g.get('existing', 0)} | {g.get('missing_count', 0)} | "
+                f"{g.get('total', 0)} |"
             )
     L.append("")
+    return L
 
-    # Section 5 — Plan
-    L.append("## 5. Plan d'action\n")
-    L.append(f"- Provider : {ctx.provider}")
+
+def _section_plan_final_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 5 — Plan d'action (rapport final dropdown)."""
     total = sum(g.get("missing_count", 0) for g in ctx.gap_by_lang.values())
-    L.append(f"- Total traduit : {total}")
-    L.append("")
+    return [
+        "## 5. Plan d'action\n",
+        f"- Provider : {ctx.provider}",
+        f"- Total traduit : {total}",
+        "",
+    ]
 
-    # Section 6 — Traduction
-    L.append("## 6. Traduction\n")
-    L.append(f"- Dossier de sortie : `{output_dir.name if output_dir else 'N/A'}`")
-    L.append("")
 
-    # Section 7 — Validation
-    L.append("## 7. Validation\n")
+def _section_translation_final_dropdown(
+    ctx: PipelineDropdownContext, output_dir: Path
+) -> list[str]:
+    """Section 6 — Traduction (rapport final dropdown)."""
+    return [
+        "## 6. Traduction\n",
+        f"- Dossier de sortie : `{output_dir.name if output_dir else 'N/A'}`",
+        "",
+    ]
+
+
+def _section_validation_final_dropdown(
+    ctx: PipelineDropdownContext, validation_results: dict
+) -> list[str]:
+    """Section 7 — Validation (rapport final dropdown)."""
+    L: list[str] = ["## 7. Validation\n"]
     if validation_results:
         L.append("| Langue | Manquantes | Vides | Non traduites |")
         L.append("|---|---:|---:|---:|")
         for lang in sorted(validation_results):
             r = validation_results[lang]
             L.append(
-                f"| {lang} | {len(r['missing'])} | {len(r['empty'])} | {len(r['untranslated'])} |"
+                f"| {lang} | {len(r['missing'])} | {len(r['empty'])} | "
+                f"{len(r['untranslated'])} |"
             )
     else:
         L.append("_Validation non exécutée._")
     L.append("")
+    return L
 
-    # Section 8 — Mésalignements
-    L.append("## 8. Mésalignements\n")
+
+def _section_misalignments_final_dropdown(
+    ctx: PipelineDropdownContext, misalignments: dict
+) -> list[str]:
+    """Section 8 — Mésalignements (rapport final dropdown)."""
     total_mis = sum(len(v) for v in misalignments.values()) if misalignments else 0
-    L.append(f"**{total_mis} mésalignement(s)** détecté(s).\n")
-    L.append("")
+    return [
+        "## 8. Mésalignements\n",
+        f"**{total_mis} mésalignement(s)** détecté(s).\n",
+        "",
+    ]
 
-    # Section 9 — Ordre
-    L.append("## 9. Ordre\n")
-    L.append("Ordre des Origins source respecté (étape 8).")
-    L.append("")
 
+def _section_order_final_dropdown(ctx: PipelineDropdownContext) -> list[str]:
+    """Section 9 — Ordre (rapport final dropdown)."""
+    return [
+        "## 9. Ordre\n",
+        "Ordre des Origins source respecté (étape 8).",
+        "",
+    ]
+
+
+def build_final_report_dropdown(
+    ctx: PipelineDropdownContext,
+    output_dir: Path,
+    validation_results: dict,
+    misalignments: dict,
+) -> str:
+    """Construit le rapport markdown final du pipeline dropdown.
+
+    Assemble les 9 sections `_section_*` (Sprint 2 - tâche 17) en un seul
+    document markdown.
+
+    Args:
+        ctx: Contexte du pipeline dropdown.
+        output_dir: Dossier de sortie des fichiers traduits.
+        validation_results: Résultat de `validate_dropdown` (ou None).
+        misalignments: Résultat de `detect_misalignments_dropdown` (ou {}).
+
+    Returns:
+        Le rapport markdown assemblé (9 sections).
+    """
+    L: list[str] = []
+    L.append("# Rapport final du pipeline dropdown COP\n")
+    L.append(f"- Source : `{ctx.xlsx_path}`\n")
+
+    L.extend(_section_source_final_dropdown(ctx))
+    L.extend(_section_comparison_final_dropdown(ctx))
+    L.extend(_section_coquilles_final_dropdown(ctx))
+    L.extend(_section_gap_final_dropdown(ctx))
+    L.extend(_section_plan_final_dropdown(ctx))
+    L.extend(_section_translation_final_dropdown(ctx, output_dir))
+    L.extend(_section_validation_final_dropdown(ctx, validation_results))
+    L.extend(_section_misalignments_final_dropdown(ctx, misalignments))
+    L.extend(_section_order_final_dropdown(ctx))
     return "\n".join(L)
 
 
 def step11_final_report_dropdown(
     ctx: PipelineDropdownContext,
-    output_dir,
+    output_dir: Path,
     validation_results: dict,
     misalignments: dict,
-):
-    """Génère le rapport final et l'écrit dans doc/."""
+) -> Path | None:
+    """Génère le rapport final consolidé et l'écrit dans `doc/`.
+
+    Args:
+        ctx: Contexte du pipeline dropdown.
+        output_dir: Dossier de sortie des fichiers traduits.
+        validation_results: Résultat de `validate_dropdown` (ou None).
+        misalignments: Résultat de `detect_misalignments_dropdown` (ou {}).
+
+    Returns:
+        Chemin du fichier markdown écrit, ou None en dry-run.
+    """
     step_banner(11, "Rapport consolidé final")
     if ctx.dry_run:
         print("  [dry-run] Rapport final non écrit.")
@@ -779,6 +993,16 @@ def step11_final_report_dropdown(
 
 
 def run_pipeline_dropdown(args: argparse.Namespace) -> int:
+    """Point d'entrée du pipeline dropdown : enchaîne les étapes 1-11.
+
+    Args:
+        args: Namespace argparse (source, prev_source, languages, provider,
+            dry_run, yes, format, retranslate_all, retranslate, no_cache).
+
+    Returns:
+        Code de sortie : 0 (succès ou arrêt utilisateur), 2 (FileNotFoundError),
+        3 (erreur durant la traduction).
+    """
     ctx = PipelineDropdownContext(
         dry_run=getattr(args, "dry_run", False),
         provider=getattr(args, "provider", "hybride"),
@@ -801,17 +1025,19 @@ def run_pipeline_dropdown(args: argparse.Namespace) -> int:
         ]
 
     print("🚀 Pipeline dropdown — COP Translation")
-    print(f"   Provider : {ctx.provider} | Langues : {', '.join(ctx.languages)}")
-    if ctx.xlsx_path:
-        print(f"   Source : {ctx.xlsx_path.name}")
+    logger.info(
+        "   Provider : %s | Langues : %s",
+        ctx.provider,
+        ", ".join(ctx.languages),
+    )
     if ctx.dry_run:
-        print("   Mode : dry-run")
+        logger.info("   Mode : dry-run")
     if ctx.retranslate_all:
-        print("   Retraduction : toutes les langues (--retranslate-all)")
+        logger.info("   Retraduction : toutes les langues (--retranslate-all)")
     if ctx.retranslate_langs:
-        print(f"   Retraduction : {', '.join(ctx.retranslate_langs)}")
+        logger.info("   Retraduction : %s", ", ".join(ctx.retranslate_langs))
     if ctx.no_cache:
-        print("   Cache service : désactivé (--no-cache)")
+        logger.info("   Cache service : désactivé (--no-cache)")
 
     try:
         step1_detect_source(ctx)
@@ -833,7 +1059,7 @@ def run_pipeline_dropdown(args: argparse.Namespace) -> int:
         step7_translate(ctx)  # skippé
         step8_reorder(ctx)  # skippé
         validate_dropdown(ctx, simulated_output)  # skippé
-        detect_misalignments_dropdown(ctx, {})  # skippé
+        detect_misalignments_dropdown(ctx)  # skippé
         step11_final_report_dropdown(ctx, simulated_output, None, {})  # skippé
         print("\n⏹  [dry-run] Simulation complète — aucune exécution.")
         return 0
@@ -856,7 +1082,7 @@ def run_pipeline_dropdown(args: argparse.Namespace) -> int:
 
     # Phase 3 — Validation + mésalignements + rapport final
     validation_results = validate_dropdown(ctx, output_dir)
-    misalignments = detect_misalignments_dropdown(ctx, validation_results)
+    misalignments = detect_misalignments_dropdown(ctx)
     step11_final_report_dropdown(ctx, output_dir, validation_results, misalignments)
 
     print("\n✅ Pipeline dropdown terminé.")

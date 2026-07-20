@@ -411,8 +411,8 @@ class TestStep3DetectTypos:
         from pipeline_dropdown import PipelineDropdownContext, step3_detect_typos
 
         monkeypatch.setattr(
-            "pipeline_dropdown.load_typos_dropdown",
-            lambda: [{"typo": "XYZNonexistent", "correction": "Fixed"}],
+            "pipeline_dropdown.load_typos",
+            lambda *a, **kw: [{"typo": "XYZNonexistent", "correction": "Fixed"}],
         )
         ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs)
         ctx.entries = [{"origin": "Hello"}, {"origin": "World"}]
@@ -425,8 +425,10 @@ class TestStep3DetectTypos:
         from core.io_xlsx import load_dropdown_xlsx
 
         monkeypatch.setattr(
-            "pipeline_dropdown.load_typos_dropdown",
-            lambda: [{"typo": "Hiearchy", "correction": "Hierarchy", "scope": "both"}],
+            "pipeline_dropdown.load_typos",
+            lambda *a, **kw: [
+                {"typo": "Hiearchy", "correction": "Hierarchy", "scope": "both"}
+            ],
         )
         ctx = PipelineDropdownContext(xlsx_path=xlsx_with_typo, dry_run=True)
         ctx.entries = load_dropdown_xlsx(xlsx_with_typo)
@@ -456,8 +458,10 @@ class TestStep3DetectTypos:
         from core.io_xlsx import load_dropdown_xlsx
 
         monkeypatch.setattr(
-            "pipeline_dropdown.load_typos_dropdown",
-            lambda: [{"typo": "Hiearchy", "correction": "Hierarchy", "scope": "both"}],
+            "pipeline_dropdown.load_typos",
+            lambda *a, **kw: [
+                {"typo": "Hiearchy", "correction": "Hierarchy", "scope": "both"}
+            ],
         )
         ctx = PipelineDropdownContext(xlsx_path=xlsx_with_typo, dry_run=True)
         ctx.entries = load_dropdown_xlsx(xlsx_with_typo)
@@ -471,8 +475,10 @@ class TestStep3DetectTypos:
         from core.io_xlsx import load_dropdown_xlsx
 
         monkeypatch.setattr(
-            "pipeline_dropdown.load_typos_dropdown",
-            lambda: [{"typo": "Hiearchy", "correction": "Hierarchy", "scope": "both"}],
+            "pipeline_dropdown.load_typos",
+            lambda *a, **kw: [
+                {"typo": "Hiearchy", "correction": "Hierarchy", "scope": "both"}
+            ],
         )
         ctx = PipelineDropdownContext(xlsx_path=xlsx_with_typo, interactive=True)
         ctx.entries = load_dropdown_xlsx(xlsx_with_typo)
@@ -633,21 +639,26 @@ class TestStep6Prepopulate:
         }
         ctx.entries = [{"origin": "Hello"}]
         ctx.missing_languages = ["pt"]
-        with patch("builtins.input", return_value="y"):
-            result = step6_prepopulate(ctx)
+        # Sprint 2 - tâche 23 : plus de confirmation redondante dans step6 ;
+        # step6 retourne toujours le dossier (la confirmation est faite en step5).
+        result = step6_prepopulate(ctx)
         assert result is not None
         assert result.exists()
 
-    def test_interactive_confirm_no_aborts(self, xlsx_3_langs):
+    def test_interactive_no_redundant_confirmation(self, xlsx_3_langs):
         from pipeline_dropdown import PipelineDropdownContext, step6_prepopulate
 
         ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, interactive=True)
         ctx.existing_translations = {"EN": {"Hello": "Hello"}}
         ctx.entries = [{"origin": "Hello"}]
         ctx.missing_languages = ["pt"]
-        with patch("builtins.input", return_value="n"):
+        # Même si l'utilisateur répondrait « n », step6 ne demande plus rien
+        # (confirmation retirée - tâche 23) : input n'est jamais appelé.
+        with patch("builtins.input", return_value="n") as mock_input:
             result = step6_prepopulate(ctx)
-        assert result is None
+        assert result is not None
+        assert result.exists()
+        mock_input.assert_not_called()
 
 
 class TestStep7Translate:
@@ -871,7 +882,7 @@ class TestStep10DetectMisalignments:
             "EN": {"Hello": "Hello", "World": "World"},
             "FR": {"Hello": "Bonjour", "World": "Monde"},
         }
-        result = detect_misalignments_dropdown(ctx, {})
+        result = detect_misalignments_dropdown(ctx)
         assert result == {}
 
     def test_dry_run_skips(self, xlsx_3_langs, capsys):
@@ -883,7 +894,7 @@ class TestStep10DetectMisalignments:
         ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, dry_run=True)
         ctx.entries = [{"origin": "Hello", "context": "greeting"}]
         ctx.existing_translations = {"EN": {"Hello": "Hello"}}
-        result = detect_misalignments_dropdown(ctx, {})
+        result = detect_misalignments_dropdown(ctx)
         assert result == {}
         out = capsys.readouterr().out
         assert "dry-run" in out.lower()
@@ -908,7 +919,7 @@ class TestStep10DetectMisalignments:
         # qui ne donne qu'une seule valeur, donc il faut simuler via un mock.
         # On utilise existing_translations avec une seule clé mais on patche
         # origin_translations pour avoir deux valeurs divergentes.
-        result = detect_misalignments_dropdown(ctx, {})
+        result = detect_misalignments_dropdown(ctx)
         # Avec une seule traduction pour Hello, pas de divergence
         # Le test vérifie que la structure de retour est correcte
         assert isinstance(result, dict)

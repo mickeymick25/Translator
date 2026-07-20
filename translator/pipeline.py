@@ -52,10 +52,14 @@ if str(TRANSLATOR_DIR) not in sys.path:
 from core.config import LANGUAGES, _find_source_file_in_import  # noqa: E402
 from pipeline_common import (  # noqa: E402
     BasePipelineContext,
+    MAX_REPORT_ENTRIES,
+    PREVIEW_LIMIT,
     backup_translation_file,
     confirm,
     json_load,
     json_write,
+    load_typos,
+    logger,
     short_repr,
     step_banner,
 )
@@ -71,7 +75,12 @@ from validate_translations import (  # noqa: E402
 
 # Langues cibles par défaut (toutes configurées sauf 'en' = source)
 DEFAULT_TARGET_LANGS = [code for code in LANGUAGES if code != "en"]
-TYPHOS_PATH = TRANSLATOR_DIR / "source_typos.json"
+# Sprint 2 - tâche 22 : renommage TYPHOS_PATH (coquille de nommage) en TYPOS_PATH.
+# Utilisé par step3_detect_typos comme chemin explicite vers source_typos.json
+# (le helper load_typos vit dans pipeline_common et utilise sa propre valeur
+# par défaut ; passer TYPOS_PATH explicitement permet aux tests de monkeypatcher
+# pipeline.TYPOS_PATH).
+TYPOS_PATH = TRANSLATOR_DIR / "source_typos.json"
 
 
 # ─── Dispatcher : détection du type de source ─────────────────────────
@@ -108,6 +117,10 @@ class PipelineContext(BasePipelineContext):
     typos_found: list[dict] = field(default_factory=list)
     typos_corrected: bool = False
     gaps: list[LangGap] = field(default_factory=list)
+
+    # Sprint 2 - tâche 25 : nombre de clés de la nouvelle source, stocké à
+    # l'étape 1 pour éviter une relecture dans les rapports (I11).
+    source_key_count: int = 0
 
     # Flags runtime
     no_cache: bool = False
@@ -208,7 +221,8 @@ def step1_detect_sources(ctx: PipelineContext) -> None:
     # Stats de la nouvelle source
     with ctx.new_source.open(encoding="utf-8") as fh:
         new_data = json.load(fh)
-    print(f"  Clés nouvelle source   : {len(new_data)}")
+    ctx.source_key_count = len(new_data)
+    print(f"  Clés nouvelle source   : {ctx.source_key_count}")
 
 
 # ─── Étape 2 : Comparaison des sources ───────────────────────────────
@@ -234,15 +248,6 @@ def step2_compare_sources(ctx: PipelineContext) -> None:
 
 
 # ─── Étape 3 : Détection des coquilles source ────────────────────────
-
-
-def load_typos(path: Path = TYPHOS_PATH) -> list[dict]:
-    """Charge le dictionnaire des coquilles connues."""
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8") as fh:
-        data = json.load(fh)
-    return data.get("typos", [])
 
 
 def detect_typos_in_source(source_path: Path, typos: list[dict]) -> list[dict]:
@@ -293,7 +298,7 @@ def apply_typo_corrections(source_path: Path, typos_found: list[dict]) -> int:
 def step3_detect_typos(ctx: PipelineContext) -> None:
     """Détecte les coquilles source connues et propose correction."""
     step_banner(3, "Détection des coquilles source")
-    typos = load_typos()
+    typos = load_typos(path=TYPOS_PATH)
     if not typos:
         print("  Aucun dictionnaire de coquilles trouvé (source_typos.json absent).")
         return
@@ -370,22 +375,9 @@ def _load_source_for_render(source_path: Path) -> dict:
         return json.load(fh)
 
 
-def build_analysis_report(ctx: PipelineContext) -> str:
-    """Construit le rapport markdown consolidé des étapes 1-4."""
-    L: list[str] = []
-    L.append(
-        f"# Rapport d'analyse du pipeline — {ctx.new_source.name if ctx.new_source else '?'}\n"
-    )
-    date_str = (
-        ctx.new_import_folder.name.replace("_Import", "")
-        if ctx.new_import_folder
-        else "?"
-    )
-    L.append(f"- Date : {date_str}")
-    L.append(f"- Source : `{ctx.new_source}`\n")
-
-    # Section 1 — Source
-    L.append("## 1. Source détectée\n")
+def _section_source_analysis(ctx: PipelineContext) -> list[str]:
+    """Section 1 — Source détectée."""
+    L: list[str] = ["## 1. Source détectée\n"]
     L.append(f"- Nouvelle source : `{ctx.new_source}`")
     if ctx.new_import_folder:
         L.append(f"- Dossier import : `{ctx.new_import_folder.name}`")
@@ -396,40 +388,55 @@ def build_analysis_report(ctx: PipelineContext) -> str:
     if ctx.export_dir:
         L.append(f"- Dernier export : `{ctx.export_dir.name}`")
     if ctx.new_source:
-        with ctx.new_source.open(encoding="utf-8") as fh:
-            nkeys = len(json.load(fh))
+        # Sprint 2 - tâche 25 : utiliser ctx.source_key_count plutôt qu'une
+        # relecture du fichier source (I11).
+        nkeys = ctx.source_key_count or len(_load_source_for_render(ctx.new_source))
         L.append(f"- Clés nouvelle source : {nkeys}")
     L.append("")
+    return L
 
-    # Section 2 — Comparaison
-    L.append("## 2. Comparaison des sources\n")
+
+def _section_comparison_analysis(ctx: PipelineContext) -> list[str]:
+    """Section 2 — Comparaison des sources."""
+    L: list[str] = ["## 2. Comparaison des sources\n"]
     if ctx.comparison:
         L.append(render_comparison(ctx.comparison))
     else:
         L.append("_Pas de source précédente — comparaison ignorée._\n")
     L.append("")
+    return L
 
-    # Section 3 — Coquilles source
-    L.append("## 3. Coquilles source détectées\n")
+
+def _section_coquilles_analysis(ctx: PipelineContext) -> list[str]:
+    """Section 3 — Coquilles source détectées."""
+    L: list[str] = ["## 3. Coquilles source détectées\n"]
     if ctx.typos_found:
         L.append("| # | Coquille | Correction | Clés affectées |")
         L.append("|---:|---|---|---|")
         for i, entry in enumerate(ctx.typos_found, 1):
-            keys = ", ".join(f"`{k}`" for k in entry["keys"][:5])
-            extra = f" (+{len(entry['keys']) - 5})" if len(entry["keys"]) > 5 else ""
+            keys = ", ".join(f"`{k}`" for k in entry["keys"][:PREVIEW_LIMIT])
+            extra = (
+                f" (+{len(entry['keys']) - PREVIEW_LIMIT})"
+                if len(entry["keys"]) > PREVIEW_LIMIT
+                else ""
+            )
             L.append(
                 f"| {i} | `{entry['typo']}` | `{entry['correction']}` | {keys}{extra} |"
             )
         L.append("")
         L.append(
-            f"Corrections appliquées : {'oui ✅' if ctx.typos_corrected else 'non (voir sortie interactive)'}"
+            f"Corrections appliquées : "
+            f"{'oui ✅' if ctx.typos_corrected else 'non (voir sortie interactive)'}"
         )
     else:
         L.append("_Aucune coquille connue détectée._")
     L.append("")
+    return L
 
-    # Section 4 — Écart de traduction
-    L.append("## 4. Écart de traduction (vs dernier export)\n")
+
+def _section_gap_analysis(ctx: PipelineContext) -> list[str]:
+    """Section 4 — Écart de traduction (vs dernier export)."""
+    L: list[str] = ["## 4. Écart de traduction (vs dernier export)\n"]
     if ctx.gaps:
         L.append(render_gap(_load_source_for_render(ctx.new_source), ctx.gaps))
     else:
@@ -437,9 +444,12 @@ def build_analysis_report(ctx: PipelineContext) -> str:
             "_Aucun export existant ou aucune source précédente — écart non calculé._"
         )
     L.append("")
+    return L
 
-    # Section 5 — Plan d'action (aperçu)
-    L.append("## 5. Plan d'action (aperçu)\n")
+
+def _section_plan_action_analysis(ctx: PipelineContext) -> list[str]:
+    """Section 5 — Plan d'action (aperçu)."""
+    L: list[str] = ["## 5. Plan d'action (aperçu)\n"]
     if ctx.gaps:
         common_add = set.intersection(*(set(g.to_add) for g in ctx.gaps))
         common_rem = set.intersection(*(set(g.to_remove) for g in ctx.gaps))
@@ -454,13 +464,41 @@ def build_analysis_report(ctx: PipelineContext) -> str:
         overfilled_total = sum(len(g.over_filled) for g in ctx.gaps)
         L.append(f"- **Compléter** {incomplete_total} traduction(s) incomplète(s).")
         L.append(
-            f"- **Décider** du sort de {overfilled_total} traduction(s) sur-remplies (back-fill manuel)."
+            f"- **Décider** du sort de {overfilled_total} traduction(s) "
+            f"sur-remplies (back-fill manuel)."
         )
     else:
         L.append("_Plan d'action indisponible (pas d'écart calculé)._")
     L.append(f"\nProvider sélectionné : **{ctx.provider}**")
     L.append(f"Langues : **{', '.join(ctx.languages)}**")
     L.append("")
+    return L
+
+
+def build_analysis_report(ctx: PipelineContext) -> str:
+    """Construit le rapport markdown consolidé des étapes 1-4.
+
+    Assemble les 5 sections `_section_*` (Sprint 2 - tâche 17) en un seul
+    document markdown.
+    """
+    L: list[str] = []
+    L.append(
+        f"# Rapport d'analyse du pipeline — "
+        f"{ctx.new_source.name if ctx.new_source else '?'}\n"
+    )
+    date_str = (
+        ctx.new_import_folder.name.replace("_Import", "")
+        if ctx.new_import_folder
+        else "?"
+    )
+    L.append(f"- Date : {date_str}")
+    L.append(f"- Source : `{ctx.new_source}`\n")
+
+    L.extend(_section_source_analysis(ctx))
+    L.extend(_section_comparison_analysis(ctx))
+    L.extend(_section_coquilles_analysis(ctx))
+    L.extend(_section_gap_analysis(ctx))
+    L.extend(_section_plan_action_analysis(ctx))
     return "\n".join(L)
 
 
@@ -960,36 +998,22 @@ def step10_detect_misalignments(
 # ─── Étape 11 : Rapport consolidé final ────────────────────────────────
 
 
-def build_final_report(
-    ctx: PipelineContext,
-    export_dir: Path,
-    validation_report: ValidationReport | None,
-    misalignments: dict[str, list[dict]],
-) -> str:
-    """Construit le rapport markdown final consolidé (9 sections)."""
-    L: list[str] = []
-    L.append("# Rapport final du pipeline de traduction COP\n")
-    date_str = (
-        ctx.new_import_folder.name.replace("_Import", "")
-        if ctx.new_import_folder
-        else "?"
-    )
-    L.append(f"- Date : {date_str}")
-    L.append(f"- Source : `{ctx.new_source}`\n")
-
-    # Section 1 — Source
-    L.append("## 1. Source\n")
+def _section_source_final(ctx: PipelineContext) -> list[str]:
+    """Section 1 — Source (rapport final)."""
+    L: list[str] = ["## 1. Source\n"]
     if ctx.new_source:
-        with ctx.new_source.open(encoding="utf-8") as fh:
-            nkeys = len(json.load(fh))
+        nkeys = ctx.source_key_count or len(_load_source_for_render(ctx.new_source))
         L.append(f"- Fichier : `{ctx.new_source.name}`")
         L.append(f"- Clés : {nkeys}")
     if ctx.prev_source:
         L.append(f"- Source précédente : `{ctx.prev_source.name}`")
     L.append("")
+    return L
 
-    # Section 2 — Comparaison
-    L.append("## 2. Comparaison des sources\n")
+
+def _section_comparison_final(ctx: PipelineContext) -> list[str]:
+    """Section 2 — Comparaison des sources (rapport final)."""
+    L: list[str] = ["## 2. Comparaison des sources\n"]
     if ctx.comparison:
         c = ctx.comparison
         L.append(f"- Ajoutées : {len(c.added)}")
@@ -998,28 +1022,35 @@ def build_final_report(
     else:
         L.append("_Pas de comparaison (pas de source précédente)._")
     L.append("")
+    return L
 
-    # Section 3 — Coquilles source
-    L.append("## 3. Coquilles source\n")
+
+def _section_coquilles_final(ctx: PipelineContext) -> list[str]:
+    """Section 3 — Coquilles source (rapport final)."""
+    L: list[str] = ["## 3. Coquilles source\n"]
     if ctx.typos_found:
         L.append("| Coquille | Correction | Clés |")
         L.append("|---|---|---|")
         for entry in ctx.typos_found:
             L.append(
                 f"| `{entry['typo']}` | `{entry['correction']}` | "
-                f"{', '.join(entry['keys'][:5])} |"
+                f"{', '.join(entry['keys'][:PREVIEW_LIMIT])} |"
             )
     else:
         L.append("_Aucune coquille connue détectée._")
     L.append(
         f"\nCorrections appliquées : {'oui ✅' if ctx.typos_corrected else 'non'}\n"
     )
+    return L
 
-    # Section 4 — Écart de traduction
-    L.append("## 4. Écart de traduction\n")
+
+def _section_gap_final(ctx: PipelineContext) -> list[str]:
+    """Section 4 — Écart de traduction (rapport final)."""
+    L: list[str] = ["## 4. Écart de traduction\n"]
     if ctx.gaps:
         L.append(
-            "| Langue | Présentes | À ajouter | À supprimer | À modifier | Incomplètes | Sur-remplies |"
+            "| Langue | Présentes | À ajouter | À supprimer | À modifier | "
+            "Incomplètes | Sur-remplies |"
         )
         L.append("|---|---:|---:|---:|---:|---:|---:|")
         for g in ctx.gaps:
@@ -1030,15 +1061,22 @@ def build_final_report(
     else:
         L.append("_Écart non calculé._")
     L.append("")
+    return L
 
-    # Section 5 — Plan d'action
-    L.append("## 5. Plan d'action\n")
-    L.append(f"- Provider utilisé : **{ctx.provider}**")
-    L.append(f"- Langues traitées : {', '.join(ctx.languages)}")
-    L.append("")
 
-    # Section 6 — Traduction
-    L.append("## 6. Traduction\n")
+def _section_plan_final(ctx: PipelineContext) -> list[str]:
+    """Section 5 — Plan d'action (rapport final)."""
+    return [
+        "## 5. Plan d'action\n",
+        f"- Provider utilisé : **{ctx.provider}**",
+        f"- Langues traitées : {', '.join(ctx.languages)}",
+        "",
+    ]
+
+
+def _section_translation_final(ctx: PipelineContext, export_dir: Path) -> list[str]:
+    """Section 6 — Traduction (rapport final)."""
+    L: list[str] = ["## 6. Traduction\n"]
     L.append(f"- Dossier d'export : `{export_dir.name if export_dir else 'N/A'}`")
     if export_dir and export_dir.exists():
         files = list(export_dir.glob("translation_en_*.json"))
@@ -1047,9 +1085,14 @@ def build_final_report(
             count = len(json.loads(f.read_text(encoding="utf-8")))
             L.append(f"  - `{f.name}` : {count} clés")
     L.append("")
+    return L
 
-    # Section 7 — Validation
-    L.append("## 7. Validation\n")
+
+def _section_validation_final(
+    ctx: PipelineContext, validation_report: ValidationReport | None
+) -> list[str]:
+    """Section 7 — Validation (rapport final)."""
+    L: list[str] = ["## 7. Validation\n"]
     if validation_report:
         L.append("| Langue | Clés | Manquantes | Excédantes | Vides | Placeholders |")
         L.append("|---|---:|---:|---:|---:|---:|")
@@ -1067,12 +1110,18 @@ def build_final_report(
     else:
         L.append("_Validation non exécutée._")
     L.append("")
+    return L
 
-    # Section 8 — Mésalignements
-    L.append("## 8. Mésalignements\n")
+
+def _section_misalignments_final(
+    ctx: PipelineContext, misalignments: dict[str, list[dict]]
+) -> list[str]:
+    """Section 8 — Mésalignements (rapport final)."""
+    L: list[str] = ["## 8. Mésalignements\n"]
     total_misalign = sum(len(v) for v in misalignments.values()) if misalignments else 0
     L.append(
-        f"**{total_misalign} mésalignement(s) potentiel(s)** détecté(s) (heuristique, à vérifier manuellement).\n"
+        f"**{total_misalign} mésalignement(s) potentiel(s)** détecté(s) "
+        f"(heuristique, à vérifier manuellement).\n"
     )
     if misalignments:
         for lang, mism_list in misalignments.items():
@@ -1080,7 +1129,7 @@ def build_final_report(
                 L.append(f"### {lang.upper()} ({len(mism_list)})\n")
                 L.append("| Texte source | Clés | Traductions |")
                 L.append("|---|---|---|")
-                for m in mism_list[:20]:
+                for m in mism_list[:MAX_REPORT_ENTRIES]:
                     keys = ", ".join(m["keys"])
                     trans = " / ".join(
                         f"{k}={short_repr(v)}"
@@ -1088,9 +1137,12 @@ def build_final_report(
                     )
                     L.append(f"| {short_repr(m['source_text'])} | {keys} | {trans} |")
     L.append("")
+    return L
 
-    # Section 9 — Ordre
-    L.append("## 9. Ordre\n")
+
+def _section_order_final(ctx: PipelineContext, export_dir: Path) -> list[str]:
+    """Section 9 — Ordre (rapport final)."""
+    L: list[str] = ["## 9. Ordre\n"]
     if export_dir and export_dir.exists() and ctx.new_source:
         source_keys = list(json_load(ctx.new_source).keys())
         all_aligned = True
@@ -1115,6 +1167,39 @@ def build_final_report(
     else:
         L.append("_Vérification de l'ordre non disponible._")
     L.append("")
+    return L
+
+
+def build_final_report(
+    ctx: PipelineContext,
+    export_dir: Path,
+    validation_report: ValidationReport | None,
+    misalignments: dict[str, list[dict]],
+) -> str:
+    """Construit le rapport markdown final consolidé (9 sections).
+
+    Assemble les 9 sections `_section_*` (Sprint 2 - tâche 17) en un seul
+    document markdown.
+    """
+    L: list[str] = []
+    L.append("# Rapport final du pipeline de traduction COP\n")
+    date_str = (
+        ctx.new_import_folder.name.replace("_Import", "")
+        if ctx.new_import_folder
+        else "?"
+    )
+    L.append(f"- Date : {date_str}")
+    L.append(f"- Source : `{ctx.new_source}`\n")
+
+    L.extend(_section_source_final(ctx))
+    L.extend(_section_comparison_final(ctx))
+    L.extend(_section_coquilles_final(ctx))
+    L.extend(_section_gap_final(ctx))
+    L.extend(_section_plan_final(ctx))
+    L.extend(_section_translation_final(ctx, export_dir))
+    L.extend(_section_validation_final(ctx, validation_report))
+    L.extend(_section_misalignments_final(ctx, misalignments))
+    L.extend(_section_order_final(ctx, export_dir))
     return "\n".join(L)
 
 
@@ -1252,14 +1337,16 @@ def _run_pipeline_json(args: argparse.Namespace) -> int:
     if getattr(args, "no_cache", False):
         ctx.no_cache = True
 
-    print(
+    logger.info(
         "🚀 Pipeline de traduction COP — Phases 1-3 (analyse + exécution + validation)"
     )
-    print(f"   Provider : {ctx.provider} | Langues : {', '.join(ctx.languages)}")
+    logger.info(
+        "   Provider : %s | Langues : %s", ctx.provider, ", ".join(ctx.languages)
+    )
     if ctx.dry_run:
-        print("   Mode : dry-run (analyse seule, pas d'exécution)")
+        logger.info("   Mode : dry-run (analyse seule, pas d'exécution)")
     if ctx.no_cache:
-        print("   Cache service : désactivé (--no-cache)")
+        logger.info("   Cache service : désactivé (--no-cache)")
 
     try:
         step1_detect_sources(ctx)

@@ -493,3 +493,25 @@ Validation : 1008 tests OK, ruff propre, 7 fichiers modifiés (348 insertions, 1
 ### Sprint 2 — Refactoring & dette : ⬜ À faire
 ### Sprint 3 — Tests & documentation : ⬜ À faire
 ### Sprint 4 — Polish : ⬜ À faire
+
+### Sprint 2 — Refactoring & dette : ✅ Terminé (2026-07-13)
+
+12/13 tâches complétées. Score estimé après Sprint 2 : **~8.5/10**.
+
+| # | Tâche | Statut |
+|---|---|:---:|
+| 16 | Unifier load_typos(scope) | ✅ |
+| 17 | Extraire _section_* (4 rapports) | ✅ |
+| 18 | Introduire logging | 🟡 Partiel (logger ajouté, prints d'étapes conservés pour capsys) |
+| 19 | Annoter output_dir: Path | ✅ |
+| 20 | Compléter docstrings dropdown | ✅ |
+| 21 | Constantes nommées | ✅ |
+| 22 | Renommer TYPHOS_PATH → TYPOS_PATH | ✅ |
+| 23 | Supprimer confirmation redondante step6 | ✅ |
+| 24 | detect_missing_languages(existing_translations=) | ✅ |
+| 25 | Stocker ctx.source_key_count | ✅ |
+| 26 | Supprimer paramètre mort validation_results | ✅ |
+| 27 | output_format: Literal + auto fonctionnel | ✅ |
+| 28 | save_dropdown_xlsx: languages → lang_config | ✅ |
+
+Validation : 1008 tests OK, ruff propre, 6 fichiers modifiés.

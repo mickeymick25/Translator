@@ -185,7 +185,7 @@ def save_dropdown_xlsx(
     data: list[dict[str, str]],
     translations: dict[str, dict[str, str]],
     output_file: str | Path,
-    languages: dict[str, dict[str, str]],
+    lang_config: dict[str, dict[str, str]],
 ) -> None:
     """
     Generate a multi-sheet XLSX file with translations for each language.
@@ -197,7 +197,10 @@ def save_dropdown_xlsx(
         translations: Dictionary mapping language code to translation dict.
             Format: {lang_code: {origin_text: translated_text, ...}}
         output_file: Output file path.
-        languages: Language configuration dictionary.
+        lang_config: Language configuration dictionary (e.g. core.config.LANGUAGES).
+            Maps lang_code -> {name, code, target, source_col, ...}. Renommé en
+            Sprint 2 - tâche 28 pour éviter la confusion avec une liste de codes
+            langues (le paramètre est le dict de config, pas une liste).
 
     Raises:
         ImportError: If openpyxl is not installed.
@@ -218,7 +221,7 @@ def save_dropdown_xlsx(
     # de traduction non vide ; sinon on insère un marqueur `[NOT TRANSLATED]`
     # pour éviter un XLSX qui prétend être traduit à tort.
     sheets_created: list[str] = []
-    for lang_code, lang_info in languages.items():
+    for lang_code, lang_info in lang_config.items():
         if lang_code in ("en", "fr"):
             create_sheet = True
         else:
@@ -240,7 +243,7 @@ def save_dropdown_xlsx(
         origin = entry["origin"]
         context = entry["context"]
 
-        for lang_code, lang_info in languages.items():
+        for lang_code, lang_info in lang_config.items():
             sheet_title = lang_code.upper()
             if lang_code not in ("en", "fr") and not translations.get(lang_code):
                 # Feuille marqueur — pas de données par entrée
@@ -263,7 +266,7 @@ def save_dropdown_xlsx(
     logger.info(
         "Saved dropdown XLSX with %d entries across %d languages: %s",
         len(data),
-        len(languages),
+        len(lang_config),
         path.name,
     )
 
@@ -312,6 +315,7 @@ def load_dropdown_xlsx_all_sheets(path: Path) -> dict[str, dict[str, str]]:
 def detect_missing_languages(
     xlsx_path: Path,
     configured_langs: list[str],
+    existing_translations: dict[str, dict[str, str]] | None = None,
 ) -> list[str]:
     """Détecte les langues configurées absentes du XLSX source.
 
@@ -320,13 +324,20 @@ def detect_missing_languages(
     comme manquant.
 
     Args:
-        xlsx_path: Chemin du fichier XLSX à inspecter.
+        xlsx_path: Chemin du fichier XLSX à inspecter. Ignored si
+            `existing_translations` est fourni.
         configured_langs: Liste des codes langues configurés (ex : ['fr','cz','sk',...]).
+        existing_translations: Dict {LANG_UPPER: {origin: traduction}} déjà
+            chargé (typiquement par `load_dropdown_xlsx_all_sheets`). Si fourni,
+            évite une relecture du XLSX (Sprint 2 - tâche 24, I10).
 
     Returns:
         Liste triée des codes langues manquants (en minuscules).
     """
-    all_sheets = load_dropdown_xlsx_all_sheets(xlsx_path)
+    if existing_translations is None:
+        all_sheets = load_dropdown_xlsx_all_sheets(xlsx_path)
+    else:
+        all_sheets = existing_translations
     present = {lang.lower() for lang in all_sheets}
     missing = [
         lang

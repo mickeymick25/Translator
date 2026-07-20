@@ -142,10 +142,10 @@ def fake_typos_file(tmp_path):
 
 @pytest.fixture
 def patched_translator_dir(fake_translator_dir, monkeypatch):
-    """Monkeypatche pipeline.TRANSLATOR_DIR et TYPHOS_PATH vers le fs de test."""
+    """Monkeypatche pipeline.TRANSLATOR_DIR et TYPOS_PATH vers le fs de test."""
     monkeypatch.setattr(pipeline, "TRANSLATOR_DIR", fake_translator_dir)
     monkeypatch.setattr(
-        pipeline, "TYPHOS_PATH", fake_translator_dir / "source_typos.json"
+        pipeline, "TYPOS_PATH", fake_translator_dir / "source_typos.json"
     )
     return fake_translator_dir
 
@@ -599,7 +599,7 @@ class TestStep3DetectTypos:
         self, patched_translator_dir, fake_typos_file, monkeypatch, capsys
     ):
         """Source sans coquille connue → message OK."""
-        monkeypatch.setattr(pipeline, "TYPHOS_PATH", fake_typos_file)
+        monkeypatch.setattr(pipeline, "TYPOS_PATH", fake_typos_file)
         ctx = PipelineContext()
         step1_detect_sources(ctx)
         # La source en 10 contient "Hiearchy" — remplaçons-la par une source propre
@@ -615,7 +615,7 @@ class TestStep3DetectTypos:
         self, patched_translator_dir, fake_typos_file, monkeypatch, capsys
     ):
         """En dry-run, les coquilles sont détectées mais non corrigées."""
-        monkeypatch.setattr(pipeline, "TYPHOS_PATH", fake_typos_file)
+        monkeypatch.setattr(pipeline, "TYPOS_PATH", fake_typos_file)
         ctx = PipelineContext(dry_run=True)
         step1_detect_sources(ctx)
         original = json.loads(ctx.new_source.read_text(encoding="utf-8"))
@@ -632,7 +632,7 @@ class TestStep3DetectTypos:
         self, patched_translator_dir, fake_typos_file, monkeypatch, capsys
     ):
         """Confirmation oui → le fichier source est corrigé."""
-        monkeypatch.setattr(pipeline, "TYPHOS_PATH", fake_typos_file)
+        monkeypatch.setattr(pipeline, "TYPOS_PATH", fake_typos_file)
         ctx = PipelineContext(interactive=True)
         step1_detect_sources(ctx)
         with patch("builtins.input", return_value="y"):
@@ -646,7 +646,7 @@ class TestStep3DetectTypos:
         self, patched_translator_dir, fake_typos_file, monkeypatch, capsys
     ):
         """Confirmation non → le fichier source n'est pas modifié."""
-        monkeypatch.setattr(pipeline, "TYPHOS_PATH", fake_typos_file)
+        monkeypatch.setattr(pipeline, "TYPOS_PATH", fake_typos_file)
         ctx = PipelineContext(interactive=True)
         step1_detect_sources(ctx)
         original = json.loads(ctx.new_source.read_text(encoding="utf-8"))
@@ -700,7 +700,7 @@ class TestBuildAnalysisReport:
     def test_report_has_all_sections(
         self, patched_translator_dir, fake_typos_file, monkeypatch
     ):
-        monkeypatch.setattr(pipeline, "TYPHOS_PATH", fake_typos_file)
+        monkeypatch.setattr(pipeline, "TYPOS_PATH", fake_typos_file)
         ctx = PipelineContext(languages=["fr", "de"])
         step1_detect_sources(ctx)
         step2_compare_sources(ctx)
