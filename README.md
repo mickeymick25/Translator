@@ -66,8 +66,13 @@ COP_translations/
 │   │   ├── mode_translate_json.py   # Mode traduction JSON (avec checkpoint par chunk)
 │   │   ├── mode_translate_dropdowns.py # Mode génération dropdowns
 │   │   └── mode_analyze.py           # Mode analyse XLSX
-│   ├── tests/                       # 723 tests unitaires (94% couverture)
+│   ├── tests/                       # 1027 tests unitaires (94% couverture)
 │   ├── service.py                   # Point d'entrée CLI
+│   ├── pipeline.py                  # Pipeline orchestré JSON (dispatcher --mode)
+│   ├── pipeline_dropdown.py          # Pipeline orchestré dropdown (XLSX)
+│   ├── pipeline_common.py           # Shared kernel des deux pipelines
+│   ├── source_typos.json            # Dictionnaire des coquilles source connues
+│   ├── validate_translations.py     # Validation structurelle des traductions
 │   ├── benchmark_ollama.py          # Benchmark comparatif des modèles Ollama
 │   ├── Dockerfile
 │   ├── docker-compose.yml
@@ -231,6 +236,8 @@ python translator/pipeline.py --languages fr,de --provider ollama
 | `--prev-source PATH` | Override la détection de la source précédente | auto |
 | `--report PATH` | Chemin du rapport markdown d'analyse | stdout |
 | `--yes` / `-y` | Mode non-interactif (valide toutes les étapes clés) | `false` |
+| `--no-cache` | Désactive le cache du service (`.translation_cache.json`) | `false` |
+| `--mode json\|dropdown` | Force le mode du pipeline (auto-détecté par extension sinon) | auto |
 
 ### Gestion des clés modifiées (étape 6, interactive)
 
@@ -306,6 +313,21 @@ Le pipeline dropdown est un bounded context distinct du pipeline JSON :
 - `pipeline_common.py` : shared kernel (helpers partagés entre les deux pipelines)
 - `pipeline.py` : dispatcher unique (`--mode json` ou `dropdown`, auto-détection par défaut)
 - `pipeline_dropdown.py` : orchestration dropdown (les 11 étapes ci-dessus)
+
+### Docker
+
+Le service `pipeline` du `docker-compose.yml` expose les deux pipelines orchestrés dans un conteneur isolé (entrypoint `python pipeline.py`). Les volumes `./source`, `./output` et `../doc` sont montés.
+
+```bash
+# Pipeline JSON via Docker
+
+docker compose -f translator/docker-compose.yml run --rm pipeline --dry-run --languages fr,de
+
+# Pipeline dropdown via Docker
+docker compose -f translator/docker-compose.yml run --rm pipeline --mode dropdown --source /app/source/dropdown.xlsx --languages pt,es,hu --yes
+```
+
+Les variables d'environnement du service `pipeline` (`TRANSLATION_PROVIDER`, `OLLAMA_URL`, `OLLAMA_MODEL`, `DEEPL_API_KEY`, …) sont héritées du `docker-compose.yml` et surchargeables via l'environnement shell.
 
 ## Multi-Provider et Fallback
 
@@ -527,9 +549,12 @@ docker compose -f translator/docker-compose.yml run --rm lint
 | core/translator_factory.py | 101 | 11 | 89% |
 | modes/mode_translate_json.py | 159 | 40 | 75% |
 | modes/mode_translate_dropdowns.py | 195 | 3 | 98% |
-| **Total** | **1218** | **75** | **94%** |
+| pipeline.py | 746 | 48 | 94% |
+| pipeline_common.py | 81 | 1 | 99% |
+| pipeline_dropdown.py | 563 | 55 | 90% |
+| **Total** | **1390** | **104** | **93%** |
 
-**723 tests** — TDD pour toutes les fonctionnalités métier.
+**1027 tests** — TDD pour toutes les fonctionnalités métier.
 
 ## Qualité de code
 

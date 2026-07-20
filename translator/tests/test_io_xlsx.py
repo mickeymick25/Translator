@@ -493,3 +493,49 @@ class TestSaveDropdownXlsx:
         assert ws.cell(row=1, column=1).value == "Origin"
         assert ws.cell(row=1, column=2).value == "Traduction"
         assert ws.cell(row=1, column=3).value == "Contexte"
+
+
+# ─── Sprint 3 - tâche 29 : garde-fou openpyxl manquant (C8) ─────────────
+
+
+class TestOpenpyxlMissingGuards:
+    """Vérifie que les fonctions XLSX lèvent ImportError si openpyxl est None.
+
+    Ces tests mockent `core.io_xlsx.openpyxl` à None pour simuler un environnement
+    sans openpyxl (Docker minimal, environnement réduit). Corrige C8.
+    """
+
+    def test_load_dropdown_xlsx_all_sheets_raises_importerror(self, tmp_path):
+        from unittest.mock import patch
+
+        import core.io_xlsx as iox
+
+        # Crée un fichier XLSX valide pour que le chemin existe.
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        wb.active.title = "EN"
+        wb.active.append(["Origin", "Anglais", "Contexte"])
+        path = tmp_path / "dummy.xlsx"
+        wb.save(path)
+
+        with patch.object(iox, "openpyxl", None):
+            with pytest.raises(ImportError, match="openpyxl is required"):
+                iox.load_dropdown_xlsx_all_sheets(path)
+
+    def test_load_dropdown_xlsx_raises_importerror(self, tmp_path):
+        from unittest.mock import patch
+
+        import core.io_xlsx as iox
+
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        wb.active.title = "EN"
+        wb.active.append(["Origin", "Anglais", "Contexte"])
+        path = tmp_path / "dummy.xlsx"
+        wb.save(path)
+
+        with patch.object(iox, "openpyxl", None):
+            with pytest.raises(ImportError, match="openpyxl is required"):
+                iox.load_dropdown_xlsx(path)

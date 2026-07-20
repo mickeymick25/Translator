@@ -11,6 +11,7 @@ Couvre :
 
 import openpyxl
 import pytest
+from pathlib import Path
 from unittest.mock import patch
 
 
@@ -173,6 +174,42 @@ class TestDetectMissingLanguages:
         missing = detect_missing_languages(xlsx_3_langs, ["en", "fr", "sk"])
         assert missing == ["sk"]
 
+    def test_accepts_existing_translations_dict(self, xlsx_3_langs):
+        """Sprint 3 - tâche 29 : detect_missing_languages(existing_translations=).
+
+        Vérifie qu'on peut passer un dict déjà chargé au lieu d'un chemin XLSX,
+        évitant ainsi une relecture du fichier (Sprint 2 tâche 24, I10).
+        """
+        from core.io_xlsx import detect_missing_languages
+
+        existing = {"EN": {"Hello": "Hello"}, "FR": {"Hello": "Bonjour"}}
+        # On passe un chemin absent + le dict : le chemin ne doit pas être lu.
+        missing = detect_missing_languages(
+            Path("/does/not/exist.xlsx"),
+            ["fr", "cz", "sk"],
+            existing_translations=existing,
+        )
+        assert missing == ["cz", "sk"]
+        # Le chemin absent n'a pas été ouvert : pas d'exception FileNotFoundError.
+
+    def test_existing_translations_skips_xlsx_read(self, tmp_path):
+        """existing_translations=None force la lecture du XLSX ; fourni l'évite."""
+        from core.io_xlsx import detect_missing_languages
+
+        # Chemin réellement absent → doit lever FileNotFoundError si le XLSX
+        # est lu (existing_translations=None).
+        with pytest.raises(FileNotFoundError):
+            detect_missing_languages(
+                tmp_path / "absent.xlsx", ["fr"], existing_translations=None
+            )
+        # Même chemin absent mais avec existing_translations fourni → pas de lecture.
+        missing = detect_missing_languages(
+            tmp_path / "absent.xlsx",
+            ["fr", "sk"],
+            existing_translations={"FR": {"Hello": "Bonjour"}},
+        )
+        assert missing == ["sk"]
+
 
 # ═══ D4 : PipelineDropdownContext + parser + flags (TDD) ═══
 
@@ -215,11 +252,32 @@ class TestPipelineDropdownContext:
 class TestBuildParserDropdown:
     """Tests de build_parser_dropdown() — flags spécifiques dropdown."""
 
-    def test_dry_run_flag(self):
+    @pytest.mark.parametrize(
+        "flag,attr",
+        [
+            ("--dry-run", "dry_run"),
+            ("--yes", "yes"),
+            ("--retranslate-all", "retranslate_all"),
+            ("--no-cache", "no_cache"),
+        ],
+        ids=["dry_run", "yes", "retranslate_all", "no_cache"],
+    )
+    def test_boolean_flag_set_true(self, flag, attr):
         from pipeline_dropdown import build_parser_dropdown
 
-        args = build_parser_dropdown().parse_args(["--dry-run"])
-        assert args.dry_run is True
+        args = build_parser_dropdown().parse_args([flag])
+        assert getattr(args, attr) is True
+
+    @pytest.mark.parametrize(
+        "attr",
+        ["dry_run", "yes", "retranslate_all", "no_cache"],
+        ids=["dry_run", "yes", "retranslate_all", "no_cache"],
+    )
+    def test_boolean_flag_default_false(self, attr):
+        from pipeline_dropdown import build_parser_dropdown
+
+        args = build_parser_dropdown().parse_args([])
+        assert getattr(args, attr) is False
 
     def test_languages_flag(self):
         from pipeline_dropdown import build_parser_dropdown
@@ -239,29 +297,11 @@ class TestBuildParserDropdown:
         args = build_parser_dropdown().parse_args(["--source", "dropdown.xlsx"])
         assert args.source is not None
 
-    def test_yes_flag(self):
-        from pipeline_dropdown import build_parser_dropdown
-
-        args = build_parser_dropdown().parse_args(["--yes"])
-        assert args.yes is True
-
     def test_mode_flag(self):
         from pipeline_dropdown import build_parser_dropdown
 
         args = build_parser_dropdown().parse_args(["--mode", "dropdown"])
         assert args.mode == "dropdown"
-
-    def test_retranslate_all_flag(self):
-        from pipeline_dropdown import build_parser_dropdown
-
-        args = build_parser_dropdown().parse_args(["--retranslate-all"])
-        assert args.retranslate_all is True
-
-    def test_retranslate_all_default_false(self):
-        from pipeline_dropdown import build_parser_dropdown
-
-        args = build_parser_dropdown().parse_args([])
-        assert args.retranslate_all is False
 
     def test_retranslate_langs_flag(self):
         from pipeline_dropdown import build_parser_dropdown
@@ -274,18 +314,6 @@ class TestBuildParserDropdown:
 
         args = build_parser_dropdown().parse_args([])
         assert args.retranslate is None
-
-    def test_no_cache_flag(self):
-        from pipeline_dropdown import build_parser_dropdown
-
-        args = build_parser_dropdown().parse_args(["--no-cache"])
-        assert args.no_cache is True
-
-    def test_no_cache_default_false(self):
-        from pipeline_dropdown import build_parser_dropdown
-
-        args = build_parser_dropdown().parse_args([])
-        assert args.no_cache is False
 
     def test_format_flag(self):
         from pipeline_dropdown import build_parser_dropdown
@@ -436,22 +464,40 @@ class TestStep3DetectTypos:
         assert len(ctx.typos_found) == 1
         assert ctx.typos_found[0]["typo"] == "Hiearchy"
 
-    def test_scope_dropdown_detected(self):
+    @pytest.mark.parametrize(
+        "typos,entries,expected_typo,test_id",
+        [
+            # Entrée avec scope="dropdown" détectée dans un Origin
+            (
+                [
+                    {
+                        "typo": "Desactive",
+                        "correction": "Deactivate",
+                        "scope": "dropdown",
+                    }
+                ],
+                [{"origin": "Desactive button"}, {"origin": "Hello"}],
+                "Desactive",
+                "scope_dropdown",
+            ),
+            # Entrée sans champ scope → considérée comme "both" et détectée
+            (
+                [{"typo": "Parners", "correction": "Partners"}],
+                [{"origin": "Parners list"}],
+                "Parners",
+                "no_scope_defaults_both",
+            ),
+        ],
+        ids=["scope_dropdown_detected", "no_scope_defaults_both"],
+    )
+    def test_detect_typos_in_origins_scope_handling(
+        self, typos, entries, expected_typo, test_id
+    ):
         from pipeline_dropdown import detect_typos_in_origins
 
-        typos = [{"typo": "Desactive", "correction": "Deactivate", "scope": "dropdown"}]
-        entries = [{"origin": "Desactive button"}, {"origin": "Hello"}]
         found = detect_typos_in_origins(entries, typos)
         assert len(found) == 1
-        assert found[0]["typo"] == "Desactive"
-
-    def test_no_scope_defaults_both(self):
-        from pipeline_dropdown import detect_typos_in_origins
-
-        typos = [{"typo": "Parners", "correction": "Partners"}]
-        entries = [{"origin": "Parners list"}]
-        found = detect_typos_in_origins(entries, typos)
-        assert len(found) == 1
+        assert found[0]["typo"] == expected_typo
 
     def test_dry_run_no_correction(self, xlsx_with_typo, monkeypatch, capsys):
         from pipeline_dropdown import PipelineDropdownContext, step3_detect_typos
@@ -661,6 +707,49 @@ class TestStep6Prepopulate:
         mock_input.assert_not_called()
 
 
+class TestNextDatedDir:
+    """Tests de _next_dated_dir() — suffixe _runN sur écrasement (C6)."""
+
+    def test_returns_base_name_when_empty(self, tmp_path):
+        from pipeline_dropdown import _next_dated_dir
+
+        result = _next_dated_dir(tmp_path, "2026_07_20_Dropdown")
+        assert result == tmp_path / "2026_07_20_Dropdown"
+
+    def test_returns_base_name_when_not_exists(self, tmp_path):
+        from pipeline_dropdown import _next_dated_dir
+
+        result = _next_dated_dir(tmp_path, "absent_Dropdown")
+        assert result == tmp_path / "absent_Dropdown"
+
+    def test_appends_run2_when_folder_non_empty(self, tmp_path):
+        from pipeline_dropdown import _next_dated_dir
+
+        existing = tmp_path / "2026_07_20_Dropdown"
+        existing.mkdir()
+        (existing / "file.txt").write_text("x", encoding="utf-8")
+        result = _next_dated_dir(tmp_path, "2026_07_20_Dropdown")
+        assert result == tmp_path / "2026_07_20_run2_Dropdown"
+
+    def test_appends_run3_when_run2_also_non_empty(self, tmp_path):
+        from pipeline_dropdown import _next_dated_dir
+
+        for name in ("2026_07_20_Dropdown", "2026_07_20_run2_Dropdown"):
+            d = tmp_path / name
+            d.mkdir()
+            (d / "file.txt").write_text("x", encoding="utf-8")
+        result = _next_dated_dir(tmp_path, "2026_07_20_Dropdown")
+        assert result == tmp_path / "2026_07_20_run3_Dropdown"
+
+    def test_reuses_empty_existing_folder(self, tmp_path):
+        """Un dossier existant mais vide est réutilisé (pas de suffixe)."""
+        from pipeline_dropdown import _next_dated_dir
+
+        (tmp_path / "2026_07_20_Dropdown").mkdir()  # vide
+        result = _next_dated_dir(tmp_path, "2026_07_20_Dropdown")
+        assert result == tmp_path / "2026_07_20_Dropdown"
+
+
 class TestStep7Translate:
     """Tests de step7_translate() — traduction avec réutilisation colonne B."""
 
@@ -764,16 +853,63 @@ class TestStep7Translate:
 class TestStep8Reorder:
     """Tests de step8_reorder() — réordonnancement par Origin source."""
 
-    def test_reorders_xlsx_by_origin(self, xlsx_3_langs, capsys):
+    def test_reorders_xlsx_by_origin(self, xlsx_3_langs, tmp_path, capsys):
         from pipeline_dropdown import PipelineDropdownContext, step8_reorder
 
         ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["fr"])
         ctx.entries = [{"origin": "Hello"}, {"origin": "World"}]
-        ctx.output_dir = xlsx_3_langs.parent / "test_reorder_output"
-        ctx.output_dir.mkdir(exist_ok=True)
+        ctx.output_dir = tmp_path
+        # Fichier désordonné : World avant Hello, dans un contexte
+        import json
+
+        out_path = tmp_path / "dropdown_fr.json"
+        out_path.write_text(
+            json.dumps(
+                {
+                    "metadata": {"language": "FR"},
+                    "contexts": {"greeting": {"World": "Monde", "Hello": "Bonjour"}},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         step8_reorder(ctx)
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+        keys = list(data["contexts"]["greeting"].keys())
+        assert keys == ["Hello", "World"]  # ordre source respecté
         out = capsys.readouterr().out
         assert "ÉTAPE 8" in out
+        assert "réordonné" in out.lower()
+
+    def test_missing_file_skipped(self, xlsx_3_langs, tmp_path, capsys):
+        """Un fichier de langue absent est ignoré (pas d'erreur)."""
+        from pipeline_dropdown import PipelineDropdownContext, step8_reorder
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["fr", "pt"])
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.output_dir = tmp_path
+        # Seul fr existe ; pt est absent
+        import json
+
+        (tmp_path / "dropdown_fr.json").write_text(
+            json.dumps({"contexts": {"greeting": {"Hello": "Bonjour"}}}),
+            encoding="utf-8",
+        )
+        step8_reorder(ctx)
+        out = capsys.readouterr().out
+        assert "PT" in out  # message « fichier absent »
+        assert "ignoré" in out.lower()
+
+    def test_no_output_dir_skips(self, xlsx_3_langs, capsys):
+        """Sans output_dir, l'étape est ignorée."""
+        from pipeline_dropdown import PipelineDropdownContext, step8_reorder
+
+        ctx = PipelineDropdownContext(xlsx_path=xlsx_3_langs, languages=["fr"])
+        ctx.entries = [{"origin": "Hello"}]
+        ctx.output_dir = None
+        step8_reorder(ctx)
+        out = capsys.readouterr().out
+        assert "Pas de dossier de sortie" in out
 
     def test_dry_run_skips(self, xlsx_3_langs, capsys):
         from pipeline_dropdown import PipelineDropdownContext, step8_reorder
@@ -1088,6 +1224,86 @@ class TestRunPipelineDropdownE2E:
         err = capsys.readouterr().err
         assert "introuvable" in err.lower() or "FileNotFoundError" in err
 
+    def test_retranslate_flags_propagated_to_ctx(
+        self, xlsx_3_langs, tmp_path, capsys, monkeypatch
+    ):
+        """--retranslate-all, --retranslate, --no-cache, --prev-source remplissent le ctx."""
+        import pipeline_dropdown as pd
+
+        monkeypatch.setattr(pd, "TRANSLATOR_DIR", tmp_path)
+        monkeypatch.setattr(pd, "REPO_ROOT", tmp_path)
+        captured = {}
+        orig_step1 = pd.step1_detect_source
+
+        def spy_step1(ctx):
+            captured["retranslate_all"] = ctx.retranslate_all
+            captured["retranslate_langs"] = ctx.retranslate_langs
+            captured["no_cache"] = ctx.no_cache
+            captured["prev_xlsx_path"] = ctx.prev_xlsx_path
+            return orig_step1(ctx)
+
+        monkeypatch.setattr(pd, "step1_detect_source", spy_step1)
+        args = pd.build_parser_dropdown().parse_args(
+            [
+                "--dry-run",
+                "--source",
+                str(xlsx_3_langs),
+                "--prev-source",
+                str(xlsx_3_langs),
+                "--languages",
+                "pt",
+                "--retranslate-all",
+                "--retranslate",
+                "fr,de",
+                "--no-cache",
+            ]
+        )
+        rc = pd.run_pipeline_dropdown(args)
+        assert rc == 0
+        assert captured["retranslate_all"] is True
+        assert captured["retranslate_langs"] == ["fr", "de"]
+        assert captured["no_cache"] is True
+        assert captured["prev_xlsx_path"] == xlsx_3_langs
+
+    def test_confirmation_refused_returns_0(
+        self, xlsx_3_langs, tmp_path, capsys, monkeypatch
+    ):
+        """En interactif, refus de la confirmation step5 → rc=0 (arrêt propre)."""
+        import pipeline_dropdown as pd
+
+        monkeypatch.setattr(pd, "TRANSLATOR_DIR", tmp_path)
+        monkeypatch.setattr(pd, "REPO_ROOT", tmp_path)
+        args = pd.build_parser_dropdown().parse_args(
+            ["--source", str(xlsx_3_langs), "--languages", "pt"]
+        )
+        # Pas de --yes → interactif ; on répond « n » à la confirmation step5.
+        with patch("builtins.input", return_value="n"):
+            rc = pd.run_pipeline_dropdown(args)
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "arrêté" in out.lower() or "arrêt" in out.lower()
+
+    def test_translation_error_returns_3(
+        self, xlsx_3_langs, tmp_path, capsys, monkeypatch
+    ):
+        """Une exception durant step7/step8 → rc=3 (erreur traduction)."""
+        import pipeline_dropdown as pd
+
+        monkeypatch.setattr(pd, "TRANSLATOR_DIR", tmp_path)
+        monkeypatch.setattr(pd, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(
+            pd,
+            "_translate_dropdown_batch",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        args = pd.build_parser_dropdown().parse_args(
+            ["--yes", "--source", str(xlsx_3_langs), "--languages", "pt"]
+        )
+        rc = pd.run_pipeline_dropdown(args)
+        assert rc == 3
+        err = capsys.readouterr().err
+        assert "Erreur durant la traduction" in err
+
 
 class TestTranslateDropdownBatchReal:
     """Tests que _translate_dropdown_batch délègue au vrai moteur."""
@@ -1167,3 +1383,38 @@ class TestWriteDropdownOutput:
         ctx.translations_by_lang = {"pt": {"Hello": "Olá"}}
         _write_dropdown_output(ctx)
         assert not (tmp_path / "dropdown_pt.json").exists()
+
+    def test_auto_format_resolves_xlsx_for_xlsx_source(self, tmp_path):
+        """Sprint 3 - tâche 29 : auto déduit xlsx quand la source est .xlsx.
+
+        Corrige I12 (auto résolvait toujours en json avant Sprint 2 tâche 27).
+        """
+        from pipeline_dropdown import PipelineDropdownContext, _write_dropdown_output
+
+        ctx = PipelineDropdownContext(output_format="auto")
+        ctx.output_dir = tmp_path
+        ctx.languages = ["pt"]
+        ctx.xlsx_path = tmp_path / "source.xlsx"  # extension .xlsx
+        ctx.entries = [{"origin": "Hello", "context": "greeting"}]
+        ctx.translations_by_lang = {"pt": {"Hello": "Olá"}}
+        ctx.existing_translations = {}
+        _write_dropdown_output(ctx)
+        # auto + .xlsx → format xlsx → fichier dropdown_translations.xlsx
+        assert (tmp_path / "dropdown_translations.xlsx").exists()
+        assert not (tmp_path / "dropdown_pt.json").exists()
+
+    def test_auto_format_resolves_json_for_non_xlsx_source(self, tmp_path):
+        """Sprint 3 - tâche 29 : auto déduit json quand la source n'est pas .xlsx."""
+        from pipeline_dropdown import PipelineDropdownContext, _write_dropdown_output
+
+        ctx = PipelineDropdownContext(output_format="auto")
+        ctx.output_dir = tmp_path
+        ctx.languages = ["pt"]
+        ctx.xlsx_path = tmp_path / "source.json"  # extension non-xlsx
+        ctx.entries = [{"origin": "Hello", "context": "greeting"}]
+        ctx.translations_by_lang = {"pt": {"Hello": "Olá"}}
+        ctx.existing_translations = {}
+        _write_dropdown_output(ctx)
+        # auto + .json → format json → fichier dropdown_pt.json
+        assert (tmp_path / "dropdown_pt.json").exists()
+        assert not (tmp_path / "dropdown_translations.xlsx").exists()

@@ -494,6 +494,19 @@ Validation : 1008 tests OK, ruff propre, 7 fichiers modifiés (348 insertions, 1
 ### Sprint 3 — Tests & documentation : ⬜ À faire
 ### Sprint 4 — Polish : ⬜ À faire
 
+### Sprint 3 — Tests & documentation : ✅ Terminé (2026-07-20)
+
+4/4 tâches complétées. Score estimé après Sprint 3 : **~9/10**.
+
+| # | Tâche | Statut |
+|---|---|:---:|
+| 29 | 7 tests ciblés (R13) | ✅ |
+| 30 | Paramétrer les tests typos / mésalignements / validation | ✅ |
+| 31 | Mise à jour README.md et README.en.md (R16) | ✅ |
+| 32 | Vérifier couverture réelle avec pytest --cov | ✅ |
+
+Validation : 1037 tests OK (1008 initiaux + 29 nouveaux), ruff propre, couverture 93% (pipeline.py 94%, pipeline_common.py 99%, pipeline_dropdown.py 90%).
+
 ### Sprint 2 — Refactoring & dette : ✅ Terminé (2026-07-13)
 
 12/13 tâches complétées. Score estimé après Sprint 2 : **~8.5/10**.

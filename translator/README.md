@@ -77,7 +77,7 @@ translator/
 │   ├── mode_translate_json.py          # Mode translate-json (checkpoint par chunk)
 │   ├── mode_translate_dropdowns.py      # Mode translate-dropdowns
 │   └── mode_analyze.py                 # Mode analyze
-├── tests/                              # 723 tests (94% couverture)
+├── tests/                              # 1027 tests (94% couverture)
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt

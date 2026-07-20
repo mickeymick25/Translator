@@ -359,6 +359,67 @@ class TestLoadTypos:
         p.write_text(json.dumps({"other": []}), encoding="utf-8")
         assert load_typos(p) == []
 
+    @pytest.mark.parametrize(
+        "scope,expected_typos",
+        [
+            # scope="json" : n'inclut que les entrées json+both (exclut dropdown)
+            ("json", ["Both1", "JsonOnly", "NoScope"]),
+            # scope="dropdown" : n'inclut que les entrées dropdown+both
+            ("dropdown", ["Both1", "DropdownOnly", "NoScope"]),
+            # scope="both" (défaut explicite) : inclut tout
+            ("both", ["Both1", "JsonOnly", "DropdownOnly", "NoScope"]),
+        ],
+    )
+    def test_scope_filtering(self, tmp_path, scope, expected_typos):
+        """Sprint 3 - tâche 29 : load_typos(scope) filtre selon le champ scope.
+
+        - scope="json" retient les entrées dont scope ∈ {json, both}.
+        - scope="dropdown" retient celles dont scope ∈ {dropdown, both}.
+        - scope="both" (défaut) retourne tout.
+        - Une entrée sans champ scope est considérée comme "both".
+        """
+        p = tmp_path / "scoped_typos.json"
+        p.write_text(
+            json.dumps(
+                {
+                    "typos": [
+                        {"typo": "Both1", "correction": "C", "scope": "both"},
+                        {"typo": "JsonOnly", "correction": "C", "scope": "json"},
+                        {
+                            "typo": "DropdownOnly",
+                            "correction": "C",
+                            "scope": "dropdown",
+                        },
+                        # Pas de champ scope → défaut "both"
+                        {"typo": "NoScope", "correction": "C"},
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        typos = load_typos(p, scope=scope)
+        found = sorted(t["typo"] for t in typos)
+        assert found == sorted(expected_typos)
+
+    def test_scope_defaults_to_both(self, tmp_path):
+        """Sans argument scope, load_typos retourne toutes les entrées."""
+        p = tmp_path / "scoped_typos.json"
+        p.write_text(
+            json.dumps(
+                {
+                    "typos": [
+                        {"typo": "A", "correction": "C", "scope": "json"},
+                        {"typo": "B", "correction": "C", "scope": "dropdown"},
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        typos = load_typos(p)
+        assert sorted(t["typo"] for t in typos) == ["A", "B"]
+
 
 # ─── TestDetectTyposInSource ────────────────────────────────────────
 
@@ -550,6 +611,18 @@ class TestStep1DetectSources:
         assert ctx.export_dir is None
         captured = capsys.readouterr().out
         assert "Aucun dossier *_Export" in captured
+
+    def test_source_key_count_stored_in_step1(self, patched_translator_dir, capsys):
+        """Sprint 3 - tâche 29 : ctx.source_key_count est calculé à l'étape 1.
+
+        Évite une relecture de la source dans les rapports (I11, Sprint 2 tâche 25).
+        """
+        ctx = PipelineContext()
+        step1_detect_sources(ctx)
+        # La source en 10.json du fixture contient 4 clés (K1, K2, K4, K5)
+        assert ctx.source_key_count == 4
+        out = capsys.readouterr().out
+        assert "4" in out
 
 
 # ─── TestStep2CompareSources ────────────────────────────────────────
@@ -794,10 +867,6 @@ class TestStep5ReportAndConfirm:
 class TestBuildParser:
     """Tests de build_parser() — arguments et valeurs par défaut."""
 
-    def test_dry_run_default_false(self):
-        args = build_parser().parse_args([])
-        assert args.dry_run is False
-
     def test_dry_run_flag(self):
         args = build_parser().parse_args(["--dry-run"])
         assert args.dry_run is True
@@ -831,17 +900,23 @@ class TestBuildParser:
         args = build_parser().parse_args(["--source", str(p)])
         assert args.source == p
 
-    def test_yes_short_flag(self):
-        args = build_parser().parse_args(["-y"])
+    @pytest.mark.parametrize(
+        "flag",
+        ["-y", "--yes"],
+        ids=["short", "long"],
+    )
+    def test_yes_flag(self, flag):
+        args = build_parser().parse_args([flag])
         assert args.yes is True
 
-    def test_yes_long_flag(self):
-        args = build_parser().parse_args(["--yes"])
-        assert args.yes is True
-
-    def test_yes_default_false(self):
+    @pytest.mark.parametrize(
+        "attr",
+        ["dry_run", "yes"],
+        ids=["dry_run", "yes"],
+    )
+    def test_boolean_flag_default_false(self, attr):
         args = build_parser().parse_args([])
-        assert args.yes is False
+        assert getattr(args, attr) is False
 
     def test_report_default_none(self):
         args = build_parser().parse_args([])
@@ -1448,12 +1523,44 @@ class TestStep9Validate:
 class TestDetectMisalignments:
     """Tests de detect_misalignments() — heuristique token overlap intra-langue."""
 
-    def test_no_misalignment_when_identical_translations(self):
-        """Deux clés, même source, traductions identiques → pas de mésalignement."""
-        source = {"K1": "Hello", "K2": "Hello"}
-        translation = {"K1": "Bonjour", "K2": "Bonjour"}
-        result = detect_misalignments(source, translation, "fr")
-        assert result == []
+    @pytest.mark.parametrize(
+        "source,translation,test_id",
+        [
+            # Deux clés, même source, traductions identiques → pas de mésalignement
+            (
+                {"K1": "Hello", "K2": "Hello"},
+                {"K1": "Bonjour", "K2": "Bonjour"},
+                "identical",
+            ),
+            # Traductions différentes mais partageant des mots → pas de mésalignement
+            (
+                {"K1": "Hello world", "K2": "Hello world"},
+                {"K1": "Bonjour monde", "K2": "Bonjour le monde"},
+                "shared_tokens",
+            ),
+            # Chaque clé a un texte source unique → pas de groupe → pas de mésalignement
+            (
+                {"K1": "Hello", "K2": "World"},
+                {"K1": "Bonjour", "K2": "Monde"},
+                "unique_source",
+            ),
+            # Les traductions vides ne sont pas comparées
+            (
+                {"K1": "Hello", "K2": "Hello"},
+                {"K1": "Bonjour", "K2": ""},
+                "empty_translation",
+            ),
+        ],
+        ids=[
+            "identical_translations",
+            "shared_tokens",
+            "unique_source",
+            "empty_translations",
+        ],
+    )
+    def test_no_misalignment_cases(self, source, translation, test_id):
+        """Cas ne devant produire aucun mésalignement (factorisé via parametrize)."""
+        assert detect_misalignments(source, translation, "fr") == []
 
     def test_misalignment_when_divergent_translations(self):
         """Deux clés, même source, traductions sans mot commun → mésalignement."""
@@ -1463,26 +1570,6 @@ class TestDetectMisalignments:
         assert len(result) == 1
         assert result[0]["source_text"] == "Hello"
         assert {"K1", "K2"} == set(result[0]["keys"])
-
-    def test_no_misalignment_with_shared_tokens(self):
-        """Traductions différentes mais partageant des mots → pas de mésalignement."""
-        source = {"K1": "Hello world", "K2": "Hello world"}
-        translation = {"K1": "Bonjour monde", "K2": "Bonjour le monde"}
-        result = detect_misalignments(source, translation, "fr")
-        assert result == []
-
-    def test_no_grouping_when_unique_source(self):
-        """Chaque clé a un texte source unique → pas de groupe → pas de mésalignement."""
-        source = {"K1": "Hello", "K2": "World"}
-        translation = {"K1": "Bonjour", "K2": "Monde"}
-        assert detect_misalignments(source, translation, "fr") == []
-
-    def test_ignores_empty_translations(self):
-        """Les traductions vides ne sont pas comparées."""
-        source = {"K1": "Hello", "K2": "Hello"}
-        translation = {"K1": "Bonjour", "K2": ""}
-        result = detect_misalignments(source, translation, "fr")
-        assert result == []
 
     def test_multiple_source_groups(self):
         """Plusieurs groupes source divergents signalés séparément."""
