@@ -7,15 +7,8 @@ cassait sur le JSON minifié, les objets imbriqués et les clés contenant `":"`
 """
 
 import json
-import sys
-from pathlib import Path
 
-# validate_translations.py vit à la racine du dépôt (hors translator/).
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-import validate_translations  # noqa: E402
+import validate_translations
 
 
 # ─── _detect_duplicate_keys (C7 / R9) ─────────────────────────────────

@@ -11,24 +11,21 @@ avec les conventions de la suite existante (test_cli, test_translator, ...).
 """
 
 import json
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 # compare_sources.py et analyze_translation_gap.py vivent à la racine du dépôt
-# (hors translator/). On ajoute la racine au sys.path pour les rendre
-# importables. En Docker (seul translator/ est monté), l'import échoue et
-# importorskip saute proprement toute la classe de tests.
+# (hors translator/). En Docker (seul translator/ est monté), l'import
+# échoue et importorskip saute proprement toute la classe de tests. Le
+# sys.path setup est géré par conftest.py (Sprint 4 - tâche 3).
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
 pytest.importorskip("compare_sources")
 pytest.importorskip("analyze_translation_gap")
 
-import pipeline  # noqa: E402
-from pipeline import (  # noqa: E402
+import pipeline  # noqa: E402  (après importorskip ci-dessus)
+from pipeline import (  # noqa: E402  (après importorskip ci-dessus)
     PipelineContext,
     _latest_export_dir,
     _list_import_folders,
@@ -59,7 +56,7 @@ from pipeline import (  # noqa: E402
     step11_final_report,
     step_banner,
 )
-from pipeline import detect_source_kind  # noqa: E402
+from pipeline import detect_source_kind  # noqa: E402  (après importorskip)
 
 # ─── Fixtures : arborescence de test ────────────────────────────────
 

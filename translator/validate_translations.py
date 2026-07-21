@@ -36,7 +36,10 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from pipeline_common import PLACEHOLDER_PATTERNS  # noqa: E402  (C14)
+from pipeline_common import (
+    PLACEHOLDER_PATTERNS,
+    json_load,
+)  # (C14) (Sprint 4 - tâche 5)
 
 DEFAULT_LANGUAGES = ["ar", "cz", "de", "fr", "it", "sk", "pt", "es", "hu"]
 
@@ -60,18 +63,11 @@ def _latest_folder(parent: Path, suffix: str) -> Path | None:
     return candidates[0] if candidates else None
 
 
-def load_json(filepath):
-    """Load a JSON file and return as dict.
-
-    Raises ValueError si le JSON n'est pas un objet (C13).
-    """
-    with open(filepath, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"Source {filepath} n'est pas un objet JSON (type: {type(data).__name__})"
-        )
-    return data
+# Sprint 4 - tâche 5 : `load_json` est maintenant un alias de
+# `pipeline_common.json_load` (référence centralisée). L'alias préserve
+# l'API publique du module (`load_json` est appelé dans `validate_lang`,
+# `validate`, `main`, et par les tests).
+load_json = json_load
 
 
 def extract_placeholders(text):

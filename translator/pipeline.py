@@ -60,8 +60,11 @@ from pipeline_common import (  # noqa: E402
     json_write,
     load_typos,
     logger,
+    parse_languages_arg,
+    section_separator,
     short_repr,
     step_banner,
+    write_report,
 )
 
 from analyze_translation_gap import LangGap, analyze_export  # noqa: E402
@@ -511,7 +514,7 @@ def step5_report_and_confirm(ctx: PipelineContext) -> bool:
     report_md = build_analysis_report(ctx)
 
     if ctx.report_path:
-        ctx.report_path.write_text(report_md, encoding="utf-8")
+        write_report(report_md, ctx.report_path)
         print(f"  Rapport écrit : {ctx.report_path}")
     else:
         print(report_md)
@@ -522,9 +525,9 @@ def step5_report_and_confirm(ctx: PipelineContext) -> bool:
     if not ctx.interactive:
         return True
 
-    print("\n" + "─" * 70)
+    print("\n" + section_separator("─"))
     print("  ÉTAPE CLÉ — Confirmer pour poursuivre vers la traduction (étapes 6-11).")
-    print("─" * 70)
+    print(section_separator("─"))
     return confirm(ctx, "  Poursuivre ?", default=False)
 
 
@@ -721,9 +724,9 @@ def step6_prepopulate_and_manage(ctx: PipelineContext) -> Path | None:
         print("  Aucune clé modifiée à examiner.")
 
     # 4. Confirmation [ÉTAPE CLÉ]
-    print("\n" + "─" * 70)
+    print("\n" + section_separator("─"))
     print("  ÉTAPE CLÉ — Confirmer avant de lancer la traduction (étapes 7-8).")
-    print("─" * 70)
+    print(section_separator("─"))
     if confirm(ctx, "  Lancer la traduction ?", default=True):
         print("  ✅ Confirmé.")
         return new_dir
@@ -1219,9 +1222,8 @@ def step11_final_report(
     report_md = build_final_report(ctx, export_dir, validation_report, misalignments)
     date_str = datetime.now().strftime("%Y_%m_%d")
     doc_dir = REPO_ROOT / "doc"
-    doc_dir.mkdir(exist_ok=True)
     path = doc_dir / f"{date_str}_Pipeline_Report.md"
-    path.write_text(report_md, encoding="utf-8")
+    write_report(report_md, path)
     print(f"  Rapport final écrit : {path}")
     return path
 
@@ -1333,7 +1335,7 @@ def _run_pipeline_json(args: argparse.Namespace) -> int:
     if args.prev_source:
         ctx.prev_source = args.prev_source
     if args.languages:
-        ctx.languages = [lg.strip() for lg in args.languages.split(",") if lg.strip()]
+        ctx.languages = parse_languages_arg(args.languages)
     if getattr(args, "no_cache", False):
         ctx.no_cache = True
 

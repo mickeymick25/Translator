@@ -3,11 +3,25 @@ Shared fixtures for the COP translation service tests.
 """
 
 import json
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
+# ─── sys.path setup (Sprint 4 - tâche 3) ─────────────────────────────
+# Ajoute la racine du dépôt et translator/ au sys.path une fois pour toutes
+# au chargement de conftest.py (exécuté par pytest avant tout test). Cela
+# rend superflu le sys.path.insert manuel dans chaque fichier de test et
+# permet de retirer les commentaires noqa E402 dans les tests. Les scripts
+# de production (pipeline.py, pipeline_dropdown.py) conservent leur propre
+# setup pour l'exécution standalone (`python translator/pipeline.py`).
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_TRANSLATOR_DIR = Path(__file__).resolve().parent.parent
+for _p in (str(_REPO_ROOT), str(_TRANSLATOR_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 # ─── Fixtures: Filesystem ─────────────────────────────────────────
 

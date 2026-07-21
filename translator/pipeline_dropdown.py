@@ -40,7 +40,10 @@ from pipeline_common import (  # noqa: E402, F401
     confirm,
     load_typos,
     logger,
+    parse_languages_arg,
+    section_separator,
     step_banner,
+    write_report,
 )
 
 try:
@@ -418,9 +421,9 @@ def step5_report_and_confirm(ctx: PipelineDropdownContext) -> bool:
         return False
     if not ctx.interactive:
         return True
-    print("\n" + "─" * 70)
+    print("\n" + section_separator("─"))
     print("  ÉTAPE CLÉ — Confirmer pour poursuivre vers la traduction (étapes 6-11).")
-    print("─" * 70)
+    print(section_separator("─"))
     return confirm(ctx, "  Poursuivre ?", default=False)
 
 
@@ -985,9 +988,8 @@ def step11_final_report_dropdown(
     )
     date_str = datetime.now().strftime("%Y_%m_%d")
     doc_dir = REPO_ROOT / "doc"
-    doc_dir.mkdir(exist_ok=True)
     path = doc_dir / f"{date_str}_Pipeline_Dropdown_Report.md"
-    path.write_text(report, encoding="utf-8")
+    write_report(report, path)
     print(f"  Rapport final écrit : {path}")
     return path
 
@@ -1018,7 +1020,7 @@ def run_pipeline_dropdown(args: argparse.Namespace) -> int:
     if getattr(args, "prev_source", None):
         ctx.prev_xlsx_path = Path(args.prev_source)
     if getattr(args, "languages", None):
-        ctx.languages = [lg.strip() for lg in args.languages.split(",") if lg.strip()]
+        ctx.languages = parse_languages_arg(args.languages)
     if getattr(args, "retranslate", None):
         ctx.retranslate_langs = [
             lg.strip() for lg in args.retranslate.split(",") if lg.strip()

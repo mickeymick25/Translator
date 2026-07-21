@@ -494,6 +494,22 @@ Validation : 1008 tests OK, ruff propre, 7 fichiers modifiés (348 insertions, 1
 ### Sprint 3 — Tests & documentation : ⬜ À faire
 ### Sprint 4 — Polish : ⬜ À faire
 
+### Sprint 4 — Polish : ✅ Terminé (2026-07-21)
+
+4/5 tâches complétées (1 partielle). Score estimé après Sprint 4 : **~9.2/10**.
+
+| # | Tâche | Statut |
+|---|---|:---:|
+| 33 | Extraire `parse_languages_arg`, `truncate`, `write_report` dans `pipeline_common` | ✅ |
+| 34 | `Comparison.__post_init__` qui appelle `compute()` | ✅ |
+| 35 | Supprimer les `noqa: E402` via `conftest.py` | 🟡 Partiel |
+| 36 | Migrer `print("─" * 70)` vers `section_separator()` | ✅ |
+| 37 | Centraliser les `load_json` en une seule dans `pipeline_common` | ✅ |
+
+Validation : 1037 tests OK, ruff propre, 8 fichiers modifiés.
+
+**Détail tâche 35 (partielle)** : `sys.path` setup ajouté à `translator/tests/conftest.py` ; `test_validate_translations.py` nettoyé (sys.path + noqa E402 supprimés) ; `test_pipeline.py` : sys.path supprimé (conftest gère) mais `# noqa: E402` conservé sur `import pipeline` car `pytest.importorskip(...)` doit précéder l'import (E402 inévitable). `validate_translations.py` : noqa E402 supprimé (import en tête de fichier). `pipeline.py` et `pipeline_dropdown.py` : sys.path setup + noqa E402 **conservés** car nécessaires à l'exécution standalone documentée (`python translator/pipeline.py` — `compare_sources.py` et `analyze_translation_gap.py` vivent à la racine du dépôt, hors `translator/`, et nécessitent `REPO_ROOT` dans `sys.path`).
+
 ### Sprint 3 — Tests & documentation : ✅ Terminé (2026-07-20)
 
 4/4 tâches complétées. Score estimé après Sprint 3 : **~9/10**.

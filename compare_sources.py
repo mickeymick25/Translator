@@ -27,22 +27,24 @@ from pathlib import Path
 
 # C14 : PLACEHOLDER_RE partagé via pipeline_common. Import tolérant pour ne
 # pas casser l'usage standalone de compare_sources.py hors translator/.
+# Sprint 4 - tâche 5 : json_load (ex-load_json local) partagé via
+# pipeline_common, avec fallback pour l'usage standalone.
 try:
-    from pipeline_common import PLACEHOLDER_RE  # noqa: E402
+    from pipeline_common import PLACEHOLDER_RE, json_load as load_json  # noqa: E402
 except ImportError:
     PLACEHOLDER_RE = re.compile(r"%[sd]|\{[^}]+\}|<[^>]+>|\{[0-9]+\}")
 
+    def load_json(path: Path) -> dict:
+        with path.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"Source {path} n'est pas un objet JSON (type: {type(data).__name__})"
+            )
+        return data
+
+
 ICU_RE = re.compile(r"\{[^}]+,\s*(plural|select|selectordinal)", re.I)
-
-
-def load_json(path: Path) -> dict:
-    with path.open(encoding="utf-8") as fh:
-        data = json.load(fh)
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"Source {path} n'est pas un objet JSON (type: {type(data).__name__})"
-        )
-    return data
 
 
 def prefix_of(key: str) -> str:
@@ -64,6 +66,12 @@ class Comparison:
     removed: list[str] = field(default_factory=list)
     modified: list[tuple[str, str, str]] = field(default_factory=list)  # key, old, new
     unchanged: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # Sprint 4 - polish : auto-compute après construction pour éviter
+        # d'oublier l'appel explicite à `compute()`. `compare()` et les
+        # constructeurs directs n'ont plus besoin de l'appeler.
+        self.compute()
 
     def compute(self) -> "Comparison":
         old_keys = set(self.old)
@@ -249,10 +257,9 @@ def compare(old_path: Path, new_path: Path) -> Comparison:
     """Charge deux fichiers JSON et retourne un Comparison calculé.
 
     Helper d'usage programmatique (depuis le pipeline). Ne modifie aucun fichier.
+    Le `compute()` est déclenché automatiquement par `Comparison.__post_init__`.
     """
-    return Comparison(
-        old_path, new_path, load_json(old_path), load_json(new_path)
-    ).compute()
+    return Comparison(old_path, new_path, load_json(old_path), load_json(new_path))
 
 
 def comparison_to_dict(c: Comparison) -> dict:

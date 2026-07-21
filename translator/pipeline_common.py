@@ -140,9 +140,9 @@ def confirm(ctx: BasePipelineContext, prompt: str, default: bool = False) -> boo
 
 def step_banner(num: int, title: str) -> None:
     """Affiche un bandeau d'étape standardisé."""
-    print("\n" + "═" * BANNER_WIDTH)
+    print("\n" + section_separator("═"))
     print(f"  ÉTAPE {num} — {title}")
-    print("═" * BANNER_WIDTH)
+    print(section_separator("═"))
 
 
 # ─── Coquilles source (Sprint 2 - tâche 16 : load_typos unifié) ─────
@@ -197,9 +197,23 @@ def backup_translation_file(path: Path) -> Path:
 
 
 def json_load(path: Path) -> dict:
-    """Charge un fichier JSON en dict."""
+    """Charge un fichier JSON en dict.
+
+    Sprint 4 - tâche 5 : version de référence centralisée. Les autres
+    modules (`compare_sources`, `analyze_translation_gap`, `validate_translations`)
+    importent cette fonction (avec fallback pour usage standalone hors
+    `translator/`).
+
+    Raises:
+        ValueError: si le JSON n'est pas un objet dict (C13).
+    """
     with path.open(encoding="utf-8") as fh:
-        return json.load(fh)
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"Source {path} n'est pas un objet JSON (type: {type(data).__name__})"
+        )
+    return data
 
 
 def json_write(path: Path, data: dict) -> None:
@@ -210,5 +224,54 @@ def json_write(path: Path, data: dict) -> None:
 
 def short_repr(v) -> str:
     """Représentation courte d'une valeur pour l'affichage interactif."""
+    return truncate(v, length=80)
+
+
+# ─── Helpers partagés (Sprint 4 - polish) ─────────────────────────────
+
+
+def parse_languages_arg(s: str | None) -> list[str]:
+    """Parse une chaîne "fr,de" en liste ["fr", "de"].
+
+    Args:
+        s: Chaîne CSV (ex : "fr,de") ou `None`.
+
+    Returns:
+        Liste des codes non vides, sans espaces autour. Liste vide si `s`
+        est `None` ou vide.
+    """
+    if not s:
+        return []
+    return [lg.strip() for lg in s.split(",") if lg.strip()]
+
+
+def truncate(v, length: int = 100) -> str:
+    """Tronque une valeur à `length` caractères, en ajoutant "..." si coupée.
+
+    Généralisation paramétrable de `short_repr` (80) / `compare_sources.short`
+    (120) / `analyze_translation_gap.short` (100). Les newlines sont replacées
+    par des espaces pour préserver l'affichage sur une ligne.
+    """
     s = str(v).replace("\n", " ")
-    return s[:80] + "..." if len(s) > 80 else s
+    if len(s) > length:
+        return s[: length - 3] + "..."
+    return s
+
+
+def write_report(content: str, path: Path) -> Path:
+    """Écrit un rapport markdown sur disque et retourne le chemin.
+
+    Crée les répertoires parents si nécessaire. Utilisé par `step5` (rapport
+    d'analyse) et `step11` (rapport final) des deux pipelines.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def section_separator(char: str = "─", width: int = BANNER_WIDTH) -> str:
+    """Retourne une chaîne de séparation de largeur `width` (défaut BANNER_WIDTH).
+
+    Utilisé pour les bandeaux de [ÉTAPE CLÉ] intermédiaires dans les pipelines.
+    """
+    return char * width

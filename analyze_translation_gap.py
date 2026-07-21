@@ -29,15 +29,20 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Sprint 4 - tâche 5 : json_load partagé via pipeline_common, avec fallback
+# pour l'usage standalone d'analyze_translation_gap.py hors translator/.
+try:
+    from pipeline_common import json_load as load_json  # noqa: E402
+except ImportError:
 
-def load_json(path: Path) -> dict:
-    with path.open(encoding="utf-8") as fh:
-        data = json.load(fh)
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"Source {path} n'est pas un objet JSON (type: {type(data).__name__})"
-        )
-    return data
+    def load_json(path: Path) -> dict:
+        with path.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"Source {path} n'est pas un objet JSON (type: {type(data).__name__})"
+            )
+        return data
 
 
 def is_empty(v) -> bool:
