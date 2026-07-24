@@ -67,7 +67,7 @@ from pipeline_common import (  # noqa: E402
     write_report,
 )
 
-from analyze_translation_gap import LangGap, analyze_export  # noqa: E402
+from analyze_translation_gap import LangGap  # noqa: E402
 from analyze_translation_gap import render as render_gap  # noqa: E402
 from compare_sources import Comparison, compare  # noqa: E402
 from compare_sources import render as render_comparison  # noqa: E402
@@ -340,9 +340,26 @@ def step4_analyze_gap(ctx: PipelineContext) -> None:
             "  ⚠️  Étape ignorée (pas de source précédente pour le calcul des 'modify')."
         )
         return
-    ctx.gaps = analyze_export(
-        ctx.new_source, ctx.prev_source, ctx.export_dir, ctx.languages
-    )
+    # Gérer les langues dont le fichier de traduction n'existe pas encore
+    # (cas d'une nouvelle langue comme pl)
+    from analyze_translation_gap import analyze, LangGap
+    from compare_sources import load_json
+    src = load_json(ctx.new_source)
+    old_src = load_json(ctx.prev_source)
+    ctx.gaps = []
+    for lang in ctx.languages:
+        tpath = ctx.export_dir / f"translation_en_{lang}.json"
+        if tpath.exists():
+            ctx.gaps.append(analyze(lang, tpath, src, old_src))
+        else:
+            # Nouvelle langue : toutes les clés à traduire
+            print(f"  {lang.upper()}: nouveau — {len(src)} clés à traduire (pas de fichier précédent)")
+            ctx.gaps.append(LangGap(
+                lang=lang, file=tpath, count=0,
+                to_add=sorted(src.keys()),
+                to_remove=[], to_modify=[],
+                incomplete=[], over_filled=[],
+            ))
     print(f"  Export analysé   : {ctx.export_dir.name}")
     print(f"  Langues          : {', '.join(ctx.languages)}\n")
     print(

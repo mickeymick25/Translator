@@ -25,6 +25,7 @@ LANGUAGES: Dict[str, Dict[str, str]] = {
     "pt": {"name": "Portugais", "code": "PT", "target": "pt", "source_col": "origin"},
     "es": {"name": "Espagnol", "code": "ES", "target": "es", "source_col": "origin"},
     "hu": {"name": "Hongrois", "code": "HU", "target": "hu", "source_col": "origin"},
+    "pl": {"name": "Polonais", "code": "PL", "target": "pl", "source_col": "origin"},
 }
 
 
