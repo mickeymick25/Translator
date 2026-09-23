@@ -2,7 +2,7 @@
 
 **Creation date:** 2026-09-23
 **Last updated:** 2026-09-23
-**Overall status:** ⏸ Plan proposed — awaiting human validation
+**Overall status:** ✅ Plan executed (FIX-1865-01..06, 2026-09-23) — next: business decision on R4 (promote or close)
 **Reference:** [Anomaly analysis](2026_09_23_LO_LI_AC_1865_FR_Misalignment_Analysis.md) (EN, shared with devs) · [Plan FR](2026_09_23_LO_LI_AC_1865_Correction_Plan.md)
 
 ---
@@ -40,7 +40,7 @@ prevent recurrence, and audit the twin cases.
 | 3 | **FIX-1865-03** | FR duplication detector (wired into pipeline step 10) | High | ✅ Done |
 | 4 | **FIX-1865-04** | Audit `PA_CO_VI_859` and `LO_LO_AD_413` (other duplicates) | Medium | ✅ Done (analysis only) |
 | 5 | **FIX-1865-05** | Duplicate-key guard for any future reference-CSV loader | Medium | ✅ Done |
-| 6 | **FIX-1865-06** | RAG reindex + governance (state-B candidate) | Low | ⏸ Proposed |
+| 6 | **FIX-1865-06** | RAG reindex + governance (state-B candidate) | Low | ✅ Done |
 
 ## 4. Detailed tracking per action
 
@@ -145,12 +145,16 @@ tests + step3 integration); ruff OK; the guard never writes to sources.
 
 ### FIX-1865-06 — RAG reindex + governance
 
-**Status:** ⏸ Proposed
+**Status:** ✅ Done (2026-09-23)
 
 #### Sub-tasks
 
-- [ ] Reindex the hub after the docs are created: `/Users/michaelboitin/Documents/02_Dev/01_LocalRag_engine/AI/chroma/index-project.sh <project root>`
-- [ ] Register as **state B** (registry `docs/gouvernance-connaissances.md`, COP root) the promotion candidate: *a business reference file indexed by key can silently overwrite values if the key is duplicated (last-occurrence-wins) — any reference ingestion must detect duplicates* (promotability test: formulates without sub-project-specific terms, affects any COP domain ingesting CSV references)
+- [x] Reindex the hub after the docs are created: `/Users/michaelboitin/Documents/02_Dev/01_LocalRag_engine/AI/chroma/index-project.sh <project root>` — ✅ run (knowledge 37 → 39 chunks, modified `gouvernance-connaissances.md` reindexed to 11 chunks)
+- [x] Register as **state B** (registry `docs/gouvernance-connaissances.md`, COP root): entry **R4** — *key-indexed business reference: detect duplicates before any merge (last-occurrence-wins)* — verified retrievable (chunk `gouvernance-connaissances.md::6`); promotion B → C left to human evaluation
+
+**Observation (out of scope for this activity):** the `.rag.yaml` scans the
+root `docs/` only — sub-project docs (`COP_translations/doc/`) are outside
+the hub scope. Extending the scope is a separate governance decision.
 
 ## 5. Tracking journal
 
@@ -166,6 +170,7 @@ tests + step3 integration); ruff OK; the guard never writes to sources.
 | 2026-09-23 | **FIX-1865-03** | ✅ Squash-merge to `main` (`2571ece`) — local branch kept | Agent |
 | 2026-09-23 | **FIX-1865-04** | ✅ Factual audit (analysis only): 859 EN empty ×11 / FR "Soumettre" since 06_12 (CSV merge) — 413 RAS; decision: no export/source change | Michael |
 | 2026-09-23 | **FIX-1865-05** | ✅ Guard `load_reference_csv()` + `DuplicateReferenceKeysError` + step3 advisory hook — 174/174 tests | Agent |
+| 2026-09-23 | **FIX-1865-06** | ✅ R4 registered in the state-B registry (root, outside any Git repo — no root .git) + hub reindex OK (37→39 chunks, R4 retrievable); observation: hub scope = root docs/ only | Agent |
 
 ## 6. Update rules
 

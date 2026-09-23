@@ -2,7 +2,7 @@
 
 **Date de création :** 2026-09-23
 **Dernière mise à jour :** 2026-09-23
-**Statut global :** ⏸ Plan proposé — en attente de validation humaine
+**Statut global :** ✅ Plan exécuté (FIX-1865-01..06, 2026-09-23) — suite : décision métier sur R4 (promotion ou clôture)
 **Référence :** [Analyse de l'anomalie](2026_09_23_LO_LI_AC_1865_FR_Misalignment_Analysis.md) · rapport EN partagé aux devs
 
 ---
@@ -40,7 +40,7 @@ vérité, empêcher la récurrence, et auditer les cas jumeaux.
 | 3 | **FIX-1865-03** | Détecteur de duplication FR (intégré au pipeline, étape 10) | Haute | ✅ Terminé |
 | 4 | **FIX-1865-04** | Audit `PA_CO_VI_859` et `LO_LO_AD_413` (autres doublons) | Moyenne | ✅ Terminé (analyse seule) |
 | 5 | **FIX-1865-05** | Garde-fou anti-doublon pour tout futur chargement de CSV de référence | Moyenne | ✅ Terminé |
-| 6 | **FIX-1865-06** | Réindexation RAG + gouvernance (candidat état B) | Basse | ⏸ Proposé |
+| 6 | **FIX-1865-06** | Réindexation RAG + gouvernance (candidat état B) | Basse | ✅ Terminé |
 
 ## 4. Suivi détaillé par action
 
@@ -148,12 +148,17 @@ tests garde-fou + intégration step3) ; ruff OK ; les sources ne sont jamais
 
 ### FIX-1865-06 — Réindexation RAG + gouvernance
 
-**Statut :** ⏸ Proposé
+**Statut :** ✅ Terminé (2026-09-23)
 
 #### Sous-tâches
 
-- [ ] Réindexer le hub après création des docs : `/Users/michaelboitin/Documents/02_Dev/01_LocalRag_engine/AI/chroma/index-project.sh <racine du projet>`
-- [ ] Inscrire en **état B** (registre `docs/gouvernance-connaissances.md` racine COP) la connaissance candidat à promotion : *« un fichier de référence métier indexé par clé peut écraser silencieusement des valeurs si la clé est dupliquée (last-occurrence-wins) — tout chargement de référence doit détecter les doublons »* (test de promotabilité : formulable sans termes propres au sous-projet, touche tout domaine COP ingérant des références CSV)
+- [x] Réindexer le hub après création des docs : `/Users/michaelboitin/Documents/02_Dev/01_LocalRag_engine/AI/chroma/index-project.sh <racine du projet>` — ✅ exécutée (knowledge 37 → 39 chunks, `gouvernance-connaissances.md` modifié réindexé en 11 chunks)
+- [x] Inscription en **état B** (registre `docs/gouvernance-connaissances.md` racine COP) : entrée **R4** — *référence métier indexée par clé : détecter les doublons avant toute fusion (last-occurrence-wins)* — vérifiée requêtable (chunk `gouvernance-connaissances.md::6`) ; promotion B → C laissée à évaluer par l'humain
+
+**Observation (hors périmètre chantier) :** le `.rag.yaml` scanne la racine
+`docs/` uniquement — les docs du sous-projet (`COP_translations/doc/`) ne sont
+pas dans le périmètre du hub. Étendre le périmètre est une décision de
+gouvernance séparée.
 
 ## 5. Journal de suivi
 
@@ -169,6 +174,7 @@ tests garde-fou + intégration step3) ; ruff OK ; les sources ne sont jamais
 | 2026-09-23 | **FIX-1865-03** | ✅ Squash-merge vers `main` (`2571ece`) — branche locale conservée | Agent |
 | 2026-09-23 | **FIX-1865-04** | ✅ Audit factuel (analyse seule) : 859 EN vide ×11 / FR « Soumettre » depuis 06_12 (fusion CSV) — 413 RAS ; décision Michael : aucun changement export/source | Michael |
 | 2026-09-23 | **FIX-1865-05** | ✅ Garde-fou `load_reference_csv()` + exception `DuplicateReferenceKeysError` + hook advisory étape 3 — 174/174 tests | Agent |
+| 2026-09-23 | **FIX-1865-06** | ✅ R4 inscrite au registre état B (racine, hors dépôt Git — pas de .git racine) + réindexation hub OK (37→39 chunks, R4 requêtable) ; observation : périmètre du hub = racine docs/ seulement | Agent |
 
 ## 6. Règles de mise à jour
 
