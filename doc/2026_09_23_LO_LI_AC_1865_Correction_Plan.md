@@ -175,6 +175,7 @@ gouvernance séparée.
 | 2026-09-23 | **FIX-1865-04** | ✅ Audit factuel (analyse seule) : 859 EN vide ×11 / FR « Soumettre » depuis 06_12 (fusion CSV) — 413 RAS ; décision Michael : aucun changement export/source | Michael |
 | 2026-09-23 | **FIX-1865-05** | ✅ Garde-fou `load_reference_csv()` + exception `DuplicateReferenceKeysError` + hook advisory étape 3 — 174/174 tests | Agent |
 | 2026-09-23 | **FIX-1865-06** | ✅ R4 inscrite au registre état B (racine, hors dépôt Git — pas de .git racine) + réindexation hub OK (37→39 chunks, R4 requêtable) ; observation : périmètre du hub = racine docs/ seulement | Agent |
+| 2026-09-23 | — | Push vers `origin` autorisé (contrainte locale levée) — `main` poussé avec l'ensemble des commits locaux | Michael |
 
 ## 6. Règles de mise à jour
 

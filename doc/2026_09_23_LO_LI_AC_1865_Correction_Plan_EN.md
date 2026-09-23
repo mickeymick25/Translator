@@ -171,6 +171,7 @@ the hub scope. Extending the scope is a separate governance decision.
 | 2026-09-23 | **FIX-1865-04** | ✅ Factual audit (analysis only): 859 EN empty ×11 / FR "Soumettre" since 06_12 (CSV merge) — 413 RAS; decision: no export/source change | Michael |
 | 2026-09-23 | **FIX-1865-05** | ✅ Guard `load_reference_csv()` + `DuplicateReferenceKeysError` + step3 advisory hook — 174/174 tests | Agent |
 | 2026-09-23 | **FIX-1865-06** | ✅ R4 registered in the state-B registry (root, outside any Git repo — no root .git) + hub reindex OK (37→39 chunks, R4 retrievable); observation: hub scope = root docs/ only | Agent |
+| 2026-09-23 | — | Push to `origin` authorized (local-only constraint lifted) — `main` pushed with all local commits | Michael |
 
 ## 6. Update rules
 
