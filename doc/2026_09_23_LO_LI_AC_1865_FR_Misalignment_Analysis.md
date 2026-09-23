@@ -45,7 +45,7 @@ LO_LI_AC_1865;Activate Amination link;Add an animation link;Ajouter un lien d'an
 
 - The second occurrence (the *animation* row) should carry `LO_LI_AC_1866`.
 - The FR↔CSV merge described in `doc/2026_06_12_Translation_FR_Changelog.md` (§3: 1103 values replaced from the CSV) works via a **dictionary keyed by the CSV key**; the **last occurrence overwrites the first**. The correct "logistique" FR was silently replaced by the "animation" FR.
-- The committed backup `translation_en_fr.json.bak` (commit `f40f4ae`, 17/06/2026) already contains the corrupted value → corruption happened during the 06_12 build, before that commit.
+- The committed backup `translation_en_fr.json.bak` (commit `c197d11` ex-`f40f4ae`, 17/06/2026) already contains the corrupted value → corruption happened during the 06_12 build, before that commit.
 
 Corroborating evidence:
 
@@ -83,4 +83,4 @@ PA_CO_VI_859   | EN: ''                      | FR: 'Soumettre'                  
 ## 6. Provenance
 
 - RAG hub `cop-commercialpartner__knowledge` queried first per routing contract: **no** content specific to this key (governance-level info only).
-- All findings above come from actual reads: `translator/source/*/` JSON exports, `translator/output/*/translation_en_*.json`, `Export_COP_Excel.csv` / `Export_COP_MessageExcel.csv`, `COP_pages_mapping_official.tsv`, `doc/2026_06_12_Translation_FR_Changelog.md`, and the Git history of the `COP_translations` repository (commits `f40f4ae`, `8fefea9`, `b61f0aa`).
+- All findings above come from actual reads: `translator/source/*/` JSON exports, `translator/output/*/translation_en_*.json`, `Export_COP_Excel.csv` / `Export_COP_MessageExcel.csv`, `COP_pages_mapping_official.tsv`, `doc/2026_06_12_Translation_FR_Changelog.md`, and the Git history of the `COP_translations` repository (commits `c197d11` ex-`f40f4ae`, `64ba283` ex-`8fefea9`, `15eaa4b` ex-`b61f0aa` — hashes rewritten by the 2026-09-23 history purge, see the plan's journal).

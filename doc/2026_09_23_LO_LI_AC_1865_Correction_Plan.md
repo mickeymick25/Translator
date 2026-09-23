@@ -51,7 +51,7 @@ vérité, empêcher la récurrence, et auditer les cas jumeaux.
 
 **Motif d'abandon :** ce CSV est un artefact d'import historique, plus consommé
 par le pipeline (la fusion CSV du 06_12 était ad hoc, scripts supprimés dans
-`b61f0aa`). Aucune correction prévue : si une fusion CSV de référence était
+`15eaa4b`, ex-`b61f0aa`). Aucune correction prévue : si une fusion CSV de référence était
 réintégrée un jour, la valeur dupliquée serait détectée par le garde-fou
 (FIX-1865-05). La valeur métier erronée reste couverte par FIX-1865-02 (export
 final) et FIX-1865-03 (détection de récurrence).
@@ -132,7 +132,7 @@ connaissances reste ouverte.
 **Statut :** ✅ Terminé (2026-09-23)
 **Fichiers :** `translator/pipeline_common.py`, `translator/pipeline.py` (étape 3), tests
 
-La fusion 06_12 était ad hoc (scripts supprimés dans `b61f0aa`) ; le pipeline
+La fusion 06_12 était ad hoc (scripts supprimés dans `15eaa4b`, ex-`b61f0aa`) ; le pipeline
 actuel n'a pas d'étape de fusion CSV. Si elle est réintégrée (ou tout script
 equivalent), le chargement doit détecter les clés dupliquées.
 
@@ -170,12 +170,13 @@ gouvernance séparée.
 | 2026-09-23 | **FIX-1865-01** | ❌ Abandonné : CSV de référence archivé, plus consommé par le pipeline — décision Michael. Correction valeur portée par FIX-1865-02, récurrence par FIX-1865-03 | Michael |
 | 2026-09-23 | **FIX-1865-02** | ✅ Patch FR appliqué sur `2026_09_03_Final_Export/translation_en_fr.json` (arbitrage export prouvé par Changes_Report §6) + validation structurelle OK + scan aval OK | Agent |
 | 2026-09-23 | **FIX-1865-03** | ✅ Détecteur `detect_duplicated_translations()` intégré à l'étape 10 + rendu section 8 du rapport + 6 tests unitaires (fixture 1865/1866) — 170/170 tests OK — backfill : 9/9 archives corrompues détectées, 105 fichiers scannés | Agent |
-| 2026-09-23 | **FIX-1865-03** | Commit `bf38039` sur branche `fix/FIX-1865-03-detecteur-duplication` (hooks OK : lint + 873 tests conteneur ; correction Dockerfile préexistante : COPY validate_translations.py) — **contrainte : pas de push vers origin, travail local uniquement** | Michael |
-| 2026-09-23 | **FIX-1865-03** | ✅ Squash-merge vers `main` (`2571ece`) — branche locale conservée | Agent |
+| 2026-09-23 | **FIX-1865-03** | Commit `8649ae4` ex-`bf38039` sur branche `fix/FIX-1865-03-detecteur-duplication` (hooks OK : lint + 873 tests conteneur ; correction Dockerfile préexistante : COPY validate_translations.py) — **contrainte : pas de push vers origin, travail local uniquement** | Michael |
+| 2026-09-23 | **FIX-1865-03** | ✅ Squash-merge vers `main` (`28e254a` ex-`2571ece`) — branche locale conservée | Agent |
 | 2026-09-23 | **FIX-1865-04** | ✅ Audit factuel (analyse seule) : 859 EN vide ×11 / FR « Soumettre » depuis 06_12 (fusion CSV) — 413 RAS ; décision Michael : aucun changement export/source | Michael |
 | 2026-09-23 | **FIX-1865-05** | ✅ Garde-fou `load_reference_csv()` + exception `DuplicateReferenceKeysError` + hook advisory étape 3 — 174/174 tests | Agent |
 | 2026-09-23 | **FIX-1865-06** | ✅ R4 inscrite au registre état B (racine, hors dépôt Git — pas de .git racine) + réindexation hub OK (37→39 chunks, R4 requêtable) ; observation : périmètre du hub = racine docs/ seulement | Agent |
 | 2026-09-23 | — | Push vers `origin` autorisé (contrainte locale levée) — `main` poussé avec l'ensemble des commits locaux | Michael |
+| 2026-09-23 | — | 🧹 **Purge d'historique** (décision Michael, option B) : `git filter-repo` (Docker, image python:3.11-slim) sur `Export_COP_MessageExcel.numbers` (fuite 17/06, extension non couverte par .gitignore) + `translation_en_fr.json.bak` (historique) — backup pré-purge : `translator_backup_20260923.bundle` (racine projet). Remappage hashes : bf38039→8649ae4 · 1d7237d→302bc7a · 9244a20→dbb587b · 2571ece→28e254a · 7f41a4c→2a86f32 · f40f4ae→c197d11 · 8fefea9→64ba283 · b61f0aa→15eaa4b · 1614272→f75ad1a · c8ef638→2a87843 · 393bb87→44cdfef · 27f116c→4e1414f · f3d507e→0e3b467 — puis **force-push requis** | Agent |
 
 ## 6. Règles de mise à jour
 
