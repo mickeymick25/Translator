@@ -215,14 +215,14 @@ python translator/pipeline.py --languages fr,de --provider ollama
 |---:|---|:---:|
 | 1 | Détection auto de la source (dernier `*_Import`) + précédente | |
 | 2 | Comparaison des deux sources (ajouts/suppressions/modifications) | |
-| 3 | Détection des coquilles source connues + correction interactive | |
+| 3 | Détection des coquilles source connues + correction interactive + contrôle des CSV de référence (`Export_*.csv`) : clés dupliquées (advisory) | |
 | 4 | Analyse de l'écart entre le dernier export et la nouvelle source | |
 | 5 | Rapport consolidé + confirmation | ✅ |
 | 6 | Pré-peuplement du dossier output + gestion clés modifiées (1/2/3) | ✅ |
 | 7 | Traduction (provider choisi : Google / Ollama / hybride) | |
 | 8 | Réordonnancement auto selon l'ordre source | |
 | 9 | Validation structurelle (6 contrôles × N langues) | |
-| 10 | Détection mésalignements intra-langue (heuristique token overlap) | |
+| 10 | Détection mésalignements intra-langue (token overlap) + traductions dupliquées (EN différents → traduction identique) | |
 | 11 | Rapport consolidé final → `doc/{date}_Pipeline_Report.md` | |
 
 ### Options CLI
@@ -554,7 +554,7 @@ docker compose -f translator/docker-compose.yml run --rm lint
 | pipeline_dropdown.py | 563 | 55 | 90% |
 | **Total** | **1390** | **104** | **93%** |
 
-**1027 tests** — TDD pour toutes les fonctionnalités métier.
+**1047 tests** — TDD pour toutes les fonctionnalités métier.
 
 ## Qualité de code
 
@@ -588,6 +588,7 @@ Le workflow `.github/workflows/ci.yml` se déclenche sur push `main`/`develop` e
 | [`doc/2026_05_05_*_Study.md`](doc/2026_05_05_COP_Translation_Service_Study.md) | Étude fonctionnelle initiale |
 | [`doc/2026_06_17_Cache_Improvement_Plan.md`](doc/2026_06_17_Cache_Improvement_Plan.md) | Cache v2 : analyse de duplication et plan d'amélioration |
 | [`doc/2026_06_23_Source_Comparison_Study.md`](doc/2026_06_23_Source_Comparison_Study.md) | Comparaison des sources en7 -> en8 + analyse d'écart de traduction |
+| [`doc/2026_09_23_LO_LI_AC_1865_*Anomalie*.md`](doc/2026_09_23_LO_LI_AC_1865_FR_Misalignment_Analysis.md) | Anomalie `LO_LI_AC_1865` : analyse (EN) + plan de correction avec suivi (FR/EN) + détecteur de traductions dupliquées et garde-fou CSV |
 
 ## Contribution
 

@@ -120,14 +120,14 @@ python pipeline.py --mode dropdown --source source/dropdown.xlsx --languages pt 
 |---:|---|:---:|
 | 1 | Detect source file (latest `*_Import`) + previous source | |
 | 2 | Compare sources (added/removed/modified keys) | |
-| 3 | Detect known source typos + interactive correction | |
+| 3 | Detect known source typos + interactive correction + reference-CSV duplicate-key check (`Export_*.csv`, advisory) | |
 | 4 | Analyze translation gap per language | |
 | 5 | Consolidated report + confirmation | ✅ |
 | 6 | Pre-populate output folder + handle modified keys | ✅ |
 | 7 | Translation (Google/Ollama, with cache reuse) | |
 | 8 | Auto-reorder files to match source key order | |
 | 9 | Structural validation (missing/extra/empty/placeholders/duplicates) | |
-| 10 | Misalignment detection (intra-language token overlap) | |
+| 10 | Misalignment detection (intra-language token overlap) + duplicated translations (different EN → identical translation) | |
 | 11 | Final consolidated report → `doc/{date}_Pipeline_Report.md` | |
 
 ---
@@ -165,7 +165,7 @@ python service.py --help
 ### Docker
 
 ```bash
-# Run all tests (1037 tests)
+# Run all tests (1047 locally; 873 in Docker — repo-root tests skipped by design)
 docker compose -f translator/docker-compose.yml run --rm --build test
 
 # Run lint (ruff check + format)
@@ -217,7 +217,7 @@ COP_translations/
 │   ├── service.py              # Classic CLI service
 │   ├── core/                   # Core modules (config, cache, translator, etc.)
 │   ├── modes/                  # Translation modes
-│   ├── tests/                  # Test suite (1037 tests)
+│   ├── tests/                  # Test suite (1047 tests)
 │   ├── source_typos.json       # Known source typos dictionary
 │   ├── docker-compose.yml      # Docker services
 │   ├── Dockerfile              # Main Docker image

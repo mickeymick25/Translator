@@ -66,7 +66,7 @@ COP_translations/
 │   │   ├── mode_translate_json.py   # JSON translation mode (per-chunk checkpoint)
 │   │   ├── mode_translate_dropdowns.py # Dropdown generation mode
 │   │   └── mode_analyze.py           # XLSX analysis mode
-│   ├── tests/                       # 1027 unit tests (94% coverage)
+│   ├── tests/                       # 1047 unit tests
 │   ├── service.py                   # CLI entry point
 │   ├── pipeline.py                  # Orchestrated JSON pipeline (--mode dispatcher)
 │   ├── pipeline_dropdown.py          # Orchestrated dropdown pipeline (XLSX)
@@ -215,14 +215,14 @@ python translator/pipeline.py --languages fr,de --provider ollama
 |---:|---|:---:|
 | 1 | Auto-detection of the source (latest `*_Import`) + previous one | |
 | 2 | Comparison of both sources (additions/deletions/modifications) | |
-| 3 | Detection of known source typos + interactive correction | |
+| 3 | Detection of known source typos + interactive correction + reference-CSV duplicate-key check (`Export_*.csv`, advisory) | |
 | 4 | Gap analysis between the last export and the new source | |
 | 5 | Consolidated report + confirmation | ✅ |
 | 6 | Output folder pre-population + modified keys handling (1/2/3) | ✅ |
 | 7 | Translation (chosen provider: Google / Ollama / hybrid) | |
 | 8 | Auto reordering according to source key order | |
 | 9 | Structural validation (6 checks × N languages) | |
-| 10 | Intra-language misalignment detection (token overlap heuristic) | |
+| 10 | Intra-language misalignment detection (token overlap) + duplicated translations (different EN → identical translation) | |
 | 11 | Final consolidated report → `doc/{date}_Pipeline_Report.md` | |
 
 ### CLI options
@@ -553,7 +553,7 @@ docker compose -f translator/docker-compose.yml run --rm lint
 | pipeline_dropdown.py | 563 | 55 | 90% |
 | **Total** | **1390** | **104** | **93%** |
 
-**1027 tests** — TDD for all business features.
+**1047 tests** — TDD for all business features.
 
 ## Code quality
 
@@ -587,6 +587,7 @@ The `.github/workflows/ci.yml` workflow triggers on push to `main`/`develop` and
 | [`doc/2026_05_05_*_Study.md`](doc/2026_05_05_COP_Translation_Service_Study.md) | Initial functional study (FR) |
 | [`doc/2026_06_17_Cache_Improvement_Plan.md`](doc/2026_06_17_Cache_Improvement_Plan.md) | Cache v2: duplication analysis and improvement plan (FR) |
 | [`doc/2026_06_23_Source_Comparison_Study.md`](doc/2026_06_23_Source_Comparison_Study.md) | en7 -> en8 source comparison + translation gap analysis (FR) |
+| [`doc/2026_09_23_LO_LI_AC_1865_*Anomalie*.md`](doc/2026_09_23_LO_LI_AC_1865_FR_Misalignment_Analysis.md) | `LO_LI_AC_1865` anomaly: analysis (EN) + correction plan with tracking (FR/EN) + duplicated-translation detector and CSV guard |
 
 > The technical documentation in `doc/` is written in French.
 
