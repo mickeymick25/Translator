@@ -57,17 +57,19 @@ Thumbs.db
 logs/
 
 # ─── DONNÉES — Ne pas committer ─────────────────────────
-# Sources : fichiers de données métier (toutes extensions)
-translator/source/**/*.json
-translator/source/**/*.xlsx
-translator/source/**/*.xls
-translator/source/**/*.csv
+# Sources : tout fichier de données métier (toutes extensions)
+translator/source/**
+!translator/source/.gitkeep
+# Outputs : tout fichier généré (les artefacts recette délibérément
+# suivis — Analytics/*.tsv, checklist/recette md — restent suivis :
+# gitignore n'affecte pas les fichiers déjà trackés)
+translator/output/**
+!translator/output/.gitkeep
+!translator/output/**/
 
-# Outputs : fichiers générés (toutes extensions)
-translator/output/**/*.json
-translator/output/**/*.xlsx
-translator/output/**/*.xls
-translator/output/**/*.csv
+# Formats Apple égarés (fuite 17/06 : .numbers non couvert par json/xlsx/csv)
+**/*.numbers
+**/*.key
 
 # Cache de traductions et state du rate limiter
 **/.translation_cache.json
