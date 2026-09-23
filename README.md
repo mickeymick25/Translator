@@ -539,22 +539,24 @@ docker compose -f translator/docker-compose.yml run --rm lint
 
 | Module | Stmts | Miss | Cover |
 |--------|-------|------|-------|
-| core/cache.py | 70 | 2 | 97% |
-| core/config.py | 141 | 8 | 94% |
+| core/cache.py | 110 | 9 | 92% |
+| core/config.py | 145 | 8 | 94% |
 | core/io_json.py | 46 | 0 | 100% |
-| core/io_xlsx.py | 95 | 7 | 93% |
-| **core/ollama_provider.py** | **175** | **0** | **100%** |
-| core/rate_limiter.py | 67 | 2 | 97% |
-| core/translator.py | 93 | 0 | 100% |
-| core/translator_factory.py | 101 | 11 | 89% |
-| modes/mode_translate_json.py | 159 | 40 | 75% |
-| modes/mode_translate_dropdowns.py | 195 | 3 | 98% |
-| pipeline.py | 746 | 48 | 94% |
-| pipeline_common.py | 81 | 1 | 99% |
-| pipeline_dropdown.py | 563 | 55 | 90% |
-| **Total** | **1390** | **104** | **93%** |
+| core/io_xlsx.py | 133 | 6 | 95% |
+| core/ollama_provider.py | 242 | 31 | 87% |
+| core/rate_limiter.py | 67 | 0 | 100% |
+| core/translator.py | 96 | 0 | 100% |
+| core/translator_factory.py | 104 | 11 | 89% |
+| modes/mode_translate_json.py | 175 | 40 | 77% |
+| modes/mode_translate_dropdowns.py | 206 | 5 | 98% |
+| pipeline.py | 799 | 54 | 93% |
+| pipeline_common.py | 120 | 5 | 96% |
+| pipeline_dropdown.py | 562 | 55 | 90% |
+| **Total** | **2805** | **224** | **92%** |
 
 **1047 tests** — TDD pour toutes les fonctionnalités métier.
+
+> Couverture mesurée le 23/09/2026 (suite locale, 1047 tests).
 
 ## Qualité de code
 
