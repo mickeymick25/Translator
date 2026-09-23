@@ -38,8 +38,8 @@ prevent recurrence, and audit the twin cases.
 | 1 | **FIX-1865-01** | Fix the reference CSV (duplicated key + typo) | High | ❌ Dropped |
 | 2 | **FIX-1865-02** | Fix the FR value in the final shipped export | High | ✅ Done |
 | 3 | **FIX-1865-03** | FR duplication detector (wired into pipeline step 10) | High | ✅ Done |
-| 4 | **FIX-1865-04** | Audit `PA_CO_VI_859` and `LO_LO_AD_413` (other duplicates) | Medium | ⏸ Proposed |
-| 5 | **FIX-1865-05** | Duplicate-key guard for any future reference-CSV loader | Medium | ⏸ Proposed |
+| 4 | **FIX-1865-04** | Audit `PA_CO_VI_859` and `LO_LO_AD_413` (other duplicates) | Medium | ✅ Done (analysis only) |
+| 5 | **FIX-1865-05** | Duplicate-key guard for any future reference-CSV loader | Medium | ✅ Done |
 | 6 | **FIX-1865-06** | RAG reindex + governance (state-B candidate) | Low | ⏸ Proposed |
 
 ## 4. Detailed tracking per action
@@ -108,31 +108,40 @@ consistent with step 10's advisory philosophy.
 
 ### FIX-1865-04 — Audit the other CSV duplicates
 
-**Status:** ⏸ Proposed
+**Status:** ✅ Done (2026-09-23) — **analysis only, no change applied**
 **File:** `translator/source/2026_06_12_Import/Export_COP_Excel.csv`
+**Michael's decision:** no change in the exports, sources untouched — the
+finding is documented; acting on it (or not) remains an open business call.
 
-| Key | Occurrences | Current state | Expected decision |
-|-----|-------------|---------------|-------------------|
-| `PA_CO_VI_859` | ×3 (Start date / End date / Save) | Final FR "Soumettre", EN **empty** in current master | Business to arbitrate (keep value? dead key?) |
-| `LO_LO_AD_413` | ×2 (Fax / Mobile) | FR "Numéro de téléphone portable", consistent with EN | Documented as OK, close |
+| Key | Occurrences | Finding (source 04_13 → 09_03) | Conclusion |
+|-----|-------------|--------------------------------|------------|
+| `PA_CO_VI_859` | ×3 (Start date / End date / Save) | EN **empty in all 11 source versions**; FR empty until 06_11 then **"Soumettre"** since 06_12 (injected by the CSV merge, duplicated "Save" row) | EN empty / FR filled inconsistency — **found, not fixed** (analysis only); arbitrate FR if the key ever comes back to life |
+| `LO_LO_AD_413` | ×2 (Fax / Mobile) | EN "Mobile number" constant; current FR "Numéro de téléphone portable" consistent | **RAS** — closed; archive note: FR "Mobilní číslo" (Czech) in the 05_27 export, fixed afterwards |
 
 #### Sub-tasks
 
-- [ ] Request business arbitration on `PA_CO_VI_859`
-- [ ] Document the decision in this doc (journal) and close
+- [x] Factual audit of both keys (11 source versions + 10 FR exports)
+- [x] Decision traced: **no change** (export/source untouched) — 859 anomaly documented for a future business decision
+
+**Validation:** ✅ facts verified via systematic trace (no write).
 
 ### FIX-1865-05 — Duplicate-key guard (reference CSV loader)
 
-**Status:** ⏸ Proposed
-**Context:** the 06_12 merge was ad hoc (scripts removed in `b61f0aa`); the
-current pipeline has no CSV merge step. If it comes back (or any equivalent
-script), the loader must detect duplicated keys.
+**Status:** ✅ Done (2026-09-23)
+**Files:** `translator/pipeline_common.py`, `translator/pipeline.py` (step 3), tests
+
+The 06_12 merge was ad hoc (scripts removed in `b61f0aa`); the current
+pipeline has no CSV merge step. If it comes back (or any equivalent script),
+the loader must detect duplicated keys.
 
 #### Sub-tasks
 
-- [ ] Utility function `load_reference_csv()` in `pipeline_common.py`: raises an explicit error listing the duplicated keys (at minimum a blocking warning with confirmation)
-- [ ] Unit test (duplicate case → error, using the 3 known real keys as fixture)
-- [ ] Add duplicated-key detection of the reference CSV to pipeline step 3 (typos) or to the analysis report, if the CSV merge comes back into the pipeline
+- [x] Utility function `load_reference_csv()` in `pipeline_common.py`: raises `DuplicateReferenceKeysError` listing duplicated keys (with line numbers) — read-only, never writes
+- [x] Unit test: clean CSV parsed; duplicate CSV (fixture = the 3 real keys from the 06_12 CSV) → explicit error with line numbers
+- [x] Advisory detection wired into pipeline step 3: every `Export_*.csv` found in the import folder is checked (⚠️ with duplicate detail, or ✅ clean) — the CSV merge is not back in the pipeline, this hook only signals
+
+**Validation:** ✅ `test_pipeline.py` suite: **174/174 passed** (4 new guard
+tests + step3 integration); ruff OK; the guard never writes to sources.
 
 ### FIX-1865-06 — RAG reindex + governance
 
@@ -154,6 +163,9 @@ script), the loader must detect duplicated keys.
 | 2026-09-23 | **FIX-1865-02** | ✅ FR patch applied to `2026_09_03_Final_Export/translation_en_fr.json` (export arbitrated via Changes_Report §6) + structural validation OK + downstream scan OK | Agent |
 | 2026-09-23 | **FIX-1865-03** | ✅ `detect_duplicated_translations()` wired into step 10 + report section 8 rendering + 6 unit tests (1865/1866 fixture) — 170/170 tests OK — backfill: 9/9 corrupted archives detected, 105 files scanned | Agent |
 | 2026-09-23 | **FIX-1865-03** | Commit `bf38039` on branch `fix/FIX-1865-03-detecteur-duplication` (hooks OK: lint + 873 container tests; pre-existing Dockerfile fix: COPY validate_translations.py) — **constraint: no push to remote origin, local work only** | Michael |
+| 2026-09-23 | **FIX-1865-03** | ✅ Squash-merge to `main` (`2571ece`) — local branch kept | Agent |
+| 2026-09-23 | **FIX-1865-04** | ✅ Factual audit (analysis only): 859 EN empty ×11 / FR "Soumettre" since 06_12 (CSV merge) — 413 RAS; decision: no export/source change | Michael |
+| 2026-09-23 | **FIX-1865-05** | ✅ Guard `load_reference_csv()` + `DuplicateReferenceKeysError` + step3 advisory hook — 174/174 tests | Agent |
 
 ## 6. Update rules
 

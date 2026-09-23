@@ -54,10 +54,12 @@ from pipeline_common import (  # noqa: E402
     BasePipelineContext,
     MAX_REPORT_ENTRIES,
     PREVIEW_LIMIT,
+    DuplicateReferenceKeysError,
     backup_translation_file,
     confirm,
     json_load,
     json_write,
+    load_reference_csv,
     load_typos,
     logger,
     parse_languages_arg,
@@ -301,6 +303,18 @@ def apply_typo_corrections(source_path: Path, typos_found: list[dict]) -> int:
 def step3_detect_typos(ctx: PipelineContext) -> None:
     """Détecte les coquilles source connues et propose correction."""
     step_banner(3, "Détection des coquilles source")
+    # Garde-fou FIX-1865-05 : un CSV de référence métier présent dans le
+    # dossier d'import ne doit pas contenir de clés dupliquées (un
+    # last-occurrence-wins a corrompu la FR 06_12). Détection advisory —
+    # la fusion CSV n'est plus dans le pipeline ; aucune écriture.
+    if ctx.new_import_folder:
+        for csv_path in sorted(ctx.new_import_folder.glob("Export_*.csv")):
+            try:
+                load_reference_csv(csv_path)
+            except DuplicateReferenceKeysError as e:
+                print(f"  ⚠️  {e}")
+            else:
+                print(f"  ✅ {csv_path.name} : aucune clé dupliquée.")
     typos = load_typos(path=TYPOS_PATH)
     if not typos:
         print("  Aucun dictionnaire de coquilles trouvé (source_typos.json absent).")

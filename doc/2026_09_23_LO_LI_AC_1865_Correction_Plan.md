@@ -38,8 +38,8 @@ vérité, empêcher la récurrence, et auditer les cas jumeaux.
 | 1 | **FIX-1865-01** | Corriger le CSV de référence (clé dupliquée + typo) | Haute | ❌ Abandonné |
 | 2 | **FIX-1865-02** | Corriger la FR dans l'export final expédié | Haute | ✅ Terminé |
 | 3 | **FIX-1865-03** | Détecteur de duplication FR (intégré au pipeline, étape 10) | Haute | ✅ Terminé |
-| 4 | **FIX-1865-04** | Auditer `PA_CO_VI_859` et `LO_LO_AD_413` (autres doublons) | Moyenne | ⏸ Proposé |
-| 5 | **FIX-1865-05** | Garde-fou anti-doublon pour tout futur chargement de CSV de référence | Moyenne | ⏸ Proposé |
+| 4 | **FIX-1865-04** | Audit `PA_CO_VI_859` et `LO_LO_AD_413` (autres doublons) | Moyenne | ✅ Terminé (analyse seule) |
+| 5 | **FIX-1865-05** | Garde-fou anti-doublon pour tout futur chargement de CSV de référence | Moyenne | ✅ Terminé |
 | 6 | **FIX-1865-06** | Réindexation RAG + gouvernance (candidat état B) | Basse | ⏸ Proposé |
 
 ## 4. Suivi détaillé par action
@@ -109,31 +109,42 @@ manuellement, cohérente avec la philosophie advisory de l'étape 10.
 
 ### FIX-1865-04 — Audit des autres doublons du CSV
 
-**Statut :** ⏸ Proposé
+**Statut :** ✅ Terminé (2026-09-23) — **analyse seule, aucun changement**
 **Fichier :** `translator/source/2026_06_12_Import/Export_COP_Excel.csv`
+**Décision Michael :** pas de changement dans les exports, sources non
+modifiées — le constat est documenté, la décision d'exploiter (ou non) ces
+connaissances reste ouverte.
 
-| Clé | Occurrences | État actuel | Décision attendue |
-|-----|-------------|-------------|-------------------|
-| `PA_CO_VI_859` | ×3 (Start date / End date / Save) | FR finale « Soumettre », EN **vide** dans le master actuel | Le métier tranche (valeur conservée ? clé morte ?) |
-| `LO_LO_AD_413` | ×2 (Fax / Mobile) | FR « Numéro de téléphone portable », cohérente avec l'EN | RAS documenté, clôturer |
+| Clé | Occurrences | Constat (versions 04_13 → 09_03) | Conclusion |
+|-----|-------------|----------------------------------|------------|
+| `PA_CO_VI_859` | ×3 (Start date / End date / Save) | EN **vide dans les 11 versions source** ; FR vide jusqu'au 06_11 puis **« Soumettre »** depuis le 06_12 (injection par la fusion CSV, ligne dupliquée « Save ») | incohérence EN vide / FR rempli — **constaté, non corrigé** (analyse seule) ; si la clé reprenait vie, arbitrer FR |
+| `LO_LO_AD_413` | ×2 (Fax / Mobile) | EN « Mobile number » constant ; FR actuel « Numéro de téléphone portable » cohérent | **RAS** — clôturé ; archive : FR « Mobilní číslo » (tchèque) dans l'export 05_27, corrigé ensuite |
 
 #### Sous-tâches
 
-- [ ] Demander arbitrage métier sur `PA_CO_VI_859`
-- [ ] Documenter la décision dans ce doc (journal) et clôturer
+- [x] Audit factuel des deux clés (11 versions source + 10 exports FR)
+- [x] Décision tracée : **aucun changement** (export/source intacts) — anomalie 859 documentée pour décision métier future
+
+**Validation :** ✅ faits vérifiés par trace systématique (aucune écriture).
 
 ### FIX-1865-05 — Garde-fou anti-doublon (loader CSV de référence)
 
-**Statut :** ⏸ Proposé
-**Contexte :** la fusion 06_12 était ad hoc (scripts supprimés dans `b61f0aa`) ;
-le pipeline actuel n'a pas d'étape de fusion CSV. Si elle est réintégrée (ou
-tout script équivalent), le chargement doit détecter les clés dupliquées.
+**Statut :** ✅ Terminé (2026-09-23)
+**Fichiers :** `translator/pipeline_common.py`, `translator/pipeline.py` (étape 3), tests
+
+La fusion 06_12 était ad hoc (scripts supprimés dans `b61f0aa`) ; le pipeline
+actuel n'a pas d'étape de fusion CSV. Si elle est réintégrée (ou tout script
+equivalent), le chargement doit détecter les clés dupliquées.
 
 #### Sous-tâches
 
-- [ ] Fonction utilitaire `load_reference_csv()` dans `pipeline_common.py` : lève une erreur explicite listant les clés dupliquées (au minimum avertissement bloquant avec confirmation)
-- [ ] Test unitaire (cas doublon → erreur avec les 3 clés connues du CSV réel)
-- [ ] Ajouter la détection des clés dupliquées du CSV à l'étape 3 du pipeline (coquilles) ou au rapport d'analyse, si la fusion CSV revient dans le pipeline
+- [x] Fonction utilitaire `load_reference_csv()` dans `pipeline_common.py` : lève `DuplicateReferenceKeysError` listant les clés dupliquées (avec lignes) — aucune écriture, lecture seule
+- [x] Test unitaire : CSV propre parsé ; CSV à doublons (fixture = les 3 clés réelles du CSV 06_12) → erreur explicite avec lignes
+- [x] Détection advisory branchée sur l'étape 3 du pipeline : tout `Export_*.csv` présent dans le dossier d'import est contrôlé (⚠️ avec détail des doublons, ou ✅ propre) — la fusion CSV n'est pas de retour, ce hook signale seulement
+
+**Validation :** ✅ suite `test_pipeline.py` : **174/174 passés** (4 nouveaux
+tests garde-fou + intégration step3) ; ruff OK ; les sources ne sont jamais
+écrites par le garde-fou.
 
 ### FIX-1865-06 — Réindexation RAG + gouvernance
 
@@ -155,6 +166,9 @@ tout script équivalent), le chargement doit détecter les clés dupliquées.
 | 2026-09-23 | **FIX-1865-02** | ✅ Patch FR appliqué sur `2026_09_03_Final_Export/translation_en_fr.json` (arbitrage export prouvé par Changes_Report §6) + validation structurelle OK + scan aval OK | Agent |
 | 2026-09-23 | **FIX-1865-03** | ✅ Détecteur `detect_duplicated_translations()` intégré à l'étape 10 + rendu section 8 du rapport + 6 tests unitaires (fixture 1865/1866) — 170/170 tests OK — backfill : 9/9 archives corrompues détectées, 105 fichiers scannés | Agent |
 | 2026-09-23 | **FIX-1865-03** | Commit `bf38039` sur branche `fix/FIX-1865-03-detecteur-duplication` (hooks OK : lint + 873 tests conteneur ; correction Dockerfile préexistante : COPY validate_translations.py) — **contrainte : pas de push vers origin, travail local uniquement** | Michael |
+| 2026-09-23 | **FIX-1865-03** | ✅ Squash-merge vers `main` (`2571ece`) — branche locale conservée | Agent |
+| 2026-09-23 | **FIX-1865-04** | ✅ Audit factuel (analyse seule) : 859 EN vide ×11 / FR « Soumettre » depuis 06_12 (fusion CSV) — 413 RAS ; décision Michael : aucun changement export/source | Michael |
+| 2026-09-23 | **FIX-1865-05** | ✅ Garde-fou `load_reference_csv()` + exception `DuplicateReferenceKeysError` + hook advisory étape 3 — 174/174 tests | Agent |
 
 ## 6. Règles de mise à jour
 

@@ -9,6 +9,7 @@ séparés).
 
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import re
@@ -225,6 +226,59 @@ def json_write(path: Path, data: dict) -> None:
 def short_repr(v) -> str:
     """Représentation courte d'une valeur pour l'affichage interactif."""
     return truncate(v, length=80)
+
+
+# ─── Garde-fou CSV de référence (FIX-1865-05) ────────────────────────
+
+
+class DuplicateReferenceKeysError(ValueError):
+    """Levée quand un CSV de référence contient des clés dupliquées.
+
+    Garde-fou issu de l'anomalie LO_LI_AC_1865 : une fusion key-indexée
+    applique un last-occurrence-wins silencieux sur les clés dupliquées,
+    ce qui a corrompu la FR du 12/06/2026 (cf.
+    doc/2026_09_23_LO_LI_AC_1865_FR_Misalignment_Analysis.md).
+    """
+
+
+def load_reference_csv(path: Path, delimiter: str = ";") -> dict:
+    """Charge un CSV de référence métier ({cle: {label, en, fr}}).
+
+    Format attendu (Export_COP_Excel.csv) : séparateur ';', colonnes
+    `Translation variable;Label;EN:en;FR:fr`, ligne d'en-tête ignorée.
+
+    Garde-fou (FIX-1865-05) : lève `DuplicateReferenceKeysError` listant les
+    clés dupliquées (avec leurs lignes) au lieu d'écraser silencieusement en
+    last-occurrence-wins. Ne modifie jamais le fichier source.
+    """
+    data: dict = {}
+    seen: dict[str, list[int]] = {}
+    with path.open(encoding="utf-8-sig", newline="") as fh:
+        reader = csv.reader(fh, delimiter=delimiter, quotechar='"')
+        next(reader, None)  # ligne d'en-tête
+        for lineno, row in enumerate(reader, 2):
+            if not row or not row[0].strip():
+                continue
+            key = row[0].strip()
+            label = row[1].strip() if len(row) > 1 else ""
+            en = row[2].strip() if len(row) > 2 else ""
+            fr = row[3].strip() if len(row) > 3 else ""
+            seen.setdefault(key, []).append(lineno)
+            data[key] = {"label": label, "en": en, "fr": fr}
+    duplicates = {k: lines for k, lines in seen.items() if len(lines) > 1}
+    if duplicates:
+        detail = "\n".join(
+            f"  - {key} : {len(lines)} occurrence(s) (lignes "
+            + ", ".join(str(n) for n in lines)
+            + ")"
+            for key, lines in sorted(duplicates.items())
+        )
+        raise DuplicateReferenceKeysError(
+            f"CSV de référence `{path.name}` : {len(duplicates)} clé(s) "
+            f"dupliquée(s) — fusion interdite (écrasement "
+            f"last-occurrence-wins, cf. FIX-1865-05).\n{detail}"
+        )
+    return data
 
 
 # ─── Helpers partagés (Sprint 4 - polish) ─────────────────────────────

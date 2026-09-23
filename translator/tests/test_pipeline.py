@@ -25,6 +25,10 @@ pytest.importorskip("compare_sources")
 pytest.importorskip("analyze_translation_gap")
 
 import pipeline  # noqa: E402  (après importorskip ci-dessus)
+from pipeline_common import (  # noqa: E402  (après importorskip ci-dessus)
+    DuplicateReferenceKeysError,
+    load_reference_csv,
+)
 from pipeline import (  # noqa: E402  (après importorskip ci-dessus)
     PipelineContext,
     _latest_export_dir,
@@ -1647,6 +1651,109 @@ class TestDetectDuplicatedTranslations:
         source = {"K1": "...", "K2": "Save"}
         translation = {"K1": "Enregistrer", "K2": "Enregistrer"}
         assert detect_duplicated_translations(source, translation, "fr") == []
+
+
+# ─── TestLoadReferenceCsv (FIX-1865-05) ──────────────────────────────
+
+
+class TestLoadReferenceCsv:
+    """Tests de load_reference_csv() — garde-fou clés dupliquées.
+
+    Fixture : les 3 clés dupliquées réelles du CSV 2026_06_12_Import
+    (cf. doc/2026_09_23_LO_LI_AC_1865_FR_Misalignment_Analysis.md).
+    """
+
+    @staticmethod
+    def _write_csv(path: Path, rows: list[list[str]]) -> Path:
+        content = "Translation variable;Label;EN:en;FR:fr\n"
+        content += "\n".join(";".join(row) for row in rows) + "\n"
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def test_clean_csv_parsed(self, tmp_path):
+        """CSV propre → dict {cle: {label, en, fr}} correct."""
+        path = self._write_csv(
+            tmp_path / "Export_COP_Excel.csv",
+            [["K1", "Label", "Hello", "Bonjour"], ["K2", "", "World", "Monde"]],
+        )
+        data = load_reference_csv(path)
+        assert data["K1"] == {"label": "Label", "en": "Hello", "fr": "Bonjour"}
+        assert data["K2"]["fr"] == "Monde"
+
+    def test_duplicate_keys_raise_with_lines(self, tmp_path):
+        """Les 3 clés dupliquées réelles du CSV 06_12 → erreur explicite."""
+        path = self._write_csv(
+            tmp_path / "Export_COP_Excel.csv",
+            [
+                [
+                    "LO_LI_AC_1865",
+                    "Activate logistic link",
+                    "Add logistic link",
+                    "Ajouter un lien logistique",
+                ],
+                [
+                    "LO_LI_AC_1865",
+                    "Activate Amination link",
+                    "Add an animation link",
+                    "Ajouter un lien d'animation",
+                ],
+                [
+                    "LO_LO_AD_413",
+                    "Fax number",
+                    "Fax number",
+                    "Numéro de fax",
+                ],
+                [
+                    "LO_LO_AD_413",
+                    "Mobile number",
+                    "Mobile number",
+                    "Numéro de téléphone portable",
+                ],
+                ["PA_CO_VI_859", "Start date", "Start date", "Date de début"],
+                ["PA_CO_VI_859", "End date", "End date", "Date de fin"],
+                ["PA_CO_VI_859", "Save", "Save", "Soumettre"],
+            ],
+        )
+        with pytest.raises(DuplicateReferenceKeysError) as excinfo:
+            load_reference_csv(path)
+        message = str(excinfo.value)
+        assert "3 clé(s) dupliquée(s)" in message
+        for key in ("LO_LI_AC_1865", "LO_LO_AD_413", "PA_CO_VI_859"):
+            assert key in message
+        assert "lignes 2, 3" in message
+
+    def test_step3_warns_on_duplicate_reference_csv(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """Un CSV de référence à doublons dans l'import → avertissement step3."""
+        monkeypatch.setattr(pipeline, "load_typos", lambda path=None: [])
+        source_file = tmp_path / "en.json"
+        source_file.write_text(json.dumps({"K": "v"}), encoding="utf-8")
+        self._write_csv(
+            tmp_path / "Export_COP_Excel.csv",
+            [["K1", "", "Save", "Soumettre"], ["K1", "", "Submit", "Soumettre"]],
+        )
+        ctx = PipelineContext(new_source=source_file)
+        ctx.new_import_folder = tmp_path
+        step3_detect_typos(ctx)
+        out = capsys.readouterr().out
+        assert "clé(s) dupliquée(s)" in out
+        assert "K1" in out
+
+    def test_step3_clean_reference_csv(self, tmp_path, monkeypatch, capsys):
+        """CSV de référence propre dans l'import → message OK."""
+        monkeypatch.setattr(pipeline, "load_typos", lambda path=None: [])
+        source_file = tmp_path / "en.json"
+        source_file.write_text(json.dumps({"K": "v"}), encoding="utf-8")
+        self._write_csv(
+            tmp_path / "Export_COP_Excel.csv",
+            [["K1", "", "Save", "Enregistrer"]],
+        )
+        ctx = PipelineContext(new_source=source_file)
+        ctx.new_import_folder = tmp_path
+        step3_detect_typos(ctx)
+        out = capsys.readouterr().out
+        assert "aucune clé dupliquée" in out
 
 
 class TestStep10DetectMisalignments:
