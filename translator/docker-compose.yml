@@ -37,8 +37,8 @@ services:
 
   pipeline:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: translator/Dockerfile.pipeline
     container_name: cop_pipeline
     entrypoint: ["python", "pipeline.py"]
     extra_hosts:

@@ -1011,7 +1011,7 @@ def run_pipeline_dropdown(args: argparse.Namespace) -> int:
         interactive=not getattr(args, "yes", False)
         and not getattr(args, "dry_run", False),
         report_path=getattr(args, "report", None),
-        output_format=getattr(args, "format", "auto"),
+        output_format=getattr(args, "format", None) or "auto",
         retranslate_all=getattr(args, "retranslate_all", False),
         no_cache=getattr(args, "no_cache", False),
     )

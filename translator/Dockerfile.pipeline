@@ -1,0 +1,34 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY translator/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY translator/requirements-dev.txt .
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
+# Modules core et modes
+COPY translator/core/ ./core/
+COPY translator/modes/ ./modes/
+
+# Pipeline et service
+COPY translator/service.py .
+COPY translator/pipeline.py .
+COPY translator/pipeline_common.py .
+COPY translator/pipeline_dropdown.py .
+COPY translator/validate_translations.py .
+
+# Scripts à la racine du dépôt (importés par le pipeline)
+COPY compare_sources.py .
+COPY analyze_translation_gap.py .
+COPY translator/source_typos.json .
+
+# Tests et config
+COPY translator/tests/ ./tests/
+COPY translator/pytest.ini .
+
+# Dossiers de travail
+RUN mkdir -p /app/output /app/source /app/doc
+
+ENTRYPOINT ["python", "pipeline.py"]
