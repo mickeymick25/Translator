@@ -15,6 +15,7 @@ COPY service.py .
 COPY pipeline.py .
 COPY pipeline_common.py .
 COPY pipeline_dropdown.py .
+COPY validate_translations.py .
 
 # Copie des tests et config pytest
 COPY tests/ ./tests/

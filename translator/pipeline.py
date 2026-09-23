@@ -979,12 +979,71 @@ def detect_misalignments(source: dict, translation: dict, lang: str) -> list[dic
     return misalignments
 
 
+def detect_duplicated_translations(
+    source: dict, translation: dict, lang: str
+) -> list[dict]:
+    """Détecte le cas jumeau des mésalignements : textes source différents
+    traduits à l'identique dans la langue cible.
+
+    Cas historique : `LO_LI_AC_1865` ("Add logistic link") traduit FR à
+    l'identique de `LO_LI_AC_1866` ("Add an animation link") — corruption
+    introduite par une clé dupliquée dans le CSV de référence du 12/06/2026
+    (cf. doc/2026_09_23_LO_LI_AC_1865_FR_Misalignment_Analysis.md).
+
+    Heuristique conservatrice : ne signale que les groupes de clés partageant
+    une traduction identique (non vide) dont les textes source (EN) diffèrent
+    après normalisation token (casse/accents/ponctuation ignorés — C15 pour
+    les textes sans token). Sortie advisory : les paires de synonymes
+    légitimes ("Cancel"/"Rollback" → "Annuler") sont signalées aussi.
+    """
+    groups: dict[str, list[str]] = {}
+    for key, text in translation.items():
+        if isinstance(text, str) and text.strip():
+            groups.setdefault(text, []).append(key)
+
+    duplications: list[dict] = []
+    for trans_text, keys in groups.items():
+        if len(keys) < 2:
+            continue
+        src = {
+            k: str(source[k])
+            for k in keys
+            if k in source and isinstance(source[k], str) and source[k].strip()
+        }
+        if len(src) < 2:
+            continue
+        token_sets = {k: _tokenize(v) for k, v in src.items()}
+        # Ignorer les textes source sans token (ponctuation seule — C15).
+        comparable = [k for k, t in token_sets.items() if t]
+        if len(comparable) < 2:
+            continue
+        # Si tous les textes source sont équivalents (même token set), la
+        # traduction identique est légitime (casse/accents près).
+        distinct = {frozenset(token_sets[k]) for k in comparable}
+        if len(distinct) <= 1:
+            continue
+        duplications.append(
+            {
+                "type": "duplicated_translation",
+                "translation_text": trans_text,
+                "keys": sorted(comparable),
+                "source_values": {k: src[k] for k in sorted(comparable)},
+            }
+        )
+    return duplications
+
+
 def step10_detect_misalignments(
     ctx: PipelineContext, export_dir: Path
 ) -> dict[str, list[dict]]:
     """Détecte les mésalignements pour toutes les langues.
 
-    Retourne un dict {lang: [mésalignement, ...]}. Signale, ne corrige pas.
+    Fusionne deux heuristiques advisory par langue :
+    - mésalignements intra-langue (même texte source, traductions divergentes) ;
+    - traductions dupliquées (textes source différents, traduction identique —
+      champ `type: "duplicated_translation"` sur l'entrée).
+
+    Retourne un dict {lang: [signalement, ...]}. Signale, ne corrige pas.
     """
     step_banner(10, "Détection mésalignements intra-langue")
 
@@ -1000,7 +1059,8 @@ def step10_detect_misalignments(
             continue
         translation = json_load(path)
         mism = detect_misalignments(source, translation, lang)
-        result[lang] = mism
+        dups = detect_duplicated_translations(source, translation, lang)
+        result[lang] = mism + dups
         if mism:
             print(f"  {lang.upper()}: {len(mism)} mésalignement(s) potentiel(s).")
             for m in mism[:5]:
@@ -1009,9 +1069,22 @@ def step10_detect_misalignments(
                 )
         else:
             print(f"  {lang.upper()}: ✅ aucun mésalignement.")
+        if dups:
+            print(
+                f"  {lang.upper()}: {len(dups)} traduction(s) dupliquée(s) "
+                f"(textes source différents)."
+            )
+            for d in dups[:5]:
+                print(
+                    f"    « {short_repr(d['translation_text'])} » ← "
+                    f"{', '.join(d['keys'])}"
+                )
     total = sum(len(v) for v in result.values())
     if total:
-        print(f"\n  ⚠️  {total} mésalignement(s) au total (à vérifier manuellement).")
+        print(
+            f"\n  ⚠️  {total} signalement(s) au total "
+            f"(mésalignements + doublons, à vérifier manuellement)."
+        )
     return result
 
 
@@ -1140,22 +1213,47 @@ def _section_misalignments_final(
     L: list[str] = ["## 8. Mésalignements\n"]
     total_misalign = sum(len(v) for v in misalignments.values()) if misalignments else 0
     L.append(
-        f"**{total_misalign} mésalignement(s) potentiel(s)** détecté(s) "
+        f"**{total_misalign} signalement(s) potentiel(s)** détecté(s) "
         f"(heuristique, à vérifier manuellement).\n"
     )
     if misalignments:
-        for lang, mism_list in misalignments.items():
-            if mism_list:
-                L.append(f"### {lang.upper()} ({len(mism_list)})\n")
-                L.append("| Texte source | Clés | Traductions |")
-                L.append("|---|---|---|")
-                for m in mism_list[:MAX_REPORT_ENTRIES]:
-                    keys = ", ".join(m["keys"])
-                    trans = " / ".join(
-                        f"{k}={short_repr(v)}"
-                        for k, v in m.get("translations", {}).items()
+        for lang, entries in misalignments.items():
+            if entries:
+                L.append(f"### {lang.upper()} ({len(entries)})\n")
+                mis_list = [
+                    m for m in entries if m.get("type") != "duplicated_translation"
+                ]
+                dup_list = [
+                    m for m in entries if m.get("type") == "duplicated_translation"
+                ]
+                if mis_list:
+                    L.append("| Texte source | Clés | Traductions |")
+                    L.append("|---|---|---|")
+                    for m in mis_list[:MAX_REPORT_ENTRIES]:
+                        keys = ", ".join(m["keys"])
+                        trans = " / ".join(
+                            f"{k}={short_repr(v)}"
+                            for k, v in m.get("translations", {}).items()
+                        )
+                        L.append(
+                            f"| {short_repr(m['source_text'])} | {keys} | {trans} |"
+                        )
+                if dup_list:
+                    L.append(
+                        "\n**Traductions identiques pour des textes source "
+                        "différents :**\n"
                     )
-                    L.append(f"| {short_repr(m['source_text'])} | {keys} | {trans} |")
+                    L.append("| Traduction | Clés | Textes source |")
+                    L.append("|---|---|---|")
+                    for d in dup_list[:MAX_REPORT_ENTRIES]:
+                        keys = ", ".join(d["keys"])
+                        srcs = " / ".join(
+                            f"{k}={short_repr(v)}"
+                            for k, v in d.get("source_values", {}).items()
+                        )
+                        L.append(
+                            f"| {short_repr(d['translation_text'])} | {keys} | {srcs} |"
+                        )
     L.append("")
     return L
 

@@ -41,6 +41,7 @@ from pipeline import (  # noqa: E402  (après importorskip ci-dessus)
     prepopulate_output,
     build_final_report,
     detect_misalignments,
+    detect_duplicated_translations,
     reorder_translation_file,
     run_pipeline,
     step1_detect_sources,
@@ -1589,6 +1590,63 @@ class TestDetectMisalignments:
         result = detect_misalignments(source, translation, "fr")
         assert len(result) == 1
         assert len(result[0]["keys"]) == 3
+
+
+class TestDetectDuplicatedTranslations:
+    """Tests de detect_duplicated_translations() — cas jumeau des mésalignements.
+
+    Fixture de référence : la corruption FR 06_12 sur LO_LI_AC_1865/1866
+    (cf. doc/2026_09_23_LO_LI_AC_1865_FR_Misalignment_Analysis.md).
+    """
+
+    def test_detects_corrupted_1865_case(self):
+        """Deux textes source différents, traduction identique → signalée."""
+        source = {
+            "LO_LI_AC_1865": "Add logistic link",
+            "LO_LI_AC_1866": "Add an animation link",
+        }
+        translation = {
+            "LO_LI_AC_1865": "Ajouter un lien d'animation",
+            "LO_LI_AC_1866": "Ajouter un lien d'animation",
+        }
+        result = detect_duplicated_translations(source, translation, "fr")
+        assert len(result) == 1
+        assert result[0]["translation_text"] == "Ajouter un lien d'animation"
+        assert set(result[0]["keys"]) == {"LO_LI_AC_1865", "LO_LI_AC_1866"}
+        assert result[0]["source_values"]["LO_LI_AC_1865"] == "Add logistic link"
+        assert result[0]["source_values"]["LO_LI_AC_1866"] == "Add an animation link"
+
+    def test_same_en_case_insensitive_not_flagged(self):
+        """Textes source identiques à la casse près → traduction identique légitime."""
+        source = {"K1": "Legal Identifier", "K2": "legal identifier"}
+        translation = {"K1": "Identifiant légal", "K2": "Identifiant légal"}
+        assert detect_duplicated_translations(source, translation, "fr") == []
+
+    def test_legit_synonyms_flagged_advisory(self):
+        """Synonymes légitimes (Cancel/Rollback → Annuler) : signalés, advisory."""
+        source = {"Btn_Cancel": "Cancel", "Btn_Rollback": "Rollback"}
+        translation = {"Btn_Cancel": "Annuler", "Btn_Rollback": "Annuler"}
+        result = detect_duplicated_translations(source, translation, "fr")
+        assert len(result) == 1
+        assert set(result[0]["keys"]) == {"Btn_Cancel", "Btn_Rollback"}
+
+    def test_single_key_not_flagged(self):
+        """Une seule clé dans le groupe → rien à comparer."""
+        source = {"K1": "Save"}
+        translation = {"K1": "Enregistrer"}
+        assert detect_duplicated_translations(source, translation, "fr") == []
+
+    def test_empty_source_value_skipped(self):
+        """Clé absente ou texte source vide → ignorée (pas de comparaison fiable)."""
+        source = {"K1": "", "K2": "Save"}
+        translation = {"K1": "Enregistrer", "K2": "Enregistrer"}
+        assert detect_duplicated_translations(source, translation, "fr") == []
+
+    def test_punctuation_only_source_skipped(self):
+        """Texte source sans token (ponctuation seule, C15) → ignoré."""
+        source = {"K1": "...", "K2": "Save"}
+        translation = {"K1": "Enregistrer", "K2": "Enregistrer"}
+        assert detect_duplicated_translations(source, translation, "fr") == []
 
 
 class TestStep10DetectMisalignments:
